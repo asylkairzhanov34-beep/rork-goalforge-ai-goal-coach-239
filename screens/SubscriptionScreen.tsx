@@ -32,6 +32,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
 interface SubscriptionScreenProps {
@@ -76,7 +77,10 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     isPremium,
     customerInfo,
     isInitialized,
+    cancelSubscriptionForDev,
   } = useSubscription();
+
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const fadeAnims = useRef(FEATURE_LIST.map(() => new Animated.Value(0))).current;
@@ -191,6 +195,28 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
 
             <TouchableOpacity style={styles.manageButton} onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}>
               <Text style={styles.manageButtonText}>Manage Subscription</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.cancelDevButton} 
+              onPress={async () => {
+                setIsCancelling(true);
+                try {
+                  await cancelSubscriptionForDev();
+                  if (Platform.OS !== 'web') {
+                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                  }
+                } finally {
+                  setIsCancelling(false);
+                }
+              }}
+              disabled={isCancelling}
+            >
+              {isCancelling ? (
+                <ActivityIndicator size="small" color="#FF6B6B" />
+              ) : (
+                <Text style={styles.cancelDevButtonText}>Cancel Subscription (Dev)</Text>
+              )}
             </TouchableOpacity>
 
           </View>
@@ -607,6 +633,21 @@ const styles = StyleSheet.create({
   manageButtonText: {
     color: '#FFD700',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelDevButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+    alignItems: 'center',
+  },
+  cancelDevButtonText: {
+    color: '#FF6B6B',
+    fontSize: 14,
     fontWeight: '600',
   },
   devZone: {
