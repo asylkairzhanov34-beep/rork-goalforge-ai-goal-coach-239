@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Check } from 'lucide-react-native';
+import { Check, RefreshCw, XCircle, CreditCard } from 'lucide-react-native';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
 const CONFETTI_COLORS = ['#FFD700', '#FFB300', '#FF8C00', '#FFE066', '#FFC93C', '#F9A826'];
@@ -28,8 +28,18 @@ const formatDate = (iso?: string) => {
 export default function PurchaseSuccessScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ planName?: string; nextBillingDate?: string; trialStatus?: string }>();
-  const { restorePurchases, isRestoring, cancelSubscriptionForDev } = useSubscription();
+  const { 
+    restorePurchases, 
+    isRestoring, 
+    cancelSubscriptionForDev, 
+    forceRefreshFromServer,
+    status,
+    packages,
+    purchasePackage,
+    isPurchasing,
+  } = useSubscription();
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const heroScale = useRef(new Animated.Value(0.85)).current;
   const confetti = useRef([...Array(CONFETTI_PIECES)].map(() => new Animated.Value(0))).current;
 
@@ -70,16 +80,99 @@ export default function PurchaseSuccessScreen() {
   };
 
   const handleCancelSubscription = async () => {
-    setIsCancelling(true);
-    try {
-      await cancelSubscriptionForDev();
-      if (Platform.OS !== 'web') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (Platform.OS === 'ios') {
+      Alert.alert(
+        'Cancel Sandbox Subscription',
+        'To cancel a Sandbox subscription in TestFlight:\n\n' +
+        '1. Go to Settings → Apple ID\n' +
+        '2. Tap "Subscriptions"\n' +
+        '3. Find your app and cancel\n\n' +
+        'Or tap "Clear Local State" to reset the app state for testing.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Open Settings', 
+            onPress: () => Linking.openURL('App-Prefs:root=STORE').catch(() => {
+              Linking.openURL('app-settings:').catch(() => {});
+            })
+          },
+          {
+            text: 'Clear Local State',
+            style: 'destructive',
+            onPress: async () => {
+              setIsCancelling(true);
+              try {
+                await cancelSubscriptionForDev();
+                if (Platform.OS !== 'web') {
+                  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                }
+                Alert.alert('Done', 'Local subscription state cleared. Tap "Refresh Status" to sync with Apple.');
+              } finally {
+                setIsCancelling(false);
+              }
+            }
+          },
+        ]
+      );
+    } else {
+      setIsCancelling(true);
+      try {
+        await cancelSubscriptionForDev();
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
+        router.replace('/subscription');
+      } finally {
+        setIsCancelling(false);
       }
-      router.replace('/subscription');
-    } finally {
-      setIsCancelling(false);
     }
+  };
+
+  const handleRefreshStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      const result = await forceRefreshFromServer();
+      if (Platform.OS !== 'web') {
+        await Haptics.notificationAsync(
+          result ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
+        ).catch(() => {});
+      }
+      Alert.alert(
+        'Status Refreshed',
+        `Current status: ${status.toUpperCase()}\n\nSynced with RevenueCat server.`
+      );
+    } catch {
+      Alert.alert('Error', 'Failed to refresh status. Please try again.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleTestPurchase = async () => {
+    if (packages.length === 0) {
+      Alert.alert('No Packages', 'No subscription packages available.');
+      return;
+    }
+
+    const packageOptions = packages.map((pkg, index) => ({
+      text: `${pkg.product.title} - ${pkg.product.priceString}`,
+      onPress: async () => {
+        console.log('[PurchaseSuccess] Testing purchase for:', pkg.identifier);
+        const result = await purchasePackage(pkg.identifier);
+        if (result) {
+          Alert.alert('Purchase Complete', `Successfully purchased: ${result.planName}`);
+        }
+      }
+    }));
+
+    Alert.alert(
+      'Test Purchase (Sandbox)',
+      'Select a package to test the Apple purchase flow:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        ...packageOptions
+      ]
+    );
   };
 
   return (
@@ -154,18 +247,66 @@ export default function PurchaseSuccessScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={handleCancelSubscription}
-          disabled={isCancelling}
-          testID="purchase-success-cancel"
-        >
-          {isCancelling ? (
-            <ActivityIndicator size="small" color="#FF6B6B" />
-          ) : (
-            <Text style={styles.cancelText}>Cancel Subscription (Testing)</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.devSection}>
+          <Text style={styles.devSectionTitle}>🛠 Developer Tools (TestFlight)</Text>
+          
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusBadgeText}>Status: {status.toUpperCase()}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handleRefreshStatus}
+            disabled={isRefreshing}
+            testID="purchase-success-refresh"
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color="#4ECDC4" />
+            ) : (
+              <>
+                <RefreshCw size={16} color="#4ECDC4" />
+                <Text style={styles.devButtonText}>Refresh Status from Server</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handleTestPurchase}
+            disabled={isPurchasing}
+            testID="purchase-success-test-purchase"
+          >
+            {isPurchasing ? (
+              <ActivityIndicator size="small" color="#FFD700" />
+            ) : (
+              <>
+                <CreditCard size={16} color="#FFD700" />
+                <Text style={[styles.devButtonText, { color: '#FFD700' }]}>Test Sandbox Purchase</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.devButton, styles.cancelDevButton]}
+            onPress={handleCancelSubscription}
+            disabled={isCancelling}
+            testID="purchase-success-cancel"
+          >
+            {isCancelling ? (
+              <ActivityIndicator size="small" color="#FF6B6B" />
+            ) : (
+              <>
+                <XCircle size={16} color="#FF6B6B" />
+                <Text style={[styles.devButtonText, { color: '#FF6B6B' }]}>Cancel / Clear State</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.devHint}>
+            Sandbox purchases use Apple test environment.{"\n"}
+            The Apple purchase dialog should appear when testing.
+          </Text>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -267,19 +408,63 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textDecorationLine: 'underline',
   },
-  cancelButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  devSection: {
+    width: '100%',
+    marginTop: 24,
+    padding: 16,
     borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(255,107,107,0.3)',
-    backgroundColor: 'rgba(255,107,107,0.08)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 12,
   },
-  cancelText: {
-    color: '#FF6B6B',
+  devSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  statusBadge: {
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(78,205,196,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(78,205,196,0.3)',
+  },
+  statusBadgeText: {
+    color: '#4ECDC4',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  devButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cancelDevButton: {
+    borderColor: 'rgba(255,107,107,0.2)',
+    backgroundColor: 'rgba(255,107,107,0.05)',
+  },
+  devButtonText: {
+    color: '#4ECDC4',
     fontSize: 14,
     fontWeight: '500',
+  },
+  devHint: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
   },
 });
