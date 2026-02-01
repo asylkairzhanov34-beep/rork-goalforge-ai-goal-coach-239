@@ -838,16 +838,54 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [isMockMode, loadMockStatus, persistCustomerInfo]);
 
   const cancelSubscriptionForDev = useCallback(async () => {
+    console.log('[SubscriptionProvider] ========== DEV CANCEL START ==========');
     console.log('[SubscriptionProvider] Cancelling subscription (dev/test mode)');
+    console.log('[SubscriptionProvider] Current status:', status);
+    console.log('[SubscriptionProvider] isMockMode:', isMockMode);
 
-    await secureDelete(SECURE_KEYS.subscriptionActive);
-    setCustomerInfo(null);
-    setStatus(trialStateRef.current.isActive ? 'trial' : 'free');
-
-    if (isMockMode || Platform.OS === 'web') {
+    try {
+      // Clear all local subscription state
+      await secureDelete(SECURE_KEYS.subscriptionActive);
       await AsyncStorage.removeItem(SUBSCRIPTION_STORAGE_KEY);
+      
+      // Clear trial state too for clean testing
+      await secureDelete(SECURE_KEYS.trialStartAt);
+      await AsyncStorage.removeItem(SUBSCRIPTION_OFFER_KEYS.trialStartISO);
+      
+      setCustomerInfo(null);
+      setTrialState(defaultTrialState);
+      trialStateRef.current = defaultTrialState;
+      setStatus('free');
+
+      // Clear Firebase subscription if user is logged in
+      if (user?.id) {
+        console.log('[SubscriptionProvider] Clearing Firebase subscription...');
+        await saveUserSubscription(user.id, {
+          status: 'free',
+          customerInfo: null,
+          trialState: null,
+          updatedAt: new Date().toISOString(),
+        }).catch((err: Error) => {
+          console.error('[SubscriptionProvider] Failed to clear Firebase subscription:', err);
+        });
+      }
+
+      // Invalidate RevenueCat cache (for real devices)
+      if (!isMockMode && Platform.OS !== 'web') {
+        console.log('[SubscriptionProvider] Invalidating RevenueCat cache...');
+        await invalidateCustomerInfoCache().catch((err: unknown) => {
+          console.warn('[SubscriptionProvider] invalidateCustomerInfoCache failed:', err);
+        });
+      }
+
+      console.log('[SubscriptionProvider] ✅ Subscription cancelled successfully');
+      console.log('[SubscriptionProvider] New status: free');
+      console.log('[SubscriptionProvider] ========== DEV CANCEL END ==========');
+    } catch (error) {
+      console.error('[SubscriptionProvider] ❌ Cancel failed:', error);
+      throw error;
     }
-  }, [isMockMode]);
+  }, [isMockMode, status, user?.id]);
 
   const forceRefreshFromServer = useCallback(async (): Promise<boolean> => {
     if (isMockMode || Platform.OS === 'web') {
