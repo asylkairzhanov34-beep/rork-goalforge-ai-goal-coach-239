@@ -55,7 +55,7 @@ export default function TodayScreen() {
   const rewardsCount = rewards.length;
   
   const orbAnimations = useRef(
-    Array.from({ length: 7 }, (_, i) => ({
+    Array.from({ length: 11 }, (_, i) => ({
       translateX: new Animated.Value(i === 0 ? 0 : SCREEN_WIDTH * 0.45),
       scale: new Animated.Value(i === 0 ? 1 : 0.5),
       opacity: new Animated.Value(i === 0 ? 1 : (i === 1 ? 0.25 : 0)),

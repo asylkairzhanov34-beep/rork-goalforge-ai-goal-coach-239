@@ -19,6 +19,10 @@ export const REWARDS: Reward[] = [
   { id: '5', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769963787/0126_13_hoa56y.mp4', label: 'Focus Master', unlocked: true, color: '#F59E0B', achievement: '10 hours focused', rarity: 'Epic', ownedBy: '18%' },
   { id: '6', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769964203/0126_14_uatb5h.mp4', label: '14 Day Streak', unlocked: true, color: '#EC4899', achievement: '14 day streak', rarity: 'Legendary', ownedBy: '8%' },
   { id: '7', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769964305/0126_15_qhwl6p.mp4', label: 'Champion', unlocked: true, color: '#22D3EE', achievement: '30 day streak', rarity: 'Mythic', ownedBy: '3%' },
+  { id: '8', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970570/0126_17_bh50ax.mp4', label: 'Deep Focus', unlocked: true, color: '#8B5CF6', achievement: '50 hours focused', rarity: 'Mythic', ownedBy: '2.5%' },
+  { id: '9', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970766/0126_18_i9c43s.mp4', label: '30 Day Streak', unlocked: true, color: '#F472B6', achievement: '30 consecutive days', rarity: 'Legendary', ownedBy: '2%' },
+  { id: '10', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970927/0126_20_bdhdiu.mp4', label: 'Elite', unlocked: true, color: '#10B981', achievement: '100 tasks completed', rarity: 'Mythic', ownedBy: '1.5%' },
+  { id: '11', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769971061/0126_21_eigchr.mp4', label: 'Legend', unlocked: true, color: '#FBBF24', achievement: '60 day streak', rarity: 'Legendary', ownedBy: '1%' },
 ];
 
 export function getLastUnlockedReward(): Reward {
