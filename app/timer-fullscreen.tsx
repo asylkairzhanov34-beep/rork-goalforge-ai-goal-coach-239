@@ -117,6 +117,8 @@ export default function TimerFullscreenScreen() {
     const selectedSound = TIMER_SOUNDS.find(s => s.id === selectedSoundId);
     if (!selectedSound) return;
 
+    console.log('Playing completion sound 3 times:', selectedSound.name);
+
     try {
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
@@ -124,8 +126,11 @@ export default function TimerFullscreenScreen() {
       });
 
       for (let i = 0; i < 3; i++) {
+        console.log(`Playing sound ${i + 1} of 3`);
+        
         if (soundRef.current) {
           await soundRef.current.unloadAsync();
+          soundRef.current = null;
         }
         
         const { sound } = await Audio.Sound.createAsync(
@@ -135,17 +140,25 @@ export default function TimerFullscreenScreen() {
         soundRef.current = sound;
         
         await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log(`Sound ${i + 1} timeout - resolving`);
+            resolve();
+          }, 5000);
+          
           sound.setOnPlaybackStatusUpdate((status) => {
-            if (status.isLoaded && status.didJustFinish) {
+            if ('didJustFinish' in status && status.didJustFinish) {
+              console.log(`Sound ${i + 1} finished playing`);
+              clearTimeout(timeout);
               resolve();
             }
           });
         });
         
         if (i < 2) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
+      console.log('All 3 sounds played');
     } catch (error) {
       console.log('Error playing completion sound:', error);
     }
