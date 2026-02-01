@@ -652,7 +652,7 @@ function getQuotes() {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.52;
+const ORB_SIZE = SCREEN_WIDTH * 0.56;
 
 const styles = StyleSheet.create({
   container: {
