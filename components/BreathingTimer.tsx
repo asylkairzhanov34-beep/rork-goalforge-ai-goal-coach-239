@@ -152,11 +152,9 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
   const phaseColor = getPhaseColor();
 
   const backgroundImage = technique.timerBackground || technique.image;
-  const ContainerComponent = backgroundImage ? ImageBackground : View;
-  const containerProps = backgroundImage ? { source: { uri: backgroundImage }, resizeMode: 'cover' as const } : {};
 
-  return (
-    <ContainerComponent style={styles.container} {...containerProps}>
+  const renderContent = () => (
+    <>
       {backgroundImage && (
         <>
           <BlurView intensity={30} style={styles.blurOverlay} tint="dark" />
@@ -404,7 +402,21 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
           </View>
         </View>
       </View>
-    </ContainerComponent>
+    </>
+  );
+
+  if (backgroundImage) {
+    return (
+      <ImageBackground source={{ uri: backgroundImage }} resizeMode="cover" style={styles.container}>
+        {renderContent()}
+      </ImageBackground>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {renderContent()}
+    </View>
   );
 }
 
