@@ -301,26 +301,15 @@ export function WelcomeOnboardingScreen() {
 
                 <View style={styles.paginationInline} testID="welcome-pagination">
                   {slides.map((s, dotIndex) => {
-                    const dotInputRange = [(dotIndex - 1) * width, dotIndex * width, (dotIndex + 1) * width];
-                    const dotWidth = scrollX.interpolate({
-                      inputRange: dotInputRange,
-                      outputRange: [8, 34, 8],
-                      extrapolate: 'clamp',
-                    });
-                    const dotOpacity = scrollX.interpolate({
-                      inputRange: dotInputRange,
-                      outputRange: [0.25, 1, 0.25],
-                      extrapolate: 'clamp',
-                    });
-
+                    const isActive = dotIndex === index;
                     return (
-                      <Animated.View
+                      <View
                         key={s.id}
                         style={[
                           styles.dot,
                           {
-                            width: dotWidth,
-                            opacity: dotOpacity,
+                            width: isActive ? 34 : 8,
+                            opacity: isActive ? 1 : 0.25,
                             backgroundColor: item.accentColor,
                           },
                         ]}
