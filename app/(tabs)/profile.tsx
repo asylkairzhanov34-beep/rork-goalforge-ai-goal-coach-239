@@ -82,6 +82,19 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
+    ...(isPremium ? [{
+      icon: Crown,
+      title: 'Premium Active',
+      subtitle: 'Thank you for your support!',
+      onPress: () => router.push('/subscription'),
+      iconColor: theme.colors.primary,
+    }] : [{
+      icon: Crown,
+      title: 'Get Premium',
+      subtitle: 'Unlock all features',
+      onPress: () => router.push('/subscription'),
+      iconColor: theme.colors.primary,
+    }]),
     {
       icon: MessageCircle,
       title: 'AI Coach',
