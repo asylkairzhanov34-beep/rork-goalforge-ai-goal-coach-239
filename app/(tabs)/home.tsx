@@ -394,6 +394,11 @@ export default function TodayScreen() {
                 <Text style={styles.orbStatLabel}>FOCUS TIME</Text>
                 <Text style={styles.orbStatValue}>{focusTimeDisplay}</Text>
               </View>
+              <View style={styles.orbStatDivider} />
+              <View style={styles.orbStatItem}>
+                <Text style={styles.orbStatLabel}>DAYS STREAK</Text>
+                <Text style={styles.orbStatValue}>{profile.currentStreak}</Text>
+              </View>
             </View>
             
             {rewards[activeRewardIndex]?.unlocked && (
