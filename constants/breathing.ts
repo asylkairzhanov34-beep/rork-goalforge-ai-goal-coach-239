@@ -8,7 +8,7 @@ export const BREATHING_TECHNIQUES: BreathingTechnique[] = [
     benefits: 'Reduces stress, improves focus — perfect before a task',
     icon: '⬜',
     color: '#4F46E5',
-    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/kzwn3g2t62apdsufw8z0g',
+    timerBackground: 'https://r2-pub.rork.com/attachments/kzwn3g2t62apdsufw8z0g',
     totalCycles: 5,
     phases: [
       {

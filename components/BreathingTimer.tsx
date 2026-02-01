@@ -150,8 +150,9 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
 
   const phaseColor = getPhaseColor();
 
-  const ContainerComponent = technique.image ? ImageBackground : View;
-  const containerProps = technique.image ? { source: { uri: technique.image }, resizeMode: 'cover' as const } : {};
+  const backgroundImage = technique.timerBackground || technique.image;
+  const ContainerComponent = backgroundImage ? ImageBackground : View;
+  const containerProps = backgroundImage ? { source: { uri: backgroundImage }, resizeMode: 'cover' as const } : {};
 
   return (
     <ContainerComponent style={styles.container} {...containerProps}>

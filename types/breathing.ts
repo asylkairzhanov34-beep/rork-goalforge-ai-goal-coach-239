@@ -8,6 +8,7 @@ export type BreathingTechnique = {
   totalCycles: number;
   color: string;
   image?: string;
+  timerBackground?: string;
 };
 
 export type BreathingPhase = {
