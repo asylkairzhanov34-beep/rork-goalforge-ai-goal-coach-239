@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Platform, ImageBackground } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Play, Pause, Square, ArrowLeft, Wind, Sparkles, Clock, Zap } from 'lucide-react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
@@ -156,7 +157,12 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
 
   return (
     <ContainerComponent style={styles.container} {...containerProps}>
-      {technique.image && <View style={styles.imageOverlay} />}
+      {backgroundImage && (
+        <>
+          <BlurView intensity={30} style={styles.blurOverlay} tint="dark" />
+          <View style={styles.imageOverlay} />
+        </>
+      )}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => {
           if (router.canGoBack()) {
@@ -408,14 +414,20 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.lg,
   },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: theme.spacing.xs,
+    zIndex: 3,
   },
   backButton: {
     width: 48,
@@ -457,6 +469,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing.md,
     position: 'relative',
+    zIndex: 3,
   },
   outerGlow: {
     position: 'absolute',
@@ -526,6 +539,7 @@ const styles = StyleSheet.create({
   },
   overallProgress: {
     marginBottom: theme.spacing.lg,
+    zIndex: 3,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -574,6 +588,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.md,
     marginBottom: theme.spacing.lg,
+    zIndex: 3,
   },
   primaryButton: {
     borderRadius: theme.borderRadius.full,
@@ -614,6 +629,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     borderWidth: 1,
     ...theme.shadows.subtle,
+    zIndex: 3,
   },
   infoHeader: {
     flexDirection: 'row',
