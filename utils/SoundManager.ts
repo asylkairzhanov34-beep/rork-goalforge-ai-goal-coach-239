@@ -4,28 +4,52 @@ import { SoundId, getNormalizedVolume } from '@/constants/sounds';
 
 const SOUNDS_CONFIG = [
   { 
-    id: 'digital' as SoundId, 
-    uri: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
+    id: 'chime1' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3',
     priority: true,
-    volume: 1.0,
+    volume: 0.9,
   },
   { 
-    id: 'bell' as SoundId, 
-    uri: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
+    id: 'chime2' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3',
     priority: true,
-    volume: 0.7,
+    volume: 0.9,
   },
   { 
-    id: 'crystal' as SoundId, 
-    uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
+    id: 'chime3' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3',
     priority: false,
-    volume: 0.75,
+    volume: 0.9,
   },
   { 
-    id: 'triple' as SoundId, 
-    uri: 'https://actions.google.com/sounds/v1/alarms/medium_bell_ringing_near.ogg',
+    id: 'bell1' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3',
     priority: false,
-    volume: 0.85,
+    volume: 0.9,
+  },
+  { 
+    id: 'bell2' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3',
+    priority: false,
+    volume: 0.9,
+  },
+  { 
+    id: 'tone1' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131206_aglji8.mp3',
+    priority: false,
+    volume: 0.9,
+  },
+  { 
+    id: 'tone2' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131208_sqlpwo.mp3',
+    priority: false,
+    volume: 0.9,
+  },
+  { 
+    id: 'tone3' as SoundId, 
+    uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131209_avomms.mp3',
+    priority: false,
+    volume: 0.9,
   },
 ];
 
