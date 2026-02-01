@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,12 +17,15 @@ import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Picker } from '@react-native-picker/picker';
-import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle } from 'lucide-react-native';
+import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useTimer } from '@/hooks/use-timer-store';
 import { useFocusShield } from '@/hooks/use-focus-shield-store';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -32,6 +35,19 @@ const RADIUS = TIMER_SIZE / 2 - STROKE_WIDTH;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const QUICK_PRESETS = [10, 25, 45, 60];
+
+const TIMER_SOUNDS = [
+  { id: 'sound1', name: 'Chime 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3' },
+  { id: 'sound2', name: 'Chime 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3' },
+  { id: 'sound3', name: 'Chime 3', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3' },
+  { id: 'sound4', name: 'Bell 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3' },
+  { id: 'sound5', name: 'Bell 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3' },
+  { id: 'sound6', name: 'Tone 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131206_aglji8.mp3' },
+  { id: 'sound7', name: 'Tone 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131208_sqlpwo.mp3' },
+  { id: 'sound8', name: 'Tone 3', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131209_avomms.mp3' },
+];
+
+const SOUND_STORAGE_KEY = '@timer_selected_sound';
 
 const SESSION_LABELS = {
   focus: 'Focus',
@@ -57,6 +73,10 @@ export default function TimerFullscreenScreen() {
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showCompletionModal, setShowCompletionModal] = useState<boolean>(false);
   const [showStrictModeWarning, setShowStrictModeWarning] = useState<boolean>(false);
+  const [selectedSoundId, setSelectedSoundId] = useState<string>('sound1');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const hasPlayedCompletionSound = useRef<boolean>(false);
 
   const isRunning = timerStore?.isRunning ?? false;
   const isPaused = timerStore?.isPaused ?? false;
@@ -72,6 +92,120 @@ export default function TimerFullscreenScreen() {
 
   const minuteOptions = useMemo(() => {
     return Array.from({ length: 120 }, (_, i) => i + 1);
+  }, []);
+
+  useEffect(() => {
+    const loadSoundSettings = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(SOUND_STORAGE_KEY);
+        if (stored) {
+          const settings = JSON.parse(stored);
+          setSelectedSoundId(settings.soundId || 'sound1');
+          setSoundEnabled(settings.enabled !== false);
+        }
+      } catch (error) {
+        console.log('Error loading sound settings:', error);
+      }
+    };
+    loadSoundSettings();
+  }, []);
+
+  const saveSoundSettings = useCallback(async (soundId: string, enabled: boolean) => {
+    try {
+      await AsyncStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify({ soundId, enabled }));
+    } catch (error) {
+      console.log('Error saving sound settings:', error);
+    }
+  }, []);
+
+  const playCompletionSound = useCallback(async () => {
+    if (!soundEnabled) return;
+    
+    const selectedSound = TIMER_SOUNDS.find(s => s.id === selectedSoundId);
+    if (!selectedSound) return;
+
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      for (let i = 0; i < 3; i++) {
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+        }
+        
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: selectedSound.url },
+          { shouldPlay: true }
+        );
+        soundRef.current = sound;
+        
+        await new Promise<void>((resolve) => {
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded && status.didJustFinish) {
+              resolve();
+            }
+          });
+        });
+        
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+    } catch (error) {
+      console.log('Error playing completion sound:', error);
+    }
+  }, [selectedSoundId, soundEnabled]);
+
+  const previewSound = useCallback(async (soundId: string) => {
+    const selectedSound = TIMER_SOUNDS.find(s => s.id === soundId);
+    if (!selectedSound) return;
+
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+      
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+      
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: selectedSound.url },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+    } catch (error) {
+      console.log('Error previewing sound:', error);
+    }
+  }, []);
+
+  const handleSoundSelect = useCallback((soundId: string) => {
+    setSelectedSoundId(soundId);
+    saveSoundSettings(soundId, soundEnabled);
+    previewSound(soundId);
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync();
+    }
+  }, [soundEnabled, saveSoundSettings, previewSound]);
+
+  const toggleSoundEnabled = useCallback(() => {
+    const newEnabled = !soundEnabled;
+    setSoundEnabled(newEnabled);
+    saveSoundSettings(selectedSoundId, newEnabled);
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync();
+    }
+  }, [soundEnabled, selectedSoundId, saveSoundSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -105,9 +239,15 @@ export default function TimerFullscreenScreen() {
 
   useEffect(() => {
     if (timerStore && currentTime === 0 && !isRunning) {
+      if (!hasPlayedCompletionSound.current) {
+        hasPlayedCompletionSound.current = true;
+        playCompletionSound();
+      }
       setShowCompletionModal(true);
+    } else if (currentTime > 0) {
+      hasPlayedCompletionSound.current = false;
     }
-  }, [currentTime, isRunning, timerStore]);
+  }, [currentTime, isRunning, timerStore, playCompletionSound]);
 
   useEffect(() => {
     if (!isRunning && setCustomDuration) {
@@ -680,14 +820,64 @@ export default function TimerFullscreenScreen() {
         onRequestClose={() => setShowSettings(false)}
       >
         <View style={styles.settingsOverlay}>
-          <View style={styles.settingsCard}>
+          <View style={styles.settingsCardLarge}>
             <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>Settings</Text>
+              <Text style={styles.settingsTitle}>Timer Settings</Text>
               <TouchableOpacity onPress={() => setShowSettings(false)}>
                 <X size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.settingsMessage}>Settings are available on the Focus tab</Text>
+            
+            <View style={styles.soundSection}>
+              <View style={styles.soundSectionHeader}>
+                <View style={styles.soundTitleRow}>
+                  <Volume2 size={20} color={theme.colors.primary} />
+                  <Text style={styles.soundSectionTitle}>Completion Sound</Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.soundToggle,
+                    soundEnabled && styles.soundToggleActive,
+                  ]}
+                  onPress={toggleSoundEnabled}
+                >
+                  <Text style={[
+                    styles.soundToggleText,
+                    soundEnabled && styles.soundToggleTextActive,
+                  ]}>
+                    {soundEnabled ? 'ON' : 'OFF'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.soundDescription}>Plays 3 times when timer ends</Text>
+              
+              <ScrollView style={styles.soundList} showsVerticalScrollIndicator={false}>
+                {TIMER_SOUNDS.map((sound) => (
+                  <TouchableOpacity
+                    key={sound.id}
+                    style={[
+                      styles.soundItem,
+                      selectedSoundId === sound.id && styles.soundItemActive,
+                      !soundEnabled && styles.soundItemDisabled,
+                    ]}
+                    onPress={() => handleSoundSelect(sound.id)}
+                    disabled={!soundEnabled}
+                  >
+                    <Text style={[
+                      styles.soundItemText,
+                      selectedSoundId === sound.id && styles.soundItemTextActive,
+                      !soundEnabled && styles.soundItemTextDisabled,
+                    ]}>
+                      {sound.name}
+                    </Text>
+                    {selectedSoundId === sound.id && soundEnabled && (
+                      <Check size={18} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1200,6 +1390,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.glassBorder,
   },
+  settingsCardLarge: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.xl,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: theme.colors.glassBorder,
+  },
   settingsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1215,6 +1415,81 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     lineHeight: 22,
+  },
+  soundSection: {
+    marginTop: theme.spacing.md,
+  },
+  soundSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  soundTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundSectionTitle: {
+    fontSize: 16,
+    fontWeight: theme.fontWeight.semibold as any,
+    color: theme.colors.text,
+  },
+  soundDescription: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    marginBottom: 16,
+  },
+  soundToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  soundToggleActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  soundToggleText: {
+    fontSize: 12,
+    fontWeight: theme.fontWeight.bold as any,
+    color: theme.colors.textSecondary,
+  },
+  soundToggleTextActive: {
+    color: '#111214',
+  },
+  soundList: {
+    maxHeight: 280,
+  },
+  soundItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  soundItemActive: {
+    backgroundColor: 'rgba(255, 209, 42, 0.12)',
+    borderColor: 'rgba(255, 209, 42, 0.3)',
+  },
+  soundItemDisabled: {
+    opacity: 0.4,
+  },
+  soundItemText: {
+    fontSize: 15,
+    fontWeight: theme.fontWeight.medium as any,
+    color: theme.colors.text,
+  },
+  soundItemTextActive: {
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.semibold as any,
+  },
+  soundItemTextDisabled: {
+    color: theme.colors.textSecondary,
   },
   strictModeButton: {
     flexDirection: 'row',
