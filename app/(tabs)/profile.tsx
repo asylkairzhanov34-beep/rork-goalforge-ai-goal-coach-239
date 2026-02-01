@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, Animated, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Sparkles, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy, Shield } from 'lucide-react-native';
+import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
@@ -14,8 +13,6 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
-Dimensions.get('window');
-
 export default function ProfileScreen() {
   const store = useGoalStore();
   const { user, logout, deleteAccount } = useAuth();
@@ -24,49 +21,6 @@ export default function ProfileScreen() {
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const insets = useSafeAreaInsets();
-  const contentTopPadding = theme.spacing.lg;
-
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseLoop.start();
-
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    glowLoop.start();
-
-    return () => {
-      pulseLoop.stop();
-      glowLoop.stop();
-    };
-  }, [pulseAnim, glowAnim]);
 
   const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
   const GRAY_ORB_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769449334/0125_1__5_xxgjfb.mp4';
@@ -133,7 +87,6 @@ export default function ProfileScreen() {
       title: 'AI Coach',
       subtitle: 'Chat with your personal assistant',
       onPress: () => router.push('/chat'),
-      gradient: ['rgba(139, 92, 246, 0.15)', 'rgba(139, 92, 246, 0.05)'],
       iconColor: '#8B5CF6',
     },
     ...(currentGoal ? [{
@@ -141,7 +94,6 @@ export default function ProfileScreen() {
       title: 'Reset Goal',
       subtitle: 'Start fresh with a new goal',
       onPress: handleResetGoal,
-      gradient: ['rgba(249, 115, 22, 0.15)', 'rgba(249, 115, 22, 0.05)'],
       iconColor: '#F97316',
     }] : []),
     {
@@ -149,7 +101,6 @@ export default function ProfileScreen() {
       title: 'Notifications',
       subtitle: 'Manage your reminders',
       onPress: () => router.push('/notifications'),
-      gradient: ['rgba(34, 197, 94, 0.15)', 'rgba(34, 197, 94, 0.05)'],
       iconColor: '#22C55E',
     },
     {
@@ -157,7 +108,6 @@ export default function ProfileScreen() {
       title: 'Settings',
       subtitle: 'App preferences & options',
       onPress: () => router.push('/settings'),
-      gradient: ['rgba(99, 102, 241, 0.15)', 'rgba(99, 102, 241, 0.05)'],
       iconColor: '#6366F1',
     },
     {
@@ -165,7 +115,6 @@ export default function ProfileScreen() {
       title: 'About',
       subtitle: 'Version 1.0',
       onPress: () => Alert.alert('GoalCoach AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0'),
-      gradient: ['rgba(156, 163, 175, 0.15)', 'rgba(156, 163, 175, 0.05)'],
       iconColor: '#9CA3AF',
     },
   ];
@@ -257,104 +206,80 @@ export default function ProfileScreen() {
     }
   };
 
-  const glowOpacity = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.6],
-  });
-
   return (
     <GradientBackground>
       <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Your</Text>
+          <Text style={styles.title}>Profile</Text>
+        </View>
+
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: contentTopPadding }]}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <View style={styles.avatarSection}>
-              <Animated.View style={[styles.avatarGlow, { opacity: glowOpacity }]} />
-              <Animated.View style={[styles.avatarContainer, { transform: [{ scale: pulseAnim }] }]}>
-                <Video
-                  source={{ uri: AVATAR_VIDEO }}
-                  style={styles.avatarVideo}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay
-                  isLooping
-                  isMuted
-                />
-                <View style={styles.avatarBorder} />
-              </Animated.View>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <Video
+                source={{ uri: AVATAR_VIDEO }}
+                style={styles.avatarVideo}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted
+              />
               {isPremium && (
                 <View style={styles.premiumBadge}>
-                  <Crown size={12} color="#000" />
+                  <Crown size={10} color="#000" />
                 </View>
               )}
             </View>
             
-            <View style={styles.nameRow}>
-              <Text style={styles.userName}>{setupProfile?.nickname || user?.name || user?.email || profile.name}</Text>
-              <TouchableOpacity 
-                style={styles.editNameButton}
-                onPress={handleEditNickname}
-                activeOpacity={0.7}
-              >
-                <Edit3 size={16} color={theme.colors.primary} />
-              </TouchableOpacity>
+            <View style={styles.profileInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.userName}>{setupProfile?.nickname || user?.name || user?.email || profile.name}</Text>
+                <TouchableOpacity 
+                  style={styles.editNameButton}
+                  onPress={handleEditNickname}
+                  activeOpacity={0.7}
+                >
+                  <Edit3 size={14} color="rgba(255,255,255,0.5)" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.memberSince}>
+                Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </Text>
+              {!isPremium && (
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  onPress={() => router.push('/subscription')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+                  <ChevronRight size={14} color={theme.colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
-            
-            <Text style={styles.memberSince}>
-              Member since {new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </Text>
-
-            {!isPremium && (
-              <TouchableOpacity
-                style={styles.upgradeBanner}
-                onPress={() => router.push('/subscription')}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.05)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.upgradeBannerGradient}
-                />
-                <View style={styles.upgradeBannerContent}>
-                  <View style={styles.upgradeBannerLeft}>
-                    <View style={styles.upgradeIconWrapper}>
-                      <Sparkles size={18} color={theme.colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={styles.upgradeBannerTitle}>Upgrade to Premium</Text>
-                      <Text style={styles.upgradeBannerSubtitle}>Unlock all features</Text>
-                    </View>
-                  </View>
-                  <View style={styles.upgradeArrow}>
-                    <ChevronRight size={20} color={theme.colors.primary} />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
           </View>
 
           <View style={styles.statsSection}>
             <View style={styles.statCard}>
               <View style={[styles.statIconWrapper, { backgroundColor: 'rgba(255, 215, 0, 0.1)' }]}>
-                <Target size={18} color={theme.colors.primary} />
+                <Target size={16} color={theme.colors.primary} />
               </View>
               <Text style={styles.statValue}>{completedTasksCount}</Text>
               <Text style={styles.statLabel}>Completed</Text>
             </View>
-            <View style={styles.statDivider} />
             <View style={styles.statCard}>
               <View style={[styles.statIconWrapper, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
-                <Clock size={18} color="#8B5CF6" />
+                <Clock size={16} color="#8B5CF6" />
               </View>
               <Text style={styles.statValue}>{focusTimeDisplay}</Text>
               <Text style={styles.statLabel}>Focus Time</Text>
             </View>
-            <View style={styles.statDivider} />
             <View style={styles.statCard}>
               <View style={[styles.statIconWrapper, { backgroundColor: 'rgba(249, 115, 22, 0.1)' }]}>
-                <Flame size={18} color="#F97316" />
+                <Flame size={16} color="#F97316" />
               </View>
               <Text style={styles.statValue}>{profile.currentStreak}</Text>
               <Text style={styles.statLabel}>Day Streak</Text>
@@ -363,7 +288,7 @@ export default function ProfileScreen() {
 
           <View style={styles.achievementsSection}>
             <View style={styles.sectionHeader}>
-              <Trophy size={18} color={theme.colors.primary} />
+              <Trophy size={16} color={theme.colors.primary} />
               <Text style={styles.sectionTitle}>Achievements</Text>
             </View>
             <ScrollView 
@@ -384,7 +309,7 @@ export default function ProfileScreen() {
                     />
                     {!orb.unlocked && (
                       <View style={styles.miniOrbLockedOverlay}>
-                        <Lock size={14} color="rgba(255,255,255,0.6)" />
+                        <Lock size={12} color="rgba(255,255,255,0.5)" />
                       </View>
                     )}
                   </View>
@@ -402,22 +327,16 @@ export default function ProfileScreen() {
                 key={index}
                 style={styles.menuItem}
                 onPress={item.onPress}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <LinearGradient
-                  colors={item.gradient as [string, string]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.menuItemGradient}
-                />
                 <View style={[styles.menuIcon, { backgroundColor: `${item.iconColor}15` }]}>
-                  <item.icon size={20} color={item.iconColor} />
+                  <item.icon size={18} color={item.iconColor} />
                 </View>
                 <View style={styles.menuContent}>
                   <Text style={styles.menuTitle}>{item.title}</Text>
                   <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
                 </View>
-                <ChevronRight size={18} color="rgba(255,255,255,0.3)" />
+                <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
               </TouchableOpacity>
             ))}
           </View>
@@ -426,23 +345,18 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.dangerButton}
               onPress={handleLogout}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={styles.dangerIcon}>
-                <LogOut size={18} color="#EF4444" />
-              </View>
+              <LogOut size={16} color="#EF4444" />
               <Text style={styles.dangerButtonText}>Sign Out</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
               style={[styles.dangerButton, styles.deleteButton]}
               onPress={handleDeleteAccount}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={[styles.dangerIcon, styles.deleteIcon]}>
-                <Shield size={18} color="#991B1B" />
-              </View>
-              <Text style={[styles.dangerButtonText, styles.deleteButtonText]}>Delete Account</Text>
+              <Text style={styles.deleteButtonText}>Delete Account</Text>
             </TouchableOpacity>
           </View>
 
@@ -450,10 +364,10 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.devEntry}
               onPress={() => router.push('/dev-subscription-tools')}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
               testID="dev-subscription-entry"
             >
-              <Wrench size={16} color="#FFD700" />
+              <Wrench size={14} color="rgba(255,255,255,0.4)" />
               <Text style={styles.devEntryText}>Developer Tools</Text>
             </TouchableOpacity>
           )}
@@ -470,7 +384,7 @@ export default function ProfileScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Change Nickname</Text>
                 <TouchableOpacity onPress={() => setIsEditingNickname(false)}>
-                  <X size={24} color={theme.colors.text} />
+                  <X size={22} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
               </View>
               
@@ -479,7 +393,7 @@ export default function ProfileScreen() {
                 value={newNickname}
                 onChangeText={setNewNickname}
                 placeholder="Enter nickname"
-                placeholderTextColor={theme.colors.textLight}
+                placeholderTextColor="rgba(255,255,255,0.3)"
                 autoFocus
                 maxLength={30}
               />
@@ -506,174 +420,133 @@ export default function ProfileScreen() {
   );
 }
 
-const AVATAR_SIZE = 100;
+const AVATAR_SIZE = 72;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  greeting: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '400' as const,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '400' as const,
+    color: '#fff',
+    letterSpacing: 0,
+  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
-  header: {
+  profileHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
     marginBottom: 24,
-  },
-  avatarSection: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  avatarGlow: {
-    position: 'absolute',
-    top: -15,
-    left: -15,
-    right: -15,
-    bottom: -15,
-    borderRadius: (AVATAR_SIZE + 30) / 2,
-    backgroundColor: theme.colors.primary,
   },
   avatarContainer: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
   },
   avatarVideo: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-  },
-  avatarBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 2,
-    borderColor: theme.colors.primary,
+    width: AVATAR_SIZE - 4,
+    height: AVATAR_SIZE - 4,
   },
   premiumBadge: {
     position: 'absolute',
     bottom: 0,
-    right: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: theme.colors.background,
+  },
+  profileInfo: {
+    flex: 1,
+    marginLeft: 16,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
+    gap: 8,
   },
   userName: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '600' as const,
-    color: theme.colors.text,
-    letterSpacing: 0.3,
+    color: '#fff',
   },
   editNameButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.2)',
   },
   memberSince: {
     fontSize: 13,
-    color: theme.colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: 4,
   },
-  upgradeBanner: {
-    width: '100%',
-    marginTop: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  upgradeBannerGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  upgradeBannerContent: {
+  upgradeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
+    marginTop: 10,
+    gap: 4,
   },
-  upgradeBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  upgradeIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upgradeBannerTitle: {
-    fontSize: 15,
+  upgradeButtonText: {
+    fontSize: 13,
     fontWeight: '600' as const,
     color: theme.colors.primary,
   },
-  upgradeBannerSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 1,
-  },
-  upgradeArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   statsSection: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 20,
-    padding: 20,
+    gap: 10,
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   statCard: {
     flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   statIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700' as const,
-    color: theme.colors.text,
-    marginBottom: 2,
+    color: '#fff',
   },
   statLabel: {
-    fontSize: 11,
-    color: theme.colors.textSecondary,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: 2,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginVertical: 8,
+    letterSpacing: 0.3,
   },
   achievementsSection: {
     marginBottom: 24,
@@ -682,36 +555,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600' as const,
-    color: theme.colors.text,
+    color: '#fff',
   },
   orbsRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
     paddingRight: 20,
   },
   miniOrbContainer: {
     alignItems: 'center',
   },
   miniOrbWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 215, 0, 0.25)',
   },
   miniOrbLocked: {
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     opacity: 0.5,
   },
   miniOrbVideo: {
-    width: 52,
-    height: 52,
+    width: 45,
+    height: 45,
   },
   miniOrbLockedOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -720,57 +593,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   miniOrbLabel: {
-    fontSize: 11,
-    color: theme.colors.text,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.5)',
     marginTop: 6,
     textAlign: 'center',
-    fontWeight: '500' as const,
   },
   miniOrbLabelLocked: {
-    color: theme.colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.3)',
   },
   menuSection: {
-    gap: 10,
+    gap: 8,
     marginBottom: 24,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    overflow: 'hidden',
-  },
-  menuItemGradient: {
-    ...StyleSheet.absoluteFillObject,
   },
   menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   menuContent: {
     flex: 1,
   },
   menuTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: theme.colors.text,
-    marginBottom: 2,
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: '#fff',
   },
   menuSubtitle: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: 2,
   },
   dangerZone: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   dangerButton: {
     flex: 1,
@@ -778,50 +646,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
+    borderColor: 'rgba(239, 68, 68, 0.15)',
   },
   deleteButton: {
-    backgroundColor: 'rgba(153, 27, 27, 0.08)',
-    borderColor: 'rgba(153, 27, 27, 0.2)',
-  },
-  dangerIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteIcon: {
-    backgroundColor: 'rgba(153, 27, 27, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   dangerButtonText: {
     fontSize: 13,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: '#EF4444',
   },
   deleteButtonText: {
-    color: '#991B1B',
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: 'rgba(255, 255, 255, 0.4)',
   },
   devEntry: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-    backgroundColor: 'rgba(255, 215, 0, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   devEntryText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: '500' as const,
+    color: 'rgba(255, 255, 255, 0.4)',
   },
   loadingContainer: {
     flex: 1,
@@ -829,24 +688,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    fontSize: theme.fontSize.lg,
-    color: theme.colors.text,
+    fontSize: 16,
+    color: '#fff',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   modalContent: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 24,
-    padding: 24,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 20,
+    padding: 20,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 340,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -855,45 +714,43 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '600' as const,
+    color: '#fff',
   },
   nicknameInput: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 14,
-    padding: 16,
-    fontSize: 16,
-    color: theme.colors.text,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: '#fff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 20,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 16,
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
   },
   cancelButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   cancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   saveButton: {
     backgroundColor: theme.colors.primary,
   },
   saveButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600' as const,
     color: '#000',
   },
