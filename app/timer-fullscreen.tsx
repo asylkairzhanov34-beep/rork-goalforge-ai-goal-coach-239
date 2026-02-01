@@ -819,8 +819,8 @@ export default function TimerFullscreenScreen() {
         animationType="slide"
         onRequestClose={() => setShowSettings(false)}
       >
-        <View style={styles.settingsOverlay}>
-          <View style={styles.settingsCardLarge}>
+        <Pressable style={styles.settingsOverlay} onPress={() => setShowSettings(false)}>
+          <Pressable style={styles.settingsCardLarge} onPress={(e) => e.stopPropagation()}>
             <View style={styles.settingsHeader}>
               <Text style={styles.settingsTitle}>Timer Settings</Text>
               <TouchableOpacity onPress={() => setShowSettings(false)}>
@@ -878,8 +878,8 @@ export default function TimerFullscreenScreen() {
                 ))}
               </ScrollView>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal
