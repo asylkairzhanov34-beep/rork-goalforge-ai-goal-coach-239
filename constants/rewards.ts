@@ -12,8 +12,8 @@ export interface Reward {
 }
 
 export const REWARDS: Reward[] = [
-  { id: '1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4', label: 'First Step', unlocked: true, color: '#FF6B6B', achievement: 'Complete your first task', rarity: 'Common', ownedBy: '95%' },
-  { id: '2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956418/0126_8_xka62k.mp4', label: 'Day 3 Reward', unlocked: true, color: '#4FACFE', achievement: '3 days of consistency', rarity: 'Uncommon', ownedBy: '78%' },
+  { id: '1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956832/0126_9_xmrb6b.mp4', label: 'First Step', unlocked: true, color: '#FF6B6B', achievement: 'Complete your first task', rarity: 'Common', ownedBy: '95%' },
+  { id: '2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956795/0126_7_olo5n4.mp4', label: 'Day 3 Reward', unlocked: true, color: '#4FACFE', achievement: '3 days of consistency', rarity: 'Uncommon', ownedBy: '78%' },
   { id: '3', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951742/0126_4_l4xx78.mp4', label: 'Week Goal', unlocked: true, color: '#A78BFA', achievement: 'Complete 7 days', rarity: 'Rare', ownedBy: '45%' },
   { id: '4', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951786/0126_5_u9xcey.mp4', label: '7 Day Streak', unlocked: true, color: '#34D399', achievement: '7 day streak', rarity: 'Rare', ownedBy: '32%' },
   { id: '5', video: GRAY_ORB_VIDEO, label: 'Focus Master', unlocked: false, color: '#F59E0B', achievement: '10 hours focused', rarity: 'Epic', ownedBy: '18%' },
