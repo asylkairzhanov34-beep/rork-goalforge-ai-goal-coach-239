@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+
 import { Picker } from '@react-native-picker/picker';
 import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
@@ -30,9 +30,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const TIMER_SIZE = Math.min(SCREEN_WIDTH * 0.7, SCREEN_HEIGHT * 0.4, 280);
-const STROKE_WIDTH = 4;
-const RADIUS = TIMER_SIZE / 2 - STROKE_WIDTH;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const QUICK_PRESETS = [10, 25, 45, 60];
 
@@ -49,11 +46,7 @@ const TIMER_SOUNDS = [
 
 const SOUND_STORAGE_KEY = '@timer_selected_sound';
 
-const SESSION_LABELS = {
-  focus: 'Focus',
-  shortBreak: 'Break',
-  longBreak: 'Long Break',
-};
+
 
 export default function TimerFullscreenScreen() {
   const insets = useSafeAreaInsets();
@@ -424,8 +417,6 @@ export default function TimerFullscreenScreen() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const progress = totalTime > 0 ? 1 - currentTime / totalTime : 0;
 
   if (!timerStore) {
     return (
