@@ -80,52 +80,34 @@ export default function PurchaseSuccessScreen() {
   };
 
   const handleCancelSubscription = async () => {
-    if (Platform.OS === 'ios') {
-      Alert.alert(
-        'Cancel Sandbox Subscription',
-        'To cancel a Sandbox subscription in TestFlight:\n\n' +
-        '1. Go to Settings → Apple ID\n' +
-        '2. Tap "Subscriptions"\n' +
-        '3. Find your app and cancel\n\n' +
-        'Or tap "Clear Local State" to reset the app state for testing.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Open Settings', 
-            onPress: () => Linking.openURL('App-Prefs:root=STORE').catch(() => {
-              Linking.openURL('app-settings:').catch(() => {});
-            })
-          },
-          {
-            text: 'Clear Local State',
-            style: 'destructive',
-            onPress: async () => {
-              setIsCancelling(true);
-              try {
-                await cancelSubscriptionForDev();
-                if (Platform.OS !== 'web') {
-                  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                }
-                Alert.alert('Done', 'Local subscription state cleared. Tap "Refresh Status" to sync with Apple.');
-              } finally {
-                setIsCancelling(false);
+    Alert.alert(
+      'Reset Subscription for Testing',
+      'This will clear local subscription state and redirect you to the purchase screen.\n\nNote: This only resets the app state. If you have an active Sandbox subscription, it will be restored when you sync with Apple.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset & Go to Purchase',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              console.log('[PurchaseSuccess] Resetting subscription state for TestFlight testing...');
+              await cancelSubscriptionForDev();
+              if (Platform.OS !== 'web') {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
               }
+              console.log('[PurchaseSuccess] State cleared, redirecting to subscription screen...');
+              router.replace('/subscription');
+            } catch (error) {
+              console.error('[PurchaseSuccess] Reset failed:', error);
+              Alert.alert('Error', 'Failed to reset subscription state. Please try again.');
+            } finally {
+              setIsCancelling(false);
             }
-          },
-        ]
-      );
-    } else {
-      setIsCancelling(true);
-      try {
-        await cancelSubscriptionForDev();
-        if (Platform.OS !== 'web') {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        }
-        router.replace('/subscription');
-      } finally {
-        setIsCancelling(false);
-      }
-    }
+          }
+        },
+      ]
+    );
   };
 
   const handleRefreshStatus = async () => {
@@ -297,7 +279,7 @@ export default function PurchaseSuccessScreen() {
             ) : (
               <>
                 <XCircle size={16} color="#FF6B6B" />
-                <Text style={[styles.devButtonText, { color: '#FF6B6B' }]}>Cancel / Clear State</Text>
+                <Text style={[styles.devButtonText, { color: '#FF6B6B' }]}>Reset & Test Purchase Again</Text>
               </>
             )}
           </TouchableOpacity>
