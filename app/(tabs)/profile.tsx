@@ -29,8 +29,8 @@ export default function ProfileScreen() {
   const GRAY_ORB_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769449334/0125_1__5_xxgjfb.mp4';
   
   const earnedOrbs = [
-    { id: '1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769449245/0126_1_nrl3iu.mp4', label: 'First Step', unlocked: true },
-    { id: '2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769449243/0126_2_kabbul.mp4', label: 'Day 3', unlocked: true },
+    { id: '1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4', label: 'First Step', unlocked: true },
+    { id: '2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956418/0126_8_xka62k.mp4', label: 'Day 3', unlocked: true },
     { id: '3', video: GRAY_ORB_VIDEO, label: 'Week', unlocked: false },
     { id: '4', video: GRAY_ORB_VIDEO, label: '7 Days', unlocked: false },
     { id: '5', video: GRAY_ORB_VIDEO, label: 'Focus', unlocked: false },
