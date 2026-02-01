@@ -17,7 +17,7 @@ import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Picker } from '@react-native-picker/picker';
-import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check } from 'lucide-react-native';
+import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check, Music, Bell, Zap, Radio, Sparkles } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useTimer } from '@/hooks/use-timer-store';
@@ -34,14 +34,14 @@ const TIMER_SIZE = Math.min(SCREEN_WIDTH * 0.7, SCREEN_HEIGHT * 0.4, 280);
 const QUICK_PRESETS = [10, 25, 45, 60];
 
 const TIMER_SOUNDS = [
-  { id: 'sound1', name: 'Chime 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3' },
-  { id: 'sound2', name: 'Chime 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3' },
-  { id: 'sound3', name: 'Chime 3', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3' },
-  { id: 'sound4', name: 'Bell 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3' },
-  { id: 'sound5', name: 'Bell 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3' },
-  { id: 'sound6', name: 'Tone 1', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131206_aglji8.mp3' },
-  { id: 'sound7', name: 'Tone 2', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131208_sqlpwo.mp3' },
-  { id: 'sound8', name: 'Tone 3', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131209_avomms.mp3' },
+  { id: 'sound1', name: 'Chime 1', description: 'Soft chime sound', icon: 'music', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3' },
+  { id: 'sound2', name: 'Chime 2', description: 'Gentle chime', icon: 'bell', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3' },
+  { id: 'sound3', name: 'Chime 3', description: 'Crystal chime', icon: 'sparkles', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3' },
+  { id: 'sound4', name: 'Bell 1', description: 'Soft bell sound', icon: 'bell', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3' },
+  { id: 'sound5', name: 'Bell 2', description: 'Clear bell tone', icon: 'zap', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3' },
+  { id: 'sound6', name: 'Tone 1', description: 'Calm notification', icon: 'radio', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131206_aglji8.mp3' },
+  { id: 'sound7', name: 'Tone 2', description: 'Meditation tone', icon: 'radio', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131208_sqlpwo.mp3' },
+  { id: 'sound8', name: 'Tone 3', description: 'Zen notification', icon: 'radio', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131209_avomms.mp3' },
 ];
 
 const SOUND_STORAGE_KEY = '@timer_selected_sound';
@@ -183,15 +183,6 @@ export default function TimerFullscreenScreen() {
       Haptics.selectionAsync();
     }
   }, [soundEnabled, saveSoundSettings, previewSound]);
-
-  const toggleSoundEnabled = useCallback(() => {
-    const newEnabled = !soundEnabled;
-    setSoundEnabled(newEnabled);
-    saveSoundSettings(selectedSoundId, newEnabled);
-    if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
-    }
-  }, [soundEnabled, selectedSoundId, saveSoundSettings]);
 
   useEffect(() => {
     return () => {
@@ -810,63 +801,89 @@ export default function TimerFullscreenScreen() {
         animationType="slide"
         onRequestClose={() => setShowSettings(false)}
       >
-        <Pressable style={styles.settingsOverlay} onPress={() => setShowSettings(false)}>
-          <Pressable style={styles.settingsCardLarge} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.settingsBottomOverlay} onPress={() => setShowSettings(false)}>
+          <Pressable style={styles.settingsBottomSheet} onPress={(e) => e.stopPropagation()}>
+            <TouchableOpacity 
+              style={styles.settingsHandleArea} 
+              onPress={() => setShowSettings(false)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.settingsHandle} />
+            </TouchableOpacity>
+            
             <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>Timer Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettings(false)}>
-                <X size={24} color={theme.colors.text} />
+              <View style={styles.settingsTitleRow}>
+                <Volume2 size={22} color={theme.colors.primary} />
+                <Text style={styles.settingsTitle}>Notification Sound</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.settingsCloseButton}
+                onPress={() => setShowSettings(false)}
+              >
+                <X size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
             
+            <Text style={styles.soundSubtitle}>Sound plays 3 times when timer ends</Text>
+            
             <View style={styles.soundSection}>
-              <View style={styles.soundSectionHeader}>
-                <View style={styles.soundTitleRow}>
-                  <Volume2 size={20} color={theme.colors.primary} />
-                  <Text style={styles.soundSectionTitle}>Completion Sound</Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.soundToggle,
-                    soundEnabled && styles.soundToggleActive,
-                  ]}
-                  onPress={toggleSoundEnabled}
-                >
-                  <Text style={[
-                    styles.soundToggleText,
-                    soundEnabled && styles.soundToggleTextActive,
-                  ]}>
-                    {soundEnabled ? 'ON' : 'OFF'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.soundDescription}>Plays 3 times when timer ends</Text>
-              
-              <ScrollView style={styles.soundList} showsVerticalScrollIndicator={false}>
-                {TIMER_SOUNDS.map((sound) => (
-                  <TouchableOpacity
-                    key={sound.id}
-                    style={[
-                      styles.soundItem,
-                      selectedSoundId === sound.id && styles.soundItemActive,
-                      !soundEnabled && styles.soundItemDisabled,
-                    ]}
-                    onPress={() => handleSoundSelect(sound.id)}
-                    disabled={!soundEnabled}
-                  >
-                    <Text style={[
-                      styles.soundItemText,
-                      selectedSoundId === sound.id && styles.soundItemTextActive,
-                      !soundEnabled && styles.soundItemTextDisabled,
-                    ]}>
-                      {sound.name}
-                    </Text>
-                    {selectedSoundId === sound.id && soundEnabled && (
-                      <Check size={18} color={theme.colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+              <ScrollView 
+                style={styles.soundList} 
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                {TIMER_SOUNDS.map((sound) => {
+                  const isActive = selectedSoundId === sound.id;
+                  const IconComponent = sound.icon === 'music' ? Music : 
+                    sound.icon === 'bell' ? Bell : 
+                    sound.icon === 'sparkles' ? Sparkles : 
+                    sound.icon === 'zap' ? Zap : Radio;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={sound.id}
+                      style={[
+                        styles.soundItem,
+                        isActive && styles.soundItemActive,
+                      ]}
+                      onPress={() => handleSoundSelect(sound.id)}
+                    >
+                      <View style={styles.soundItemLeft}>
+                        <View style={[
+                          styles.soundItemIcon,
+                          isActive && styles.soundItemIconActive,
+                        ]}>
+                          <IconComponent 
+                            size={20} 
+                            color={isActive ? theme.colors.primary : theme.colors.textSecondary} 
+                          />
+                        </View>
+                        <View style={styles.soundItemTextContainer}>
+                          <Text style={[
+                            styles.soundItemText,
+                            isActive && styles.soundItemTextActive,
+                          ]}>
+                            {sound.name}
+                          </Text>
+                          <Text style={styles.soundItemDescription}>
+                            {sound.description}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.soundItemRight}>
+                        <TouchableOpacity 
+                          style={styles.soundPlayButton}
+                          onPress={() => handleSoundSelect(sound.id)}
+                        >
+                          <Play size={16} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                        {isActive && (
+                          <Check size={20} color={theme.colors.primary} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </View>
           </Pressable>
@@ -1365,42 +1382,60 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold as any,
     color: '#111214',
   },
-  settingsOverlay: {
+  settingsBottomOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  settingsBottomSheet: {
+    backgroundColor: '#0E0E0E',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: theme.spacing.lg,
-  },
-  settingsCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    width: '90%',
-    maxWidth: 400,
+    paddingBottom: 40,
+    maxHeight: '85%',
     borderWidth: 1,
-    borderColor: theme.colors.glassBorder,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 212, 59, 0.15)',
   },
-  settingsCardLarge: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-    borderWidth: 1,
-    borderColor: theme.colors.glassBorder,
+  settingsHandleArea: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  settingsHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
   },
   settingsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.md,
+    marginBottom: 8,
+  },
+  settingsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   settingsTitle: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.extrabold as any,
+    fontSize: 20,
+    fontWeight: theme.fontWeight.bold as any,
     color: theme.colors.text,
+  },
+  settingsCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soundSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: 16,
   },
   settingsMessage: {
     fontSize: theme.fontSize.md,
@@ -1408,79 +1443,71 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   soundSection: {
-    marginTop: theme.spacing.md,
-  },
-  soundSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  soundTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  soundSectionTitle: {
-    fontSize: 16,
-    fontWeight: theme.fontWeight.semibold as any,
-    color: theme.colors.text,
-  },
-  soundDescription: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginBottom: 16,
-  },
-  soundToggle: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  soundToggleActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  soundToggleText: {
-    fontSize: 12,
-    fontWeight: theme.fontWeight.bold as any,
-    color: theme.colors.textSecondary,
-  },
-  soundToggleTextActive: {
-    color: '#111214',
+    flex: 1,
   },
   soundList: {
-    maxHeight: 280,
+    flex: 1,
   },
   soundItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    marginBottom: 8,
-    borderWidth: 1,
+    marginBottom: 10,
+    borderWidth: 1.5,
     borderColor: 'transparent',
   },
   soundItemActive: {
     backgroundColor: 'rgba(255, 209, 42, 0.12)',
-    borderColor: 'rgba(255, 209, 42, 0.3)',
+    borderColor: 'rgba(255, 209, 42, 0.4)',
   },
-  soundItemDisabled: {
-    opacity: 0.4,
+  soundItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  soundItemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soundItemIconActive: {
+    backgroundColor: 'rgba(255, 209, 42, 0.2)',
+  },
+  soundItemTextContainer: {
+    flex: 1,
   },
   soundItemText: {
-    fontSize: 15,
-    fontWeight: theme.fontWeight.medium as any,
+    fontSize: 16,
+    fontWeight: theme.fontWeight.semibold as any,
     color: theme.colors.text,
+    marginBottom: 2,
   },
   soundItemTextActive: {
     color: theme.colors.primary,
-    fontWeight: theme.fontWeight.semibold as any,
   },
-  soundItemTextDisabled: {
+  soundItemDescription: {
+    fontSize: 13,
     color: theme.colors.textSecondary,
+  },
+  soundItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundPlayButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   strictModeButton: {
     flexDirection: 'row',
