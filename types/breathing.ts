@@ -9,6 +9,7 @@ export type BreathingTechnique = {
   color: string;
   image?: string;
   timerBackground?: string;
+  timerVideo?: string;
 };
 
 export type BreathingPhase = {

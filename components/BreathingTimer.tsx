@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Platform, ImageBackground } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { Play, Pause, Square, ArrowLeft, Wind, Sparkles, Clock, Zap } from 'lucide-react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
@@ -152,6 +153,7 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
   const phaseColor = getPhaseColor();
 
   const backgroundImage = technique.timerBackground || technique.image;
+  const backgroundVideo = technique.timerVideo;
 
   const renderContent = () => (
     <>
@@ -405,6 +407,22 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
     </>
   );
 
+  if (backgroundVideo) {
+    return (
+      <View style={styles.container}>
+        <Video
+          source={{ uri: backgroundVideo }}
+          style={styles.backgroundVideo}
+          resizeMode={ResizeMode.COVER}
+          isLooping
+          shouldPlay
+          isMuted
+        />
+        {renderContent()}
+      </View>
+    );
+  }
+
   if (backgroundImage) {
     return (
       <ImageBackground source={{ uri: backgroundImage }} resizeMode="cover" style={styles.container}>
@@ -425,6 +443,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.lg,
+  },
+  backgroundVideo: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   blurOverlay: {
     ...StyleSheet.absoluteFillObject,

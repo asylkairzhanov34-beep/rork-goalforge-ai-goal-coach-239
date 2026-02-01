@@ -151,5 +151,79 @@ export const BREATHING_TECHNIQUES: BreathingTechnique[] = [
         type: 'exhale'
       }
     ]
+  },
+  {
+    id: 'calm-wave',
+    name: 'Calm Wave',
+    description: 'Gentle rhythmic breathing like ocean waves',
+    benefits: 'Deep relaxation, reduces anxiety — ideal for winding down',
+    icon: '🌊',
+    color: '#0EA5E9',
+    image: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=400&h=300&fit=crop',
+    timerVideo: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951742/0126_4_l4xx78.mp4',
+    totalCycles: 6,
+    phases: [
+      {
+        name: 'Inhale',
+        duration: 5,
+        instruction: 'Breathe in slowly like a wave rising',
+        type: 'inhale'
+      },
+      {
+        name: 'Hold',
+        duration: 2,
+        instruction: 'Pause at the peak',
+        type: 'hold'
+      },
+      {
+        name: 'Exhale',
+        duration: 5,
+        instruction: 'Release slowly like a wave receding',
+        type: 'exhale'
+      }
+    ]
+  },
+  {
+    id: 'energy-boost',
+    name: 'Energy Boost',
+    description: 'Invigorating breathing to increase energy and alertness',
+    benefits: 'Boosts energy, improves alertness — great for morning or mid-day',
+    icon: '⚡',
+    color: '#F97316',
+    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop',
+    timerVideo: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951786/0126_5_u9xcey.mp4',
+    totalCycles: 5,
+    phases: [
+      {
+        name: 'Quick Inhale',
+        duration: 2,
+        instruction: 'Sharp breath in through your nose',
+        type: 'inhale'
+      },
+      {
+        name: 'Quick Exhale',
+        duration: 2,
+        instruction: 'Forceful breath out through your mouth',
+        type: 'exhale'
+      },
+      {
+        name: 'Deep Inhale',
+        duration: 4,
+        instruction: 'Deep breath in filling your lungs',
+        type: 'inhale'
+      },
+      {
+        name: 'Hold',
+        duration: 3,
+        instruction: 'Hold and feel the energy',
+        type: 'hold'
+      },
+      {
+        name: 'Release',
+        duration: 4,
+        instruction: 'Slowly release all tension',
+        type: 'exhale'
+      }
+    ]
   }
 ];
