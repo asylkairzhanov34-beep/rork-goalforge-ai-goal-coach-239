@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Dimensions, Animated, Easing, ImageBackground } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, Clock, Target, CheckCircle, Plus, ChevronRight, Lock, Flame, Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { DailyTask, SubTask, TaskFeedback } from '@/types/goal';
@@ -34,6 +35,30 @@ const getDifficultyColor = (difficulty: 'easy' | 'medium' | 'hard') => {
     case 'hard': return '#FF6B6B';
     default: return '#FFD600';
   }
+};
+
+const CHALLENGE_GRADIENT_THEMES = [
+  { primary: '#8B5CF6', secondary: '#6366F1', border: 'rgba(139, 92, 246, 0.5)', glow: 'rgba(139, 92, 246, 0.3)' },
+  { primary: '#06B6D4', secondary: '#0891B2', border: 'rgba(6, 182, 212, 0.5)', glow: 'rgba(6, 182, 212, 0.3)' },
+  { primary: '#F97316', secondary: '#EA580C', border: 'rgba(249, 115, 22, 0.5)', glow: 'rgba(249, 115, 22, 0.3)' },
+  { primary: '#10B981', secondary: '#059669', border: 'rgba(16, 185, 129, 0.5)', glow: 'rgba(16, 185, 129, 0.3)' },
+  { primary: '#EC4899', secondary: '#DB2777', border: 'rgba(236, 72, 153, 0.5)', glow: 'rgba(236, 72, 153, 0.3)' },
+  { primary: '#3B82F6', secondary: '#2563EB', border: 'rgba(59, 130, 246, 0.5)', glow: 'rgba(59, 130, 246, 0.3)' },
+  { primary: '#EAB308', secondary: '#CA8A04', border: 'rgba(234, 179, 8, 0.5)', glow: 'rgba(234, 179, 8, 0.3)' },
+  { primary: '#EF4444', secondary: '#DC2626', border: 'rgba(239, 68, 68, 0.5)', glow: 'rgba(239, 68, 68, 0.3)' },
+  { primary: '#14B8A6', secondary: '#0D9488', border: 'rgba(20, 184, 166, 0.5)', glow: 'rgba(20, 184, 166, 0.3)' },
+  { primary: '#A855F7', secondary: '#9333EA', border: 'rgba(168, 85, 247, 0.5)', glow: 'rgba(168, 85, 247, 0.3)' },
+];
+
+const getChallengeTheme = (challengeName: string | undefined, taskTitle: string) => {
+  const str = challengeName || taskTitle || '';
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  const index = Math.abs(hash) % CHALLENGE_GRADIENT_THEMES.length;
+  return CHALLENGE_GRADIENT_THEMES[index];
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -299,12 +324,119 @@ export function WeeklyPlanView({
       outputRange: [0, 1],
     });
 
-    const backgroundImage = isChallengeTask 
-      ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/7gjjybucqzhqzqldtkmgl'
-      : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tipdit1tsyrunqcm8lzmm';
+    const challengeTheme = isChallengeTask ? getChallengeTheme(task.challengeName, task.title) : null;
+    const backgroundImage = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tipdit1tsyrunqcm8lzmm';
     
-    const borderColor = isChallengeTask ? 'rgba(180, 60, 60, 0.6)' : 'rgba(80, 80, 80, 0.5)';
-    const glowColor = isChallengeTask ? 'rgba(255, 80, 80, 0.3)' : 'rgba(255, 214, 0, 0.25)';
+    const borderColor = isChallengeTask && challengeTheme ? challengeTheme.border : 'rgba(80, 80, 80, 0.5)';
+    const glowColor = isChallengeTask && challengeTheme ? challengeTheme.glow : 'rgba(255, 214, 0, 0.25)';
+    const cardShadowColor = isChallengeTask && challengeTheme ? challengeTheme.primary : '#FFD600';
+
+    const renderCardContent = () => (
+      <View style={[styles.taskCardOverlay, isChallengeTask && styles.taskCardChallengeOverlay, task.completed && styles.taskCardCompleted]}>
+        <Animated.View pointerEvents="none" style={[styles.taskGlowOverlay, { opacity: glowOpacity, backgroundColor: glowColor }]} />
+        
+        <View style={styles.taskBadgeRow}>
+          {isChallengeTask ? (
+            <View style={[styles.goalBadge, { backgroundColor: challengeTheme ? challengeTheme.primary + '25' : 'rgba(255, 107, 107, 0.12)' }]}>
+              <Flame size={12} color={challengeTheme ? challengeTheme.primary : '#FF6B6B'} />
+              <Text style={[styles.goalBadgeText, { color: challengeTheme ? challengeTheme.primary : '#FF6B6B' }]}>
+                CHALLENGE
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.goalBadge, styles.mainGoalBadgeStyle]}>
+              <Target size={12} color="rgba(255,255,255,0.6)" />
+              <Text style={[styles.goalBadgeText, styles.mainGoalBadgeText]}>
+                MAIN GOAL
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity 
+          style={styles.taskHeader}
+          onPress={() => handleTaskPress(task)}
+          activeOpacity={0.92}
+          testID={`plan.task.${task.id}.open`}
+        >
+          <TouchableOpacity 
+            style={[
+              styles.taskCheckbox, 
+              task.completed && styles.taskCheckboxCompleted,
+              !task.completed && (isChallengeTask ? { borderColor: challengeTheme?.primary || '#FF6B6B', borderWidth: 2.5 } : styles.goalTaskCheckbox),
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              animateTaskToggle(task);
+            }}
+            activeOpacity={0.9}
+            testID={`plan.task.${task.id}.toggle`}
+          >
+            <Animated.View style={{ transform: [{ scale: anims.checkScale }], opacity: anims.checkOpacity }}>
+              {task.completed && <Check size={16} color="#000" strokeWidth={3} />}
+            </Animated.View>
+          </TouchableOpacity>
+          
+          <View style={styles.taskContent}>
+            <View style={styles.taskTitleRow}>
+              <Text style={[
+                styles.taskTitle, 
+                task.completed && styles.taskTitleCompleted,
+              ]}>
+                {task.title}
+              </Text>
+              <ChevronRight size={18} color="rgba(255,255,255,0.4)" />
+            </View>
+            
+            <Text style={styles.taskDescription} numberOfLines={2}>
+              {task.description}
+            </Text>
+            
+            <View style={styles.taskMeta}>
+              <View style={[
+                styles.metaTagBadge,
+                isChallengeTask ? { backgroundColor: (challengeTheme?.primary || '#FF6B6B') + '30' } : styles.goalMetaTagBadge
+              ]}>
+                <Text style={[
+                  styles.metaTagText,
+                  isChallengeTask ? { color: challengeTheme?.primary || '#FF6B6B' } : styles.goalMetaTagText
+                ]}>
+                  {isChallengeTask ? 'CHALLENGE' : 'GOAL'}
+                </Text>
+              </View>
+              
+              <View style={styles.metaTagBadge}>
+                <Clock size={12} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.metaTagText}>{task.estimatedTime}m</Text>
+              </View>
+              
+              <View style={[
+                styles.metaTagBadge,
+                { backgroundColor: getDifficultyColor(task.difficulty) + '30' }
+              ]}>
+                <Text style={[
+                  styles.metaTagText,
+                  { color: getDifficultyColor(task.difficulty) }
+                ]}>
+                  {task.difficulty.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+        
+        {isExpanded && hasSubtasks && renderSubTasks(task.subtasks!, task.id)}
+        
+        {task.tips && task.tips.length > 0 && isExpanded && (
+          <View style={styles.tipsContainer}>
+            <Text style={styles.tipsTitle}>💡 Tips:</Text>
+            {task.tips.map((tip, index) => (
+              <Text key={index} style={styles.tipText}>• {tip}</Text>
+            ))}
+          </View>
+        )}
+      </View>
+    );
 
     return (
       <Animated.View 
@@ -317,121 +449,29 @@ export function WeeklyPlanView({
           styles.taskCardWrapper,
           { 
             borderColor: borderColor,
-            shadowColor: isChallengeTask ? '#FF4444' : '#FFD600',
+            shadowColor: cardShadowColor,
           }
         ]}>
-          <ImageBackground
-            source={{ uri: backgroundImage }}
-            style={styles.taskCardImageBg}
-            imageStyle={styles.taskCardImageStyle}
-            resizeMode="cover"
-          >
-            <View style={[styles.taskCardOverlay, task.completed && styles.taskCardCompleted]}>
-              <Animated.View pointerEvents="none" style={[styles.taskGlowOverlay, { opacity: glowOpacity, backgroundColor: glowColor }]} />
-              
-              <View style={styles.taskBadgeRow}>
-                {isChallengeTask ? (
-                  <View style={[styles.goalBadge, styles.challengeBadgeStyle]}>
-                    <Flame size={12} color="#FF6B6B" />
-                    <Text style={[styles.goalBadgeText, styles.challengeBadgeText]}>
-                      CHALLENGE
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={[styles.goalBadge, styles.mainGoalBadgeStyle]}>
-                    <Target size={12} color="rgba(255,255,255,0.6)" />
-                    <Text style={[styles.goalBadgeText, styles.mainGoalBadgeText]}>
-                      MAIN GOAL
-                    </Text>
-                  </View>
-                )}
+          {isChallengeTask && challengeTheme ? (
+            <LinearGradient
+              colors={[challengeTheme.primary + '35', challengeTheme.secondary + '20', 'rgba(20,20,20,0.95)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.taskCardImageBg}
+            >
+              {renderCardContent()}
+            </LinearGradient>
+          ) : (
+            <ImageBackground
+              source={{ uri: backgroundImage }}
+              style={styles.taskCardImageBg}
+              imageStyle={styles.taskCardImageStyle}
+              resizeMode="cover"
+            >
+              {renderCardContent()}
+            </ImageBackground>
+          )}
               </View>
-
-              <TouchableOpacity 
-                style={styles.taskHeader}
-                onPress={() => handleTaskPress(task)}
-                activeOpacity={0.92}
-                testID={`plan.task.${task.id}.open`}
-              >
-                <TouchableOpacity 
-                  style={[
-                    styles.taskCheckbox, 
-                    task.completed && styles.taskCheckboxCompleted,
-                    !task.completed && (isChallengeTask ? styles.challengeTaskCheckbox : styles.goalTaskCheckbox),
-                  ]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    animateTaskToggle(task);
-                  }}
-                  activeOpacity={0.9}
-                  testID={`plan.task.${task.id}.toggle`}
-                >
-                  <Animated.View style={{ transform: [{ scale: anims.checkScale }], opacity: anims.checkOpacity }}>
-                    {task.completed && <Check size={16} color="#000" strokeWidth={3} />}
-                  </Animated.View>
-                </TouchableOpacity>
-                
-                <View style={styles.taskContent}>
-                  <View style={styles.taskTitleRow}>
-                    <Text style={[
-                      styles.taskTitle, 
-                      task.completed && styles.taskTitleCompleted,
-                    ]}>
-                      {task.title}
-                    </Text>
-                    <ChevronRight size={18} color="rgba(255,255,255,0.4)" />
-                  </View>
-                  
-                  <Text style={styles.taskDescription} numberOfLines={2}>
-                    {task.description}
-                  </Text>
-                  
-                  <View style={styles.taskMeta}>
-                    <View style={[
-                      styles.metaTagBadge,
-                      isChallengeTask ? styles.challengeMetaTagBadge : styles.goalMetaTagBadge
-                    ]}>
-                      <Text style={[
-                        styles.metaTagText,
-                        isChallengeTask ? styles.challengeMetaTagText : styles.goalMetaTagText
-                      ]}>
-                        {isChallengeTask ? 'CHALLENGE' : 'GOAL'}
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.metaTagBadge}>
-                      <Clock size={12} color="rgba(255,255,255,0.7)" />
-                      <Text style={styles.metaTagText}>{task.estimatedTime}m</Text>
-                    </View>
-                    
-                    <View style={[
-                      styles.metaTagBadge,
-                      { backgroundColor: getDifficultyColor(task.difficulty) + '30' }
-                    ]}>
-                      <Text style={[
-                        styles.metaTagText,
-                        { color: getDifficultyColor(task.difficulty) }
-                      ]}>
-                        {task.difficulty.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-              
-              {isExpanded && hasSubtasks && renderSubTasks(task.subtasks!, task.id)}
-              
-              {task.tips && task.tips.length > 0 && isExpanded && (
-                <View style={styles.tipsContainer}>
-                  <Text style={styles.tipsTitle}>💡 Tips:</Text>
-                  {task.tips.map((tip, index) => (
-                    <Text key={index} style={styles.tipText}>• {tip}</Text>
-                  ))}
-                </View>
-              )}
-            </View>
-          </ImageBackground>
-        </View>
       </Animated.View>
     );
   };
@@ -880,6 +920,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
+  },
+  taskCardChallengeOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
   challengeTaskCard: {
     borderColor: 'rgba(255, 107, 107, 0.3)',
