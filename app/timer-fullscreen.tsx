@@ -816,14 +816,6 @@ export default function TimerFullscreenScreen() {
       >
         <Pressable style={styles.settingsBottomOverlay} onPress={() => setShowSettings(false)}>
           <Pressable style={styles.settingsBottomSheet} onPress={(e) => e.stopPropagation()}>
-            <TouchableOpacity 
-              style={styles.settingsHandleArea} 
-              onPress={() => setShowSettings(false)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.settingsHandle} />
-            </TouchableOpacity>
-            
             <View style={styles.settingsHeader}>
               <View style={styles.settingsTitleRow}>
                 <Volume2 size={22} color={theme.colors.primary} />
