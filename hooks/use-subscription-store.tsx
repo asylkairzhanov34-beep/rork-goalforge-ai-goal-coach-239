@@ -1,137 +1,77 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import createContextHook from '@nkzw/create-context-hook';
 
-// Импортируем из нашей исправленной библиотеки
+
 import {
   initializeRevenueCat,
+  getOfferings,
   getCustomerInfo,
-  purchasePackageByIdentifier,
-  restorePurchases as restorePurchasesRC,
-  getOfferingsWithCache,
+  purchasePackage,
+  restorePurchases,
+  findPackageByIdentifier,
   RevenueCatCustomerInfo,
-  RevenueCatPackage,
 } from '@/lib/revenuecat';
 
-import { SubscriptionPackage, SubscriptionStatus, CustomerInfo } from '@/types/subscription';
-import { saveUserSubscription, getUserSubscription } from '@/lib/firebase';
-import { useAuth } from '@/hooks/use-auth-store';
+export type SubscriptionStatus = 'loading' | 'free' | 'premium';
 
-// --- КОНСТАНТЫ ---
-const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
-const SUBSCRIPTION_OFFER_KEYS = {
-  seenOffer: 'hasSeenSubscriptionOffer',
-  trialStartISO: 'trialStartISO',
-};
-const SECURE_KEYS = {
-  trialStartAt: 'trialStartAt',
-  hasSeenPaywall: 'hasSeenPaywall',
-  subscriptionActive: 'subscriptionActive',
-};
-
-// Заглушки для веба (чтобы не падал интерфейс)
-const WEB_MOCK_PACKAGES: SubscriptionPackage[] = [
-  {
-    identifier: '$rc_monthly',
-    product: {
-      identifier: 'premium_monthly',
-      title: 'Monthly Subscription',
-      description: 'Premium access for 1 month',
-      price: 9.99,
-      priceString: '$9.99',
-      currencyCode: 'USD',
-    },
-  },
-  {
-    identifier: '$rc_annual',
-    product: {
-      identifier: 'premium_yearly',
-      title: 'Annual Subscription',
-      description: 'Premium access for 1 year',
-      price: 79.99,
-      priceString: '$79.99',
-      currencyCode: 'USD',
-    },
-  },
-];
-
-// Хелперы
-const canUseSecureStore = Platform.OS !== 'web';
-const secureSet = async (key: string, value: string) => {
-  if (canUseSecureStore) return SecureStore.setItemAsync(key, value);
-  return AsyncStorage.setItem(key, value);
-};
-const secureGet = async (key: string) => {
-  if (canUseSecureStore) return SecureStore.getItemAsync(key);
-  return AsyncStorage.getItem(key);
-};
-const secureDelete = async (key: string) => {
-  if (canUseSecureStore) return SecureStore.deleteItemAsync(key);
-  return AsyncStorage.removeItem(key);
-};
-
-// Логика триала
-const buildTrialState = (start: string | null) => {
-  if (!start) return { startedAt: null, expiresAt: null, isActive: false, isExpired: false };
-  const startedMs = Date.parse(start);
-  if (Number.isNaN(startedMs)) return { startedAt: null, expiresAt: null, isActive: false, isExpired: false };
-  const expiresMs = startedMs + TRIAL_DURATION_MS;
-  const now = Date.now();
-  return {
-    startedAt: new Date(startedMs).toISOString(),
-    expiresAt: new Date(expiresMs).toISOString(),
-    isActive: now < expiresMs,
-    isExpired: now >= expiresMs,
+export interface SubscriptionPackage {
+  identifier: string;
+  product: {
+    identifier: string;
+    title: string;
+    description: string;
+    price: number;
+    priceString: string;
+    currencyCode: string;
   };
-};
+}
+
+const ENTITLEMENT_ID = 'Premium Subscriptions';
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
-  const auth = useAuth();
-  const user = auth?.user;
-  
   const [isInitialized, setIsInitialized] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus>('loading');
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [customerInfo, setCustomerInfo] = useState<RevenueCatCustomerInfo | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
-  
-  const [trialState, setTrialState] = useState(buildTrialState(null));
-  const trialStateRef = useRef(trialState);
+  const [error, setError] = useState<string | null>(null);
+  const [isFirstLaunch, setIsFirstLaunch] = useState(true);
 
-  // 1. Инициализация при старте
   useEffect(() => {
     const init = async () => {
-      console.log('[SubscriptionProvider] 🚀 Запуск инициализации...');
-      
-      // Сначала проверим локальные данные (триал)
-      const trialStart = await secureGet(SECURE_KEYS.trialStartAt);
-      const currentTrial = buildTrialState(trialStart);
-      setTrialState(currentTrial);
-      trialStateRef.current = currentTrial;
+      console.log('[Subscription] 🚀 Initializing...');
+      console.log('[Subscription] Platform:', Platform.OS);
+      console.log('[Subscription] __DEV__:', __DEV__);
 
-      if (Platform.OS === 'web') {
-        setPackages(WEB_MOCK_PACKAGES);
-        setStatus('free');
-        setIsInitialized(true);
-        return;
-      }
-
-      // Инициализируем RevenueCat
-      const rcSuccess = await initializeRevenueCat();
-      
-      if (rcSuccess) {
-        console.log('[SubscriptionProvider] ✅ RevenueCat готов. Загружаем данные...');
+      try {
+        const rcInitialized = await initializeRevenueCat();
         
-        // 1. Инфо о юзере
-        const info = await getCustomerInfo();
-        updateStatusFromInfo(info);
+        if (!rcInitialized) {
+          console.error('[Subscription] RevenueCat init failed');
+          setError('Failed to initialize purchases');
+          setStatus('free');
+          setIsInitialized(true);
+          return;
+        }
 
-        // 2. Тарифы
-        const offerings = await getOfferingsWithCache();
-        if (offerings?.current?.availablePackages.length) {
-          const formatted = offerings.current.availablePackages.map((pkg: RevenueCatPackage) => ({
+        const [info, offerings] = await Promise.all([
+          getCustomerInfo(),
+          getOfferings(),
+        ]);
+
+        if (info) {
+          setCustomerInfo(info);
+          const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+                            info.entitlements.active['premium'] !== undefined;
+          setStatus(hasPremium ? 'premium' : 'free');
+          console.log('[Subscription] Status:', hasPremium ? 'PREMIUM' : 'FREE');
+        } else {
+          setStatus('free');
+        }
+
+        if (offerings?.current?.availablePackages) {
+          const formatted: SubscriptionPackage[] = offerings.current.availablePackages.map((pkg) => ({
             identifier: pkg.identifier,
             product: {
               identifier: pkg.product.identifier,
@@ -143,125 +83,108 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
             },
           }));
           setPackages(formatted);
-          console.log(`[SubscriptionProvider] 📦 Загружено пакетов: ${formatted.length}`);
+          console.log('[Subscription] Loaded', formatted.length, 'packages');
         } else {
-          console.warn('[SubscriptionProvider] ⚠️ Пакеты не найдены в RevenueCat');
+          console.warn('[Subscription] No packages available');
         }
-      } else {
-        console.error('[SubscriptionProvider] ❌ Ошибка инициализации RevenueCat');
-        // Если ошибка - не блокируем приложение, даем фри доступ
+
+        setIsInitialized(true);
+        console.log('[Subscription] ✅ Initialization complete');
+      } catch (err) {
+        console.error('[Subscription] Init error:', err);
+        setError('Initialization error');
         setStatus('free');
+        setIsInitialized(true);
       }
-      
-      setIsInitialized(true);
     };
 
     init();
   }, []);
 
-  // Обновление статуса на основе данных от RevenueCat
-  const updateStatusFromInfo = async (info: RevenueCatCustomerInfo | null) => {
-    if (!info) return;
-
-    // Преобразуем в наш формат CustomerInfo
-    const mappedInfo: CustomerInfo = {
-      activeSubscriptions: info.activeSubscriptions,
-      allPurchasedProductIdentifiers: info.allPurchasedProductIdentifiers,
-      entitlements: {
-        active: Object.entries(info.entitlements.active).reduce((acc, [key, val]) => {
-          acc[key] = { identifier: val.identifier, isActive: val.isActive, productIdentifier: val.productIdentifier };
-          return acc;
-        }, {} as any)
-      }
-    };
-    setCustomerInfo(mappedInfo);
-
-    const hasPremium = info.entitlements.active['premium'] !== undefined; // Проверяем entitlement 'premium'
+  const handlePurchase = useCallback(async (packageIdentifier: string): Promise<boolean> => {
+    console.log('[Subscription] 🛒 Purchase requested:', packageIdentifier);
     
-    if (hasPremium) {
-      console.log('[SubscriptionProvider] 💎 Статус: PREMIUM');
-      setStatus('premium');
-      await secureSet(SECURE_KEYS.subscriptionActive, 'true');
-    } else {
-      console.log('[SubscriptionProvider] 👤 Статус: FREE (или Trial)');
-      await secureDelete(SECURE_KEYS.subscriptionActive);
-      setStatus(trialStateRef.current.isActive ? 'trial' : 'free');
-    }
-  };
-
-  // Покупка
-  const purchasePackage = async (identifier: string) => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Web Payment', 'Not supported in demo');
-      return null;
+    const pkg = findPackageByIdentifier(packageIdentifier);
+    if (!pkg) {
+      console.error('[Subscription] Package not found:', packageIdentifier);
+      Alert.alert('Error', 'Package not found. Please try again.');
+      return false;
     }
 
     setIsPurchasing(true);
+    setError(null);
+
     try {
-      console.log(`[SubscriptionProvider] 🛒 Начинаем покупку: ${identifier}`);
+      const info = await purchasePackage(pkg);
       
-      // Вызываем исправленную функцию из revenuecat.ts
-      const result = await purchasePackageByIdentifier(identifier);
-      
-      if (result) {
-        console.log('[SubscriptionProvider] ✅ Покупка прошла успешно!');
-        await updateStatusFromInfo(result.info);
-        return true;
-      } else {
-        console.log('[SubscriptionProvider] ❌ Покупка вернула null (отмена или ошибка)');
-        return false;
+      if (info) {
+        setCustomerInfo(info);
+        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+                          info.entitlements.active['premium'] !== undefined;
+        if (hasPremium) {
+          setStatus('premium');
+          console.log('[Subscription] ✅ Purchase successful - now PREMIUM');
+          return true;
+        }
       }
-    } catch (e: any) {
-      if (!e.userCancelled) {
-        Alert.alert('Ошибка покупки', e.message);
+      
+      console.log('[Subscription] Purchase cancelled or no entitlement');
+      return false;
+    } catch (err: any) {
+      console.error('[Subscription] Purchase error:', err);
+      if (!err.userCancelled) {
+        setError(err.message || 'Purchase failed');
+        Alert.alert('Purchase Error', err.message || 'Unable to complete purchase. Please try again.');
       }
       return false;
     } finally {
       setIsPurchasing(false);
     }
-  };
+  }, []);
 
-  // Восстановление
-  const restorePurchases = async () => {
-    setIsPurchasing(true); // Используем тот же лоадер
+  const handleRestore = useCallback(async (): Promise<boolean> => {
+    console.log('[Subscription] 🔄 Restore requested');
+    setIsPurchasing(true);
+    setError(null);
+
     try {
-      const info = await restorePurchasesRC();
-      await updateStatusFromInfo(info);
-      const hasPremium = info?.entitlements.active['premium'];
-      return !!hasPremium;
-    } catch (e) {
+      const info = await restorePurchases();
+      
+      if (info) {
+        setCustomerInfo(info);
+        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+                          info.entitlements.active['premium'] !== undefined;
+        if (hasPremium) {
+          setStatus('premium');
+          console.log('[Subscription] ✅ Restore successful - now PREMIUM');
+          return true;
+        }
+      }
+      
+      console.log('[Subscription] No purchases to restore');
+      return false;
+    } catch (err: any) {
+      console.error('[Subscription] Restore error:', err);
+      setError(err.message || 'Restore failed');
       return false;
     } finally {
       setIsPurchasing(false);
     }
-  };
+  }, []);
 
-  // Триал
-  const startTrial = async () => {
-    const now = new Date().toISOString();
-    await secureSet(SECURE_KEYS.trialStartAt, now);
-    const newState = buildTrialState(now);
-    setTrialState(newState);
-    trialStateRef.current = newState;
-    setStatus('trial');
-    return newState;
-  };
-
-  // Геттеры доступа
-  const canAccessPremiumFeatures = useCallback(() => {
-    return status === 'premium' || trialState.isActive;
-  }, [status, trialState.isActive]);
-
-  const getFeatureAccess = useCallback(() => {
-    const hasAccess = canAccessPremiumFeatures();
-    return {
-      dailyAICoach: hasAccess,
-      weeklyAIReport: hasAccess,
-      unlimitedSmartTasks: hasAccess,
-      aiChatAssistant: true, // Всегда доступен
-      // ... добавьте остальные флаги по необходимости
-    };
-  }, [canAccessPremiumFeatures]);
+  const refreshStatus = useCallback(async () => {
+    try {
+      const info = await getCustomerInfo();
+      if (info) {
+        setCustomerInfo(info);
+        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+                          info.entitlements.active['premium'] !== undefined;
+        setStatus(hasPremium ? 'premium' : 'free');
+      }
+    } catch (err) {
+      console.error('[Subscription] Refresh error:', err);
+    }
+  }, []);
 
   return {
     isInitialized,
@@ -269,12 +192,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     packages,
     customerInfo,
     isPurchasing,
-    purchasePackage,
-    restorePurchases,
-    trialState,
-    startTrial,
-    canAccessPremiumFeatures,
-    getFeatureAccess,
+    error,
+    isFirstLaunch,
     isPremium: status === 'premium',
+    purchasePackage: handlePurchase,
+    restorePurchases: handleRestore,
+    refreshStatus,
+    setIsFirstLaunch,
   };
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, ReactNode } from 'react';
+import React, { useEffect, useState, ReactNode, useCallback } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSubscription } from '@/hooks/use-subscription-store';
@@ -17,8 +17,7 @@ export default function PremiumGate({
   fallback = null,
 }: PremiumGateProps) {
   const router = useRouter();
-  const { canAccessPremiumFeatures, isInitialized, status } = useSubscription();
-  const hasAccess = canAccessPremiumFeatures();
+  const { isPremium, isInitialized, status } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
   const [accessDecided, setAccessDecided] = useState(false);
 
@@ -27,10 +26,9 @@ export default function PremiumGate({
       return;
     }
     
-    const access = canAccessPremiumFeatures();
     setAccessDecided(true);
-    setShowPaywall(!access);
-  }, [isInitialized, status, canAccessPremiumFeatures]);
+    setShowPaywall(!isPremium);
+  }, [isInitialized, status, isPremium]);
 
   if (!isInitialized || status === 'loading' || !accessDecided) {
     return (
@@ -40,7 +38,7 @@ export default function PremiumGate({
     );
   }
 
-  if (!hasAccess) {
+  if (!isPremium) {
     return (
       <>
         {fallback}
@@ -72,19 +70,18 @@ const styles = StyleSheet.create({
 
 export function usePremiumGate() {
   const router = useRouter();
-  const { canAccessPremiumFeatures, getFeatureAccess } = useSubscription();
+  const { isPremium } = useSubscription();
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const checkAccess = (featureName?: string): boolean => {
-    const allowed = canAccessPremiumFeatures();
-    if (!allowed) {
+  const checkAccess = useCallback((featureName?: string): boolean => {
+    if (!isPremium) {
       setShowPaywall(true);
       console.log('[PremiumGate] Access denied:', featureName || 'premium feature');
     }
-    return allowed;
-  };
+    return isPremium;
+  }, [isPremium]);
 
-  const Paywall = () => (
+  const Paywall = useCallback(() => (
     <PaywallModal
       visible={showPaywall}
       variant="feature"
@@ -98,12 +95,11 @@ export function usePremiumGate() {
       primaryLabel="Get Premium"
       secondaryLabel="Not Now"
     />
-  );
+  ), [showPaywall, router]);
 
   return {
     checkAccess,
-    hasAccess: canAccessPremiumFeatures(),
-    featureAccess: getFeatureAccess(),
+    hasAccess: isPremium,
     PaywallModal: Paywall,
   };
 }

@@ -10,26 +10,19 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { 
   Trash2, 
   Clock, 
-  CheckCircle, 
-  XCircle, 
   RefreshCw, 
   User, 
-  Settings,
   CreditCard,
-  CloudOff,
   Server,
-  RotateCcw,
   Shield,
 } from 'lucide-react-native';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { useAuth } from '@/hooks/use-auth-store';
-import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
 
 const STORAGE_KEYS = [
   'hasSeenPaywall',
@@ -38,41 +31,21 @@ const STORAGE_KEYS = [
   'hasSeenSubscriptionOffer',
   '@subscription_status',
   '@first_launch',
-  'auth_user',
-  'auth_sessions',
-  'current_session',
-  'registered_users',
-  'firstTimeSetup',
-  'subscription_state',
-];
-
-const SECURE_STORE_KEYS = [
-  'trialStartAt',
-  'hasSeenPaywall',
-  'subscriptionActive',
 ];
 
 export default function DevSubscriptionTools() {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [storageValues, setStorageValues] = useState<Record<string, string | null>>({});
   const { 
     status, 
-    cancelSubscriptionForDev,
-    forceRefreshFromServer,
-    fullResetForTesting,
     restorePurchases,
+    refreshStatus,
     customerInfo,
+    isPremium,
+    packages,
   } = useSubscription();
   const { user, logout } = useAuth();
-  const { 
-    isPremium,
-    isTrialActive,
-    isTrialExpired,
-    trialExpiresAt,
-    refreshStatus,
-  } = useSubscriptionStatus();
 
   const loadStorageValues = useCallback(async () => {
     const values: Record<string, string | null> = {};
@@ -85,16 +58,6 @@ export default function DevSubscriptionTools() {
       }
     }
     
-    if (Platform.OS !== 'web') {
-      for (const key of SECURE_STORE_KEYS) {
-        try {
-          values[`[Secure] ${key}`] = await SecureStore.getItemAsync(key);
-        } catch {
-          values[`[Secure] ${key}`] = null;
-        }
-      }
-    }
-    
     setStorageValues(values);
   }, []);
 
@@ -102,64 +65,19 @@ export default function DevSubscriptionTools() {
     loadStorageValues();
   }, [loadStorageValues]);
 
-  const resetLocalCache = useCallback(async () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    try {
-      await cancelSubscriptionForDev();
-      await refreshStatus();
-      await loadStorageValues();
-      Alert.alert('✅ Success', 'Local subscription cache has been reset. Status is now determined by the server.');
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [isProcessing, cancelSubscriptionForDev, refreshStatus, loadStorageValues]);
-
   const forceServerSync = useCallback(async () => {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      const result = await forceRefreshFromServer();
+      await refreshStatus();
       await loadStorageValues();
-      if (result) {
-        Alert.alert('✅ Success', `Server sync completed.\nStatus: ${status}`);
-      } else {
-        Alert.alert('⚠️ Warning', 'Failed to fetch data from server. RevenueCat may be unavailable.');
-      }
+      Alert.alert('✅ Success', `Server sync completed.\nStatus: ${status}`);
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, forceRefreshFromServer, loadStorageValues, status]);
-
-  const performFullReset = useCallback(async () => {
-    Alert.alert(
-      '⚠️ Full Reset',
-      'This will reset ALL subscription data locally and sync with the server. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              await fullResetForTesting();
-              await loadStorageValues();
-              Alert.alert('✅ Success', 'Full reset completed. App is like a fresh install.');
-            } catch (error) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
-            } finally {
-              setIsProcessing(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [fullResetForTesting, loadStorageValues]);
+  }, [isProcessing, refreshStatus, loadStorageValues, status]);
 
   const performRestorePurchases = useCallback(async () => {
     if (isProcessing) return;
@@ -179,26 +97,6 @@ export default function DevSubscriptionTools() {
     }
   }, [isProcessing, restorePurchases, loadStorageValues]);
 
-  const forceExpireTrial = useCallback(async () => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    try {
-      const expiredTime = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
-      await AsyncStorage.setItem('trialStartedAt', expiredTime);
-      await AsyncStorage.setItem('trialStartISO', expiredTime);
-      if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync('trialStartAt', expiredTime);
-      }
-      await refreshStatus();
-      await loadStorageValues();
-      Alert.alert('✅ Success', 'Trial has been forcefully expired.');
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [isProcessing, refreshStatus, loadStorageValues]);
-
   const clearAllData = useCallback(async () => {
     Alert.alert(
       '⚠️ Warning',
@@ -212,13 +110,6 @@ export default function DevSubscriptionTools() {
             setIsProcessing(true);
             try {
               await AsyncStorage.clear();
-              if (Platform.OS !== 'web') {
-                for (const key of SECURE_STORE_KEYS) {
-                  try {
-                    await SecureStore.deleteItemAsync(key);
-                  } catch {}
-                }
-              }
               await logout();
               Alert.alert('✅ Success', 'All data has been deleted.');
               router.replace('/');
@@ -233,12 +124,6 @@ export default function DevSubscriptionTools() {
     );
   }, [logout, router]);
 
-  const toggleKey = (key: string) => {
-    setSelectedKeys(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
-
   const activeEntitlements = customerInfo?.entitlements?.active 
     ? Object.keys(customerInfo.entitlements.active) 
     : [];
@@ -248,8 +133,8 @@ export default function DevSubscriptionTools() {
       <Stack.Screen 
         options={{ 
           title: 'Subscription Tools',
-          headerStyle: { backgroundColor: '#000' },
-          headerTintColor: '#FFD700',
+          headerStyle: { backgroundColor: '#0f0f23' },
+          headerTintColor: '#4ECDC4',
         }} 
       />
       <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -273,7 +158,7 @@ export default function DevSubscriptionTools() {
                 <Shield size={16} color="#888" />
                 <Text style={styles.statusLabel}>Status:</Text>
                 <Text style={[styles.statusValue, status === 'premium' && styles.premiumText]}>
-                  {status === 'premium' ? 'Premium' : status === 'trial' ? 'Trial' : 'Free'}
+                  {status === 'premium' ? 'Premium' : 'Free'}
                 </Text>
               </View>
               <View style={styles.statusItem}>
@@ -285,220 +170,78 @@ export default function DevSubscriptionTools() {
               </View>
               <View style={styles.statusItem}>
                 <Clock size={16} color="#888" />
-                <Text style={styles.statusLabel}>Trial:</Text>
+                <Text style={styles.statusLabel}>Packages:</Text>
                 <Text style={styles.statusValue}>
-                  {isTrialActive ? 'Active' : isTrialExpired ? 'Expired' : 'Not started'}
+                  {packages.length} loaded
                 </Text>
               </View>
-              {trialExpiresAt && (
-                <View style={styles.statusItem}>
-                  <Settings size={16} color="#888" />
-                  <Text style={styles.statusLabel}>Expires:</Text>
-                  <Text style={styles.statusValue} numberOfLines={1}>
-                    {new Date(trialExpiresAt).toLocaleString('en-US')}
-                  </Text>
-                </View>
-              )}
-              {activeEntitlements.length > 0 && (
-                <View style={styles.statusItem}>
-                  <CheckCircle size={16} color="#4CAF50" />
-                  <Text style={styles.statusLabel}>Entitlements:</Text>
-                  <Text style={[styles.statusValue, styles.premiumText]}>
-                    {activeEntitlements.join(', ')}
-                  </Text>
-                </View>
-              )}
             </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🔄 Server Sync</Text>
-            <Text style={styles.sectionSubtitle}>
-              Use these buttons to sync with RevenueCat
-            </Text>
             
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
-              onPress={forceServerSync}
-              disabled={isProcessing}
-            >
-              <Server size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Sync with Server</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
-              onPress={performRestorePurchases}
-              disabled={isProcessing}
-            >
-              <RefreshCw size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Restore Purchases</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🧪 Test Actions</Text>
-            
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#F44336' }]}
-              onPress={async () => {
-                if (isProcessing) return;
-                Alert.alert(
-                  '❌ Cancel Subscription',
-                  'This will cancel your subscription locally for testing. RevenueCat server status will remain unchanged.',
-                  [
-                    { text: 'No', style: 'cancel' },
-                    {
-                      text: 'Yes, Cancel',
-                      style: 'destructive',
-                      onPress: async () => {
-                        setIsProcessing(true);
-                        try {
-                          await cancelSubscriptionForDev();
-                          await loadStorageValues();
-                          Alert.alert('✅ Success', 'Subscription cancelled locally. Status: ' + status);
-                        } catch (error) {
-                          Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
-                        } finally {
-                          setIsProcessing(false);
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              disabled={isProcessing}
-            >
-              <XCircle size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Cancel Subscription (Test)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#FF9800' }]}
-              onPress={resetLocalCache}
-              disabled={isProcessing}
-            >
-              <CloudOff size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Reset Local Subscription Cache</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#E91E63' }]}
-              onPress={forceExpireTrial}
-              disabled={isProcessing}
-            >
-              <XCircle size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Force Expire Trial</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#9C27B0' }]}
-              onPress={performFullReset}
-              disabled={isProcessing}
-            >
-              <RotateCcw size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Full Reset (like first launch)</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📦 Storage</Text>
-            <Text style={styles.sectionSubtitle}>Current storage values</Text>
-            
-            {Object.entries(storageValues).map(([key, value]) => (
-              <TouchableOpacity
-                key={key}
-                style={styles.storageKeyRow}
-                onPress={() => toggleKey(key)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.checkbox}>
-                  {selectedKeys.includes(key) && <CheckCircle size={16} color="#FFD700" />}
-                </View>
-                <View style={styles.storageKeyInfo}>
-                  <Text style={styles.storageKeyText}>{key}</Text>
-                  <Text style={styles.storageValueText} numberOfLines={1}>
-                    {value ?? '(null)'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={loadStorageValues}
-            >
-              <RefreshCw size={16} color="#FFD700" />
-              <Text style={styles.refreshButtonText}>Refresh Values</Text>
-            </TouchableOpacity>
-
-            {selectedKeys.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearSelectedButton}
-                onPress={async () => {
-                  setIsProcessing(true);
-                  try {
-                    const asyncKeys = selectedKeys.filter(k => !k.startsWith('[Secure]'));
-                    const secureKeys = selectedKeys
-                      .filter(k => k.startsWith('[Secure]'))
-                      .map(k => k.replace('[Secure] ', ''));
-                    
-                    if (asyncKeys.length > 0) {
-                      await AsyncStorage.multiRemove(asyncKeys);
-                    }
-                    
-                    if (Platform.OS !== 'web' && secureKeys.length > 0) {
-                      for (const key of secureKeys) {
-                        await SecureStore.deleteItemAsync(key);
-                      }
-                    }
-                    
-                    Alert.alert('✅ Success', `Deleted ${selectedKeys.length} keys`);
-                    setSelectedKeys([]);
-                    await loadStorageValues();
-                    await refreshStatus();
-                  } catch {
-                    Alert.alert('Error', 'Failed to delete keys');
-                  } finally {
-                    setIsProcessing(false);
-                  }
-                }}
-              >
-                <Trash2 size={18} color="#FF6B6B" />
-                <Text style={styles.clearSelectedText}>
-                  Delete {selectedKeys.length} selected
-                </Text>
-              </TouchableOpacity>
+            {activeEntitlements.length > 0 && (
+              <View style={styles.entitlementsBox}>
+                <Text style={styles.entitlementsTitle}>Active Entitlements:</Text>
+                {activeEntitlements.map(e => (
+                  <Text key={e} style={styles.entitlementItem}>• {e}</Text>
+                ))}
+              </View>
             )}
           </View>
 
-          <View style={styles.dangerZone}>
-            <Text style={styles.dangerTitle}>⚠️ Danger Zone</Text>
+          <View style={styles.actionsSection}>
+            <Text style={styles.sectionTitle}>Actions</Text>
+            
             <TouchableOpacity
-              style={styles.dangerButton}
+              style={[styles.actionButton, styles.primaryButton]}
+              onPress={forceServerSync}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator color="#0f0f23" size="small" />
+              ) : (
+                <>
+                  <Server size={20} color="#0f0f23" />
+                  <Text style={styles.primaryButtonText}>Sync with Server</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.secondaryButton]}
+              onPress={performRestorePurchases}
+              disabled={isProcessing}
+            >
+              <RefreshCw size={20} color="#4ECDC4" />
+              <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.dangerButton]}
               onPress={clearAllData}
               disabled={isProcessing}
             >
-              <Trash2 size={20} color="#FFF" />
-              <Text style={styles.dangerButtonText}>Delete ALL App Data</Text>
+              <Trash2 size={20} color="#FF6B6B" />
+              <Text style={styles.dangerButtonText}>Clear All Data</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>ℹ️ Information</Text>
-            <Text style={styles.infoText}>
-              • Sync with Server - fetches current status from RevenueCat{'\n'}
-              • Reset Local Cache - removes local data but doesn&apos;t cancel subscription{'\n'}
-              • Full Reset - resets everything and syncs with server{'\n'}
-              • To test Sandbox subscriptions, use a test Apple ID
-            </Text>
+          <View style={styles.storageSection}>
+            <Text style={styles.sectionTitle}>Storage Values</Text>
+            {Object.entries(storageValues).map(([key, value]) => (
+              <View key={key} style={styles.storageItem}>
+                <Text style={styles.storageKey}>{key}</Text>
+                <Text style={styles.storageValue} numberOfLines={1}>
+                  {value || '(empty)'}
+                </Text>
+              </View>
+            ))}
           </View>
 
-          {isProcessing && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#FFD700" />
-            </View>
-          )}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoTitle}>Debug Info</Text>
+            <Text style={styles.infoText}>Platform: {Platform.OS}</Text>
+            <Text style={styles.infoText}>__DEV__: {__DEV__ ? 'true' : 'false'}</Text>
+            <Text style={styles.infoText}>Packages loaded: {packages.length}</Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </>
@@ -508,41 +251,41 @@ export default function DevSubscriptionTools() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0f0f23',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    padding: 20,
+    paddingBottom: 40,
   },
   header: {
-    paddingVertical: 20,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '700' as const,
+    color: '#fff',
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.5)',
   },
   statusCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.15)',
+    borderColor: 'rgba(78,205,196,0.2)',
   },
   statusTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFD700',
-    marginBottom: 16,
+    fontWeight: '600' as const,
+    color: '#4ECDC4',
+    marginBottom: 12,
   },
   statusGrid: {
-    gap: 12,
+    gap: 8,
   },
   statusItem: {
     flexDirection: 'row',
@@ -550,159 +293,116 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
   },
   statusValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
+    fontSize: 13,
+    color: '#fff',
     flex: 1,
   },
   premiumText: {
-    color: '#FFD700',
+    color: '#4ECDC4',
+    fontWeight: '600' as const,
   },
-  section: {
+  entitlementsBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  entitlementsTitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 4,
+  },
+  entitlementItem: {
+    fontSize: 12,
+    color: '#4ECDC4',
+  },
+  actionsSection: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-    marginBottom: 8,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '600' as const,
     color: 'rgba(255,255,255,0.5)',
     marginBottom: 12,
+    textTransform: 'uppercase',
   },
   actionButton: {
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     padding: 14,
+    borderRadius: 12,
     marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
-  actionButtonText: {
+  primaryButton: {
+    backgroundColor: '#4ECDC4',
+  },
+  primaryButtonText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
+    fontWeight: '600' as const,
+    color: '#0f0f23',
   },
-  storageKeyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: 'rgba(255,215,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  storageKeyInfo: {
-    flex: 1,
-  },
-  storageKeyText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
-  },
-  storageValueText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 2,
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    marginTop: 8,
-  },
-  refreshButtonText: {
-    fontSize: 14,
-    color: '#FFD700',
-    fontWeight: '500',
-  },
-  clearSelectedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginTop: 12,
-    borderRadius: 8,
+  secondaryButton: {
+    backgroundColor: 'rgba(78,205,196,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255,107,107,0.4)',
+    borderColor: 'rgba(78,205,196,0.3)',
   },
-  clearSelectedText: {
-    fontSize: 14,
-    color: '#FF6B6B',
-    fontWeight: '600',
-  },
-  dangerZone: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,107,107,0.2)',
-  },
-  dangerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FF6B6B',
-    marginBottom: 12,
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#4ECDC4',
   },
   dangerButton: {
-    backgroundColor: '#FF4444',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.3)',
   },
   dangerButtonText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
+    fontWeight: '600' as const,
+    color: '#FF6B6B',
   },
-  infoBox: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+  storageSection: {
+    marginBottom: 24,
+  },
+  storageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  storageKey: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    flex: 1,
+  },
+  storageValue: {
+    fontSize: 12,
+    color: '#fff',
+    flex: 1,
+    textAlign: 'right',
+  },
+  infoSection: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(33, 150, 243, 0.3)',
+    padding: 12,
   },
   infoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2196F3',
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 8,
   },
   infoText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    lineHeight: 18,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });

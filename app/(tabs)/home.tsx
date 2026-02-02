@@ -33,7 +33,7 @@ export default function TodayScreen() {
   const { profile: setupProfile } = useFirstTimeSetup();
 
   const challengeStore = useChallengeStore();
-  const { shouldShowOffer, startTrial, checking: subscriptionChecking } = useSubscriptionStatus();
+  const { shouldShowOffer, checking: subscriptionChecking } = useSubscriptionStatus();
   const [refreshing, setRefreshing] = useState(false);
   const [, setCurrentQuoteIndex] = useState(() => 
     Math.floor(Math.random() * getQuotes().length)
@@ -341,8 +341,8 @@ export default function TodayScreen() {
       <SubscriptionOfferModal
         visible={shouldShowOffer}
         loading={subscriptionChecking}
-        onPrimary={() => startTrial('primary')}
-        onSkip={() => startTrial('skip')}
+        onPrimary={() => router.push('/subscription')}
+        onSkip={() => router.push('/subscription')}
         testID="subscription-offer"
       />
       <View style={[styles.container, { paddingTop: insets.top }]}>

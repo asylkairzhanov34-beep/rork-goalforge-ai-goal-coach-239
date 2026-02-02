@@ -231,26 +231,8 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleCancelSubscriptionDev = async () => {
-    Alert.alert(
-      'Cancel Subscription (Dev)',
-      'This will cancel your subscription for testing purposes. Are you sure?',
-      [
-        { text: 'No', style: 'cancel' },
-        { 
-          text: 'Yes, Cancel', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await subscription?.cancelSubscriptionForDev();
-              Alert.alert('Done', 'Subscription cancelled for testing.');
-            } catch {
-              Alert.alert('Error', 'Failed to cancel subscription.');
-            }
-          }
-        },
-      ]
-    );
+  const handleOpenDevTools = () => {
+    router.push('/dev-subscription-tools');
   };
 
   const handleRestorePurchases = async () => {
@@ -410,7 +392,7 @@ export default function SettingsScreen() {
             <SettingItem
               icon={Crown}
               title="Subscription Status"
-              subtitle={subscription?.status === 'premium' ? 'Premium Active' : subscription?.status === 'trial' ? 'Trial Active' : 'Free Plan'}
+              subtitle={subscription?.isPremium ? 'Premium Active' : 'Free Plan'}
               onPress={() => router.push('/subscription')}
               showArrow
               iconColor="#F59E0B"
@@ -433,14 +415,24 @@ export default function SettingsScreen() {
               showArrow
               iconColor="#10B981"
             />
-            {(__DEV__ || subscription?.status === 'premium') && (
+            {subscription?.isPremium && (
               <SettingItem
                 icon={ExternalLink}
                 title="Cancel Subscription"
-                subtitle={__DEV__ ? 'Dev: Cancel for testing' : 'Opens store settings'}
-                onPress={__DEV__ ? handleCancelSubscriptionDev : handleCancelSubscription}
+                subtitle="Opens store settings"
+                onPress={handleCancelSubscription}
                 showArrow
                 iconColor="#EF4444"
+              />
+            )}
+            {__DEV__ && (
+              <SettingItem
+                icon={Shield}
+                title="Developer Tools"
+                subtitle="Debug subscription state"
+                onPress={handleOpenDevTools}
+                showArrow
+                iconColor="#8B5CF6"
               />
             )}
           </View>

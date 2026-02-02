@@ -1,44 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Check, RefreshCw, XCircle, CreditCard } from 'lucide-react-native';
+import { Check, RefreshCw, CreditCard } from 'lucide-react-native';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
-const CONFETTI_COLORS = ['#FFD700', '#FFB300', '#FF8C00', '#FFE066', '#FFC93C', '#F9A826'];
+const CONFETTI_COLORS = ['#4ECDC4', '#44A08D', '#667eea', '#764ba2', '#f093fb', '#f5576c'];
 const CONFETTI_PIECES = 12;
-
-const formatDate = (iso?: string) => {
-  if (!iso) {
-    return '—';
-  }
-  try {
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(iso));
-  } catch {
-    return '—';
-  }
-};
 
 export default function PurchaseSuccessScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ planName?: string; nextBillingDate?: string; trialStatus?: string }>();
+  const params = useLocalSearchParams<{ planName?: string }>();
   const { 
     restorePurchases, 
-    isRestoring, 
-    cancelSubscriptionForDev, 
-    forceRefreshFromServer,
+    refreshStatus,
     status,
     packages,
     purchasePackage,
     isPurchasing,
   } = useSubscription();
-  const [isCancelling, setIsCancelling] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const heroScale = useRef(new Animated.Value(0.85)).current;
   const confetti = useRef([...Array(CONFETTI_PIECES)].map(() => new Animated.Value(0))).current;
@@ -64,9 +47,7 @@ export default function PurchaseSuccessScreen() {
     ]).start();
   }, [confetti, heroScale]);
 
-  const planName = params.planName || 'GoalForge Premium';
-  const trialStatus = params.trialStatus || 'Пробный период активирован';
-  const nextBilling = formatDate(params.nextBillingDate);
+  const planName = params.planName || 'Premium';
 
   const handleContinue = async () => {
     if (Platform.OS !== 'web') {
@@ -76,55 +57,24 @@ export default function PurchaseSuccessScreen() {
   };
 
   const handleRestore = async () => {
-    await restorePurchases();
-  };
-
-  const handleCancelSubscription = async () => {
-    Alert.alert(
-      'Reset Subscription for Testing',
-      'This will clear local subscription state and redirect you to the purchase screen.\n\nNote: This only resets the app state. If you have an active Sandbox subscription, it will be restored when you sync with Apple.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset & Go to Purchase',
-          style: 'destructive',
-          onPress: async () => {
-            setIsCancelling(true);
-            try {
-              console.log('[PurchaseSuccess] Resetting subscription state for TestFlight testing...');
-              await cancelSubscriptionForDev();
-              if (Platform.OS !== 'web') {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              }
-              console.log('[PurchaseSuccess] State cleared, redirecting to subscription screen...');
-              router.replace('/subscription');
-            } catch (error) {
-              console.error('[PurchaseSuccess] Reset failed:', error);
-              Alert.alert('Error', 'Failed to reset subscription state. Please try again.');
-            } finally {
-              setIsCancelling(false);
-            }
-          }
-        },
-      ]
-    );
+    setIsRestoring(true);
+    try {
+      await restorePurchases();
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   const handleRefreshStatus = async () => {
     setIsRefreshing(true);
     try {
-      const result = await forceRefreshFromServer();
+      await refreshStatus();
       if (Platform.OS !== 'web') {
-        await Haptics.notificationAsync(
-          result ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
-        ).catch(() => {});
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
-      Alert.alert(
-        'Status Refreshed',
-        `Current status: ${status.toUpperCase()}\n\nSynced with RevenueCat server.`
-      );
+      Alert.alert('Status Refreshed', `Current status: ${status.toUpperCase()}`);
     } catch {
-      Alert.alert('Error', 'Failed to refresh status. Please try again.');
+      Alert.alert('Error', 'Failed to refresh status.');
     } finally {
       setIsRefreshing(false);
     }
@@ -136,34 +86,32 @@ export default function PurchaseSuccessScreen() {
       return;
     }
 
-    const packageOptions = packages.map((pkg, index) => ({
+    const packageOptions = packages.map((pkg) => ({
       text: `${pkg.product.title} - ${pkg.product.priceString}`,
       onPress: async () => {
         console.log('[PurchaseSuccess] Testing purchase for:', pkg.identifier);
         const result = await purchasePackage(pkg.identifier);
         if (result) {
-          Alert.alert('Purchase Complete', `Successfully purchased: ${result.planName}`);
+          Alert.alert('Purchase Complete', 'Successfully purchased subscription!');
         }
       }
     }));
 
     Alert.alert(
-      'Test Purchase (Sandbox)',
-      'Select a package to test the Apple purchase flow:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        ...packageOptions
-      ]
+      'Test Purchase',
+      'Select a package to test:',
+      [{ text: 'Cancel', style: 'cancel' }, ...packageOptions]
     );
   };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <LinearGradient colors={['rgba(255,215,0,0.2)', 'rgba(0,0,0,0)']} style={styles.backgroundGlow} />
+      <LinearGradient colors={['rgba(78,205,196,0.2)', 'rgba(0,0,0,0)']} style={styles.backgroundGlow} />
       <View style={styles.container}>
         <Animated.View style={[styles.heroIcon, { transform: [{ scale: heroScale }] }]} testID="purchase-success-hero">
-          <Check size={40} color="#000" />
+          <Check size={40} color="#0f0f23" />
         </Animated.View>
+        
         <View style={styles.confettiContainer} pointerEvents="none">
           {confetti.map((anim, index) => {
             const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [-20, 60 + index * 2] });
@@ -188,21 +136,17 @@ export default function PurchaseSuccessScreen() {
           })}
         </View>
 
-        <Text style={styles.title}>Premium activated</Text>
-        <Text style={styles.subtitle}>Thank you — your Premium subscription is active.</Text>
+        <Text style={styles.title}>Premium Activated!</Text>
+        <Text style={styles.subtitle}>Thank you for subscribing. Enjoy all premium features.</Text>
 
         <View style={styles.detailsCard}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>План</Text>
+            <Text style={styles.detailLabel}>Plan</Text>
             <Text style={styles.detailValue}>{planName}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Пробный период</Text>
-            <Text style={styles.detailValue}>{trialStatus}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Следующее списание</Text>
-            <Text style={styles.detailValue}>{nextBilling}</Text>
+            <Text style={styles.detailLabel}>Status</Text>
+            <Text style={[styles.detailValue, styles.activeStatus]}>Active</Text>
           </View>
         </View>
 
@@ -210,7 +154,6 @@ export default function PurchaseSuccessScreen() {
           style={styles.primaryButton}
           onPress={handleContinue}
           activeOpacity={0.9}
-          accessibilityLabel="Продолжить"
           testID="purchase-success-continue"
         >
           <Text style={styles.primaryText}>Continue</Text>
@@ -223,72 +166,51 @@ export default function PurchaseSuccessScreen() {
           testID="purchase-success-restore"
         >
           {isRestoring ? (
-            <ActivityIndicator size="small" color="#FFD700" />
+            <ActivityIndicator size="small" color="#4ECDC4" />
           ) : (
-            <Text style={styles.restoreText}>Restore purchases</Text>
+            <Text style={styles.restoreText}>Restore Purchases</Text>
           )}
         </TouchableOpacity>
 
-        <View style={styles.devSection}>
-          <Text style={styles.devSectionTitle}>🛠 Developer Tools (TestFlight)</Text>
-          
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>Status: {status.toUpperCase()}</Text>
+        {__DEV__ && (
+          <View style={styles.devSection}>
+            <Text style={styles.devSectionTitle}>Developer Tools</Text>
+            
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>Status: {status.toUpperCase()}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={handleRefreshStatus}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color="#4ECDC4" />
+              ) : (
+                <>
+                  <RefreshCw size={16} color="#4ECDC4" />
+                  <Text style={styles.devButtonText}>Refresh Status</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={handleTestPurchase}
+              disabled={isPurchasing}
+            >
+              {isPurchasing ? (
+                <ActivityIndicator size="small" color="#4ECDC4" />
+              ) : (
+                <>
+                  <CreditCard size={16} color="#4ECDC4" />
+                  <Text style={styles.devButtonText}>Test Purchase</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.devButton}
-            onPress={handleRefreshStatus}
-            disabled={isRefreshing}
-            testID="purchase-success-refresh"
-          >
-            {isRefreshing ? (
-              <ActivityIndicator size="small" color="#4ECDC4" />
-            ) : (
-              <>
-                <RefreshCw size={16} color="#4ECDC4" />
-                <Text style={styles.devButtonText}>Refresh Status from Server</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devButton}
-            onPress={handleTestPurchase}
-            disabled={isPurchasing}
-            testID="purchase-success-test-purchase"
-          >
-            {isPurchasing ? (
-              <ActivityIndicator size="small" color="#FFD700" />
-            ) : (
-              <>
-                <CreditCard size={16} color="#FFD700" />
-                <Text style={[styles.devButtonText, { color: '#FFD700' }]}>Test Sandbox Purchase</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.devButton, styles.cancelDevButton]}
-            onPress={handleCancelSubscription}
-            disabled={isCancelling}
-            testID="purchase-success-cancel"
-          >
-            {isCancelling ? (
-              <ActivityIndicator size="small" color="#FF6B6B" />
-            ) : (
-              <>
-                <XCircle size={16} color="#FF6B6B" />
-                <Text style={[styles.devButtonText, { color: '#FF6B6B' }]}>Reset & Test Purchase Again</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.devHint}>
-            Sandbox purchases use Apple test environment.{"\n"}
-            The Apple purchase dialog should appear when testing.
-          </Text>
-        </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -297,7 +219,7 @@ export default function PurchaseSuccessScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0f0f23',
   },
   backgroundGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -309,15 +231,12 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   heroIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
+    backgroundColor: '#4ECDC4',
     marginTop: 40,
   },
   confettiContainer: {
@@ -335,24 +254,24 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: '#FFFFFF',
     textAlign: 'center',
     marginTop: 12,
   },
   subtitle: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     marginBottom: 20,
   },
   detailsCard: {
     width: '100%',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.12)',
+    borderColor: 'rgba(78,205,196,0.2)',
     gap: 12,
   },
   detailRow: {
@@ -360,35 +279,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   detailLabel: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
   },
   detailValue: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+  },
+  activeStatus: {
+    color: '#4ECDC4',
   },
   primaryButton: {
     width: '100%',
-    height: 58,
-    borderRadius: 24,
-    backgroundColor: '#FFD700',
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4ECDC4',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
   },
   primaryText: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: '600' as const,
+    color: '#0f0f23',
   },
   restoreButton: {
     paddingVertical: 10,
   },
   restoreText: {
-    color: '#FFD700',
+    color: '#4ECDC4',
     fontSize: 15,
-    textDecorationLine: 'underline',
   },
   devSection: {
     width: '100%',
@@ -402,10 +323,9 @@ const styles = StyleSheet.create({
   },
   devSectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
-    marginBottom: 4,
   },
   statusBadge: {
     alignSelf: 'center',
@@ -419,7 +339,7 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     color: '#4ECDC4',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
   devButton: {
     flexDirection: 'row',
@@ -427,26 +347,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  cancelDevButton: {
-    borderColor: 'rgba(255,107,107,0.2)',
-    backgroundColor: 'rgba(255,107,107,0.05)',
-  },
   devButtonText: {
     color: '#4ECDC4',
     fontSize: 14,
-    fontWeight: '500',
-  },
-  devHint: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 16,
+    fontWeight: '500' as const,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,60 +10,38 @@ import {
   Platform,
   Linking,
   Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Constants from 'expo-constants';
 import { 
   X, 
-  Check, 
-  Sparkles, 
-  Bot, 
-  Calendar, 
-  FileText, 
-  CheckSquare, 
-  History, 
-  Trophy, 
-  MessageCircle, 
-  Zap, 
-  Timer, 
-  Infinity,
-  CreditCard,
-  Bug
+  Sparkles,
+  Crown,
+  Zap,
+  Brain,
+  Target,
+  TrendingUp,
+  Shield,
+  Star,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
+
+
 interface SubscriptionScreenProps {
   skipButton?: boolean;
 }
 
-const isProductionBuild = () => {
-  // Returns false for: dev builds, TestFlight, Expo Go
-  // Returns true only for: production release from App Store
-  if (__DEV__) return false;
-  
-  // TestFlight detection
-  const isTestFlight = Constants.appOwnership === 'expo' || 
-                       Constants.manifest?.releaseChannel === undefined ||
-                       Constants.isDevice === false;
-  
-  return !isTestFlight;
-};
-
-const FEATURE_LIST = [
-  { title: 'Daily AI Coach', subtitle: 'AI analyzes your day and suggests optimal steps', icon: Bot },
-  { title: 'Full Weekly/Monthly Plan', subtitle: 'See the big picture of progress and schedule', icon: Calendar },
-  { title: 'Weekly AI Report', subtitle: 'Precise insights and recommendations', icon: FileText },
-  { title: 'All Personal Tips', subtitle: 'Tasks tailored to your profile', icon: Sparkles },
-  { title: 'Smart Tasks', subtitle: 'AI generates tasks for your goal', icon: CheckSquare },
-  { title: '7-90 Days History', subtitle: 'Analytics and trends', icon: History },
-  { title: 'Levels and Rewards', subtitle: 'Motivation growth and achievements', icon: Trophy },
-  { title: 'AI Chat Assistant', subtitle: 'Quick answers and support', icon: MessageCircle },
-  { title: 'Priority Speed', subtitle: 'Features work faster', icon: Zap },
-  { title: 'Smart Pomodoro Timer with Analytics', subtitle: 'Detailed focus statistics', icon: Timer },
-  { title: 'All Future Features', subtitle: 'Access to all updates', icon: Infinity },
+const FEATURES = [
+  { icon: Brain, title: 'AI Coach', description: 'Personal daily guidance' },
+  { icon: Target, title: 'Smart Goals', description: 'AI-powered task generation' },
+  { icon: TrendingUp, title: 'Analytics', description: 'Deep progress insights' },
+  { icon: Zap, title: 'Priority Speed', description: 'Faster AI responses' },
+  { icon: Shield, title: 'All Features', description: 'Full premium access' },
+  { icon: Star, title: 'Future Updates', description: 'Always get the latest' },
 ];
 
 export default function SubscriptionScreen({ skipButton = false }: SubscriptionScreenProps) {
@@ -75,150 +53,116 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     purchasePackage,
     restorePurchases,
     isPremium,
-    customerInfo,
     isInitialized,
-    cancelSubscriptionForDev,
+    error,
   } = useSubscription();
 
-  const [isCancelling, setIsCancelling] = useState(false);
-
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const fadeAnims = useRef(FEATURE_LIST.map(() => new Animated.Value(0))).current;
-  const translateYAnims = useRef(FEATURE_LIST.map(() => new Animated.Value(-10))).current;
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     if (packages.length > 0 && !selectedPackage) {
-      // Prefer yearly package if available, otherwise first
-      const yearly = packages.find(p => p.product.identifier.includes('year') || p.product.identifier.includes('annual'));
-      setSelectedPackage(yearly ? yearly.identifier : packages[0].identifier);
+      const yearly = packages.find(p => 
+        p.identifier.includes('annual') || 
+        p.identifier.includes('year') ||
+        p.product.identifier.includes('year')
+      );
+      setSelectedPackage(yearly?.identifier || packages[0].identifier);
     }
   }, [packages, selectedPackage]);
 
-  useEffect(() => {
-    const animations = FEATURE_LIST.map((_, index) => {
-      return Animated.parallel([
-        Animated.timing(fadeAnims[index], {
-          toValue: 1,
-          duration: 220,
-          delay: index * 80,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateYAnims[index], {
-          toValue: 0,
-          duration: 220,
-          delay: index * 80,
-          useNativeDriver: true,
-        }),
-      ]);
-    });
-
-    Animated.stagger(50, animations).start();
-  }, [fadeAnims, translateYAnims]);
-
   const handlePurchase = async () => {
     if (!selectedPackage) {
-      Alert.alert('Error', 'Please select a subscription plan');
+      Alert.alert('Select Plan', 'Please select a subscription plan');
       return;
     }
-    
-    console.log('[SubscriptionScreen] 🛒 Starting purchase...');
-    console.log('[SubscriptionScreen] Selected package:', selectedPackage);
-    console.log('[SubscriptionScreen] Available packages:', packages.length);
-    
+
+    if (Platform.OS !== 'web') {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }
+
+    console.log('[SubscriptionScreen] Starting purchase for:', selectedPackage);
     const success = await purchasePackage(selectedPackage);
-    
+
     if (success) {
-      console.log('[SubscriptionScreen] ✅ Purchase completed successfully');
-      Alert.alert('Success!', 'Subscription activated', [{ text: 'OK', onPress: () => router.back() }]);
-    } else {
-      console.error('[SubscriptionScreen] ❌ Purchase failed or was cancelled');
+      if (Platform.OS !== 'web') {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      Alert.alert('Welcome to Premium!', 'Your subscription is now active.', [
+        { text: 'Continue', onPress: () => router.back() }
+      ]);
     }
   };
 
   const handleRestore = async () => {
     const success = await restorePurchases();
     if (success) {
-      Alert.alert('Success!', 'Subscription restored', [{ text: 'OK', onPress: () => router.back() }]);
+      Alert.alert('Restored!', 'Your subscription has been restored.', [
+        { text: 'Continue', onPress: () => router.back() }
+      ]);
     } else {
-      Alert.alert('Info', 'No active subscriptions found');
+      Alert.alert('No Purchases Found', 'We couldn\'t find any previous purchases to restore.');
     }
+  };
+
+  const handleClose = () => {
+    router.back();
   };
 
   if (isPremium) {
     return (
       <View style={styles.container}>
-        <View style={styles.background}>
-          <LinearGradient
-            colors={['rgba(255, 215, 0, 0.1)', 'rgba(0,0,0,0)']}
-            style={styles.glowEffect}
-          />
-        </View>
+        <LinearGradient
+          colors={['#1a1a2e', '#16213e', '#0f0f23']}
+          style={StyleSheet.absoluteFill}
+        />
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
-            <View style={styles.headerLeft} />
-            <TouchableOpacity 
-              style={styles.closeButton} 
-              onPress={() => router.back()}
-            >
-              <X size={24} color="rgba(255,255,255,0.8)" />
+            <View style={styles.headerSpacer} />
+            <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+              <X size={24} color="#fff" />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.successContainer}>
-            <View style={styles.successIconWrapper}>
-              <LinearGradient
-                colors={['#FFD700', '#FFB300']}
-                style={styles.successIconBadge}
-              >
-                <Check size={48} color="#000" />
-              </LinearGradient>
+          <View style={styles.premiumActiveContainer}>
+            <View style={styles.premiumBadge}>
+              <Crown size={48} color="#FFD700" />
             </View>
-            
-            <Text style={styles.heroTitle}>You&apos;re already with us!</Text>
-            <Text style={styles.heroSubtitle}>
-              Your Premium subscription is active. Enjoy full access to all GoalForge features.
+            <Text style={styles.premiumTitle}>Premium Active</Text>
+            <Text style={styles.premiumSubtitle}>
+              You have full access to all features
             </Text>
-
-            <View style={styles.activePlanCard}>
-              <View style={styles.planRow}>
-                <CreditCard size={20} color="#FFD700" />
-                <Text style={styles.planLabel}>Subscription Status</Text>
-              </View>
-              <Text style={styles.planValue}>Active</Text>
-              
-              {customerInfo?.entitlements.active.premium?.productIdentifier && (
-                 <Text style={styles.planId}>
-                   {customerInfo.entitlements.active.premium.productIdentifier}
-                 </Text>
-              )}
-            </View>
-
-            <TouchableOpacity style={styles.manageButton} onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}>
-              <Text style={styles.manageButtonText}>Manage Subscription</Text>
-            </TouchableOpacity>
-
+            
             <TouchableOpacity 
-              style={styles.cancelDevButton} 
-              onPress={async () => {
-                setIsCancelling(true);
-                try {
-                  await cancelSubscriptionForDev();
-                  if (Platform.OS !== 'web') {
-                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                  }
-                } finally {
-                  setIsCancelling(false);
-                }
-              }}
-              disabled={isCancelling}
+              style={styles.manageBtn}
+              onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
             >
-              {isCancelling ? (
-                <ActivityIndicator size="small" color="#FF6B6B" />
-              ) : (
-                <Text style={styles.cancelDevButtonText}>Cancel Subscription (Dev)</Text>
-              )}
+              <Text style={styles.manageBtnText}>Manage Subscription</Text>
             </TouchableOpacity>
-
           </View>
         </SafeAreaView>
       </View>
@@ -227,159 +171,168 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
 
   return (
     <View style={styles.container}>
-      {/* Background */}
-      <View style={styles.background}>
-        <LinearGradient
-          colors={['rgba(255, 215, 0, 0.15)', 'rgba(0,0,0,0)']}
-          style={styles.glowEffect}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.6 }}
-        />
-      </View>
+      <LinearGradient
+        colors={['#1a1a2e', '#16213e', '#0f0f23']}
+        style={StyleSheet.absoluteFill}
+      />
 
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Header */}
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-           {/* Placeholder for Logo if needed, or just empty space as requested "small logo left" - we use text or icon */}
-           <View style={styles.headerLeft}>
-             <Sparkles size={24} color="#FFD700" />
-           </View>
-           <TouchableOpacity 
-            style={styles.closeButton} 
-            onPress={() => router.back()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-           >
-             <X size={24} color="rgba(255,255,255,0.8)" />
-           </TouchableOpacity>
+          <View style={styles.headerSpacer} />
+          <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+            <X size={24} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
         </View>
 
         <ScrollView 
-          style={styles.scrollView} 
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 180 }]} // Extra padding for sticky CTA
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero Block */}
-          <View style={styles.heroBlock}>
-            <Text style={styles.heroTitle}>Unlock the Full Potential of GoalForge</Text>
+          <Animated.View 
+            style={[
+              styles.heroSection,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              }
+            ]}
+          >
+            <View style={styles.iconBadge}>
+              <Sparkles size={32} color="#FFD700" />
+            </View>
+            <Text style={styles.heroTitle}>Unlock Your Full Potential</Text>
             <Text style={styles.heroSubtitle}>
-              Invest in your productivity and future
+              Get AI-powered coaching and premium features
             </Text>
-          </View>
+          </Animated.View>
 
-          {/* Feature List */}
-          <View style={styles.featureList}>
-            {FEATURE_LIST.map((feature, index) => (
-              <Animated.View
-                key={index}
-                style={[
-                  styles.featureCard,
-                  {
-                    opacity: fadeAnims[index],
-                    transform: [{ translateY: translateYAnims[index] }],
-                  },
-                ]}
-              >
-                <View style={styles.featureIconContainer}>
-                  <feature.icon size={24} color="#FFD700" />
+          <Animated.View 
+            style={[
+              styles.featuresGrid,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+              }
+            ]}
+          >
+            {FEATURES.map((feature, index) => (
+              <View key={index} style={styles.featureItem}>
+                <View style={styles.featureIcon}>
+                  <feature.icon size={20} color="#4ECDC4" />
                 </View>
-                <View style={styles.featureTextContainer}>
+                <View style={styles.featureText}>
                   <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureSubtitle}>{feature.subtitle}</Text>
+                  <Text style={styles.featureDesc}>{feature.description}</Text>
                 </View>
-              </Animated.View>
+              </View>
             ))}
-          </View>
+          </Animated.View>
 
-          {/* Plan Selector (Simplified) */}
-           {packages.length > 0 ? (
-            <View style={styles.packagesContainer}>
+          {isInitialized && packages.length > 0 ? (
+            <Animated.View 
+              style={[
+                styles.packagesSection,
+                { opacity: fadeAnim }
+              ]}
+            >
               {packages.map((pkg) => {
                 const isSelected = selectedPackage === pkg.identifier;
+                const isYearly = pkg.identifier.includes('annual') || pkg.identifier.includes('year');
+                
                 return (
                   <TouchableOpacity
                     key={pkg.identifier}
                     style={[
                       styles.packageCard,
-                      isSelected && styles.packageCardSelected
+                      isSelected && styles.packageCardSelected,
                     ]}
-                    onPress={() => setSelectedPackage(pkg.identifier)}
-                    activeOpacity={0.9}
+                    onPress={() => {
+                      setSelectedPackage(pkg.identifier);
+                      if (Platform.OS !== 'web') {
+                        Haptics.selectionAsync().catch(() => {});
+                      }
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <View style={styles.packageHeader}>
-                       <Text style={[styles.packageTitle, isSelected && styles.packageTitleSelected]}>
-                        {pkg.product.title}
-                       </Text>
-                       {isSelected && <View style={styles.checkCircle}><Check size={12} color="#000" /></View>}
+                    {isYearly && (
+                      <View style={styles.bestValueBadge}>
+                        <Text style={styles.bestValueText}>BEST VALUE</Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.packageContent}>
+                      <View style={styles.packageLeft}>
+                        <View style={[
+                          styles.radioOuter,
+                          isSelected && styles.radioOuterSelected
+                        ]}>
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
+                        <View>
+                          <Text style={[
+                            styles.packageName,
+                            isSelected && styles.packageNameSelected
+                          ]}>
+                            {pkg.product.title}
+                          </Text>
+                          <Text style={styles.packageDesc}>{pkg.product.description}</Text>
+                        </View>
+                      </View>
+                      <Text style={[
+                        styles.packagePrice,
+                        isSelected && styles.packagePriceSelected
+                      ]}>
+                        {pkg.product.priceString}
+                      </Text>
                     </View>
-                    <Text style={[styles.packagePrice, isSelected && styles.packagePriceSelected]}>
-                      {pkg.product.priceString}
-                    </Text>
-                    <Text style={styles.packageDescription}>
-                      {pkg.product.description}
-                    </Text>
                   </TouchableOpacity>
                 );
               })}
-              
-              {/* Debug info for TestFlight */}
-              {!isProductionBuild() && (
-                <View style={styles.debugInfoCard}>
-                  <Text style={styles.debugInfoTitle}>Debug Info (TestFlight)</Text>
-                  <Text style={styles.debugInfoText}>Platform: {Platform.OS}</Text>
-                  <Text style={styles.debugInfoText}>Packages: {packages.length}</Text>
-                  <Text style={styles.debugInfoText}>Selected: {selectedPackage || 'none'}</Text>
-                  <Text style={styles.debugInfoText}>Is Initialized: {isInitialized ? 'Yes' : 'No'}</Text>
-                  <Text style={styles.debugInfoText}>appOwnership: {Constants?.appOwnership || 'unknown'}</Text>
-                </View>
-              )}
-            </View>
+            </Animated.View>
           ) : (
-            <View style={styles.loadingPackagesContainer}>
-              <ActivityIndicator size="large" color="#FFD700" />
+            <View style={styles.loadingSection}>
+              <ActivityIndicator size="large" color="#4ECDC4" />
               <Text style={styles.loadingText}>
-                {isInitialized ? 'Loading subscription plans...' : 'Initializing...'}
+                {isInitialized ? 'Loading plans...' : 'Connecting to store...'}
               </Text>
-              {!isProductionBuild() && (
-                <TouchableOpacity 
-                  style={styles.debugLinkButton}
-                  onPress={() => router.push('/dev-subscription-tools')}
-                >
-                  <Bug size={16} color="#FF6B6B" />
-                  <Text style={styles.debugLinkText}>Open Debug Tools</Text>
-                </TouchableOpacity>
+              {error && (
+                <Text style={styles.errorText}>{error}</Text>
               )}
             </View>
           )}
+
+          <View style={{ height: 160 }} />
         </ScrollView>
 
-        {/* Sticky CTA Zone */}
-        <View style={[styles.ctaZone, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.ctaSection, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity
             style={[
               styles.ctaButton,
-              (isPurchasing || packages.length === 0) && styles.ctaButtonDisabled
+              (isPurchasing || packages.length === 0) && styles.ctaButtonDisabled,
             ]}
             onPress={handlePurchase}
             disabled={isPurchasing || packages.length === 0}
-            activeOpacity={0.98}
+            activeOpacity={0.9}
           >
-             {isPurchasing ? (
-               <ActivityIndicator color="#000" />
-             ) : (
-               <Text style={styles.ctaText}>Try Premium</Text>
-             )}
+            {isPurchasing ? (
+              <ActivityIndicator color="#0f0f23" />
+            ) : (
+              <Text style={styles.ctaText}>Continue</Text>
+            )}
           </TouchableOpacity>
-          
-          <View style={styles.policyLinks}>
-            <TouchableOpacity onPress={handleRestore} testID="subscription-restore">
-              <Text style={styles.policyText}>Restore</Text>
+
+          <View style={styles.linksRow}>
+            <TouchableOpacity onPress={handleRestore}>
+              <Text style={styles.linkText}>Restore Purchases</Text>
             </TouchableOpacity>
-            <Text style={styles.policyDivider}>•</Text>
-            <TouchableOpacity
-              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
-              testID="subscription-terms-eula"
-            >
-              <Text style={styles.policyText}>Terms of Use (EULA)</Text>
+            <Text style={styles.linkDivider}>•</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+              <Text style={styles.linkText}>Terms</Text>
+            </TouchableOpacity>
+            <Text style={styles.linkDivider}>•</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/privacy/')}>
+              <Text style={styles.linkText}>Privacy</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -391,367 +344,269 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
-  },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-  },
-  glowEffect: {
-    width: '100%',
-    height: '60%',
-    opacity: 0.6,
+    backgroundColor: '#0f0f23',
   },
   safeArea: {
     flex: 1,
   },
   header: {
-    height: 56,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    height: 56,
   },
-  headerLeft: {
-    width: 32,
-    height: 32,
+  headerSpacer: {
+    width: 40,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  closeButton: {
-    padding: 4,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
-  heroBlock: {
-    marginTop: 16,
-    marginBottom: 32,
+  heroSection: {
     alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 32,
+  },
+  iconBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   heroTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 32, // 28-32px
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700' as const,
+    color: '#fff',
     textAlign: 'center',
-    lineHeight: 34, // 1.06 * 32
-    maxWidth: 320,
     marginBottom: 12,
   },
   heroSubtitle: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.62)',
-    textAlign: 'center',
-  },
-  featureList: {
-    gap: 12,
-    marginBottom: 32,
-  },
-  featureCard: {
-    height: 80,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.12)',
-  },
-  featureIconContainer: {
-    width: 24,
-    marginRight: 18, // Padding 18px
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureTextContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  featureTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginBottom: 2,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
   },
-  featureSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.62)',
-  },
-  packagesContainer: {
-    gap: 12,
+  featuresGrid: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 24,
   },
-  packageCard: {
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  packageCardSelected: {
-    backgroundColor: 'rgba(255, 215, 0, 0.08)',
-    borderColor: '#FFD700',
-  },
-  packageHeader: {
+  featureItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    paddingVertical: 12,
   },
-  packageTitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-  },
-  packageTitleSelected: {
-    color: '#FFD700',
-    fontWeight: '600',
-  },
-  checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFD700',
+  featureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(78, 205, 196, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
+  },
+  featureText: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#fff',
+    marginBottom: 2,
+  },
+  featureDesc: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  packagesSection: {
+    gap: 12,
+  },
+  packageCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  packageCardSelected: {
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    borderColor: '#4ECDC4',
+  },
+  bestValueBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 12,
+  },
+  bestValueText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#0f0f23',
+  },
+  packageContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  packageLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  radioOuterSelected: {
+    borderColor: '#4ECDC4',
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4ECDC4',
+  },
+  packageName: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#fff',
+    marginBottom: 2,
+  },
+  packageNameSelected: {
+    color: '#4ECDC4',
+  },
+  packageDesc: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
   },
   packagePrice: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#fff',
   },
   packagePriceSelected: {
-    color: '#FFD700',
+    color: '#4ECDC4',
   },
-  packageDescription: {
+  loadingSection: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  errorText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: '#FF6B6B',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
-  ctaZone: {
+  ctaSection: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#000000', // Opaque background for sticky area
+    backgroundColor: '#0f0f23',
+    paddingHorizontal: 20,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 24,
-    paddingTop: 18,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   ctaButton: {
-    height: 64,
-    borderRadius: 40,
-    backgroundColor: '#FFD700',
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4ECDC4',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    elevation: 10,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   ctaButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   ctaText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: '#0f0f23',
   },
-  policyLinks: {
+  linksRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
   },
-  policyText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.4)',
+  linkText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
   },
-  successContainer: {
+  linkDivider: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  premiumActiveContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 80,
   },
-  successIconWrapper: {
-    marginBottom: 32,
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-  },
-  successIconBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  premiumBadge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 24,
   },
-  activePlanCard: {
-    marginTop: 40,
-    width: '100%',
-    padding: 24,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.2)',
-  },
-  planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  planLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  planValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  planId: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.4)',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  manageButton: {
-    marginTop: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  manageButtonText: {
+  premiumTitle: {
+    fontSize: 28,
+    fontWeight: '700' as const,
     color: '#FFD700',
+    marginBottom: 12,
+  },
+  premiumSubtitle: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelDevButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
-    alignItems: 'center',
-  },
-  cancelDevButtonText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  devZone: {
-    marginTop: 48,
-    alignItems: 'center',
-  },
-  sandboxButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    marginTop: 12,
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 122, 255, 0.3)',
-  },
-  sandboxButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  policyDivider: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.4)',
-    marginHorizontal: 4,
-  },
-  loadingPackagesContainer: {
-    marginTop: 32,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
     marginBottom: 32,
-    alignItems: 'center',
-    gap: 16,
-    padding: 24,
-    backgroundColor: 'rgba(255, 215, 0, 0.05)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.15)',
   },
-  loadingText: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-  },
-  debugLinkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+  manageBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
+    borderColor: 'rgba(255, 215, 0, 0.3)',
   },
-  debugLinkText: {
-    fontSize: 13,
-    color: '#FF6B6B',
-    fontWeight: '600',
-  },
-  debugCard: {
-    marginTop: 32,
-    padding: 16,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
-    alignItems: 'center',
-    gap: 12,
-  },
-  debugText: {
-    fontSize: 13,
-    color: '#FF6B6B',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  debugButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(255, 107, 107, 0.2)',
-    borderRadius: 8,
-  },
-  debugButtonText: {
-    fontSize: 13,
-    color: '#FF6B6B',
-    fontWeight: '600',
-  },
-  debugInfoCard: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: 'rgba(0, 200, 100, 0.1)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 200, 100, 0.3)',
-  },
-  debugInfoTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#00C864',
-    marginBottom: 8,
-  },
-  debugInfoText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginBottom: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  manageBtnText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#FFD700',
   },
 });

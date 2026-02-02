@@ -2,148 +2,169 @@ import { Platform } from 'react-native';
 import Purchases, { 
   CustomerInfo, 
   PurchasesPackage, 
-  PurchasesOffering 
+  PurchasesOfferings,
+  LOG_LEVEL,
 } from 'react-native-purchases';
 
-// Типы для совместимости с вашим проектом
 export type RevenueCatCustomerInfo = CustomerInfo;
 export type RevenueCatPackage = PurchasesPackage;
-export type RevenueCatOfferings = {
-  current: PurchasesOffering | null;
-  all: { [key: string]: PurchasesOffering };
-};
+export type RevenueCatOfferings = PurchasesOfferings;
 
-// 1. Получаем ключ (Исправлено имя переменной!)
-const API_KEYS = {
-  // Проверяем оба варианта написания, чтобы точно найти ключ
-  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
-  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
-};
+function getRevenueCatApiKey(): string | undefined {
+  if (__DEV__ || Platform.OS === 'web') {
+    return process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
+  }
+  return Platform.select({
+    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
+    android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
+    default: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY,
+  });
+}
 
 let isConfigured = false;
+let cachedOfferings: PurchasesOfferings | null = null;
 
-// 2. Инициализация
 export const initializeRevenueCat = async (): Promise<boolean> => {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web') {
+    console.log('[RevenueCat] Web platform - using Test Store');
+    const apiKey = getRevenueCatApiKey();
+    if (!apiKey) {
+      console.error('[RevenueCat] No TEST_API_KEY found for web');
+      return false;
+    }
+    try {
+      Purchases.configure({ apiKey });
+      isConfigured = true;
+      console.log('[RevenueCat] ✅ Web configured with Test Store');
+      return true;
+    } catch (error) {
+      console.error('[RevenueCat] Web configuration error:', error);
+      return false;
+    }
+  }
 
-  if (isConfigured) return true;
+  if (isConfigured) {
+    console.log('[RevenueCat] Already configured');
+    return true;
+  }
 
-  const apiKey = Platform.OS === 'ios' ? API_KEYS.ios : API_KEYS.android;
+  const apiKey = getRevenueCatApiKey();
 
   if (!apiKey) {
-    console.error('[RevenueCat] ❌ Ключ API не найден! Проверьте файл .env');
-    console.error('[RevenueCat] Ищем EXPO_PUBLIC_REVENUECAT_IOS_KEY');
+    console.error('[RevenueCat] ❌ API key not found!');
+    console.error('[RevenueCat] __DEV__:', __DEV__);
+    console.error('[RevenueCat] Platform:', Platform.OS);
     return false;
   }
 
   try {
     if (__DEV__) {
-      await Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
     
-    await Purchases.configure({ apiKey });
+    Purchases.configure({ apiKey });
     isConfigured = true;
-    console.log('[RevenueCat] ✅ Успешно подключено к', Platform.OS);
+    
+    console.log('[RevenueCat] ✅ Configured successfully');
+    console.log('[RevenueCat] Platform:', Platform.OS);
+    console.log('[RevenueCat] Mode:', __DEV__ ? 'Development (Test Store)' : 'Production');
+    
     return true;
   } catch (error) {
-    console.error('[RevenueCat] ❌ Ошибка конфигурации:', error);
+    console.error('[RevenueCat] Configuration error:', error);
     return false;
   }
 };
 
-// 3. Получение тарифов (Offerings)
-export const getOfferings = async (): Promise<RevenueCatOfferings | null> => {
-  if (!isConfigured) await initializeRevenueCat();
+export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
+  if (!isConfigured) {
+    const success = await initializeRevenueCat();
+    if (!success) return null;
+  }
 
   try {
+    console.log('[RevenueCat] Fetching offerings...');
     const offerings = await Purchases.getOfferings();
+    
     if (offerings.current) {
-      console.log('[RevenueCat] 📦 Тарифы загружены:', offerings.current.availablePackages.length);
+      console.log('[RevenueCat] ✅ Offerings loaded:', offerings.current.availablePackages.length, 'packages');
+      offerings.current.availablePackages.forEach((pkg, i) => {
+        console.log(`[RevenueCat] Package ${i + 1}:`, pkg.identifier, '-', pkg.product.priceString);
+      });
+      cachedOfferings = offerings;
     } else {
-      console.warn('[RevenueCat] ⚠️ Offerings пусты (проверьте Dashboard)');
+      console.warn('[RevenueCat] ⚠️ No current offering found');
     }
+    
     return offerings;
   } catch (error) {
-    console.error('[RevenueCat] ❌ Ошибка загрузки тарифов:', error);
+    console.error('[RevenueCat] Error fetching offerings:', error);
     return null;
   }
 };
 
-// 4. Покупка пакета
-export const purchasePackage = async (
-  pkg: PurchasesPackage
-): Promise<{ customerInfo: CustomerInfo }> => {
+export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
+  if (!isConfigured) {
+    const success = await initializeRevenueCat();
+    if (!success) return null;
+  }
+
   try {
-    console.log('[RevenueCat] 💰 Попытка покупки:', pkg.product.identifier);
-    // Это вызывает системное окно Apple Pay
+    const info = await Purchases.getCustomerInfo();
+    console.log('[RevenueCat] Customer info loaded');
+    console.log('[RevenueCat] Active subscriptions:', info.activeSubscriptions);
+    console.log('[RevenueCat] Entitlements:', Object.keys(info.entitlements.active));
+    return info;
+  } catch (error) {
+    console.error('[RevenueCat] Error getting customer info:', error);
+    return null;
+  }
+};
+
+export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerInfo | null> => {
+  try {
+    console.log('[RevenueCat] 🛒 Starting purchase:', pkg.product.identifier);
+    console.log('[RevenueCat] Price:', pkg.product.priceString);
+    
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    console.log('[RevenueCat] ✅ Покупка успешна!');
-    return { customerInfo };
+    
+    console.log('[RevenueCat] ✅ Purchase successful!');
+    return customerInfo;
   } catch (error: any) {
     if (error.userCancelled) {
-      console.log('[RevenueCat] ℹ️ Пользователь отменил покупку');
-      throw { userCancelled: true };
+      console.log('[RevenueCat] Purchase cancelled by user');
+      return null;
     }
-    console.error('[RevenueCat] ❌ Ошибка покупки:', error);
+    console.error('[RevenueCat] Purchase error:', error.message || error);
     throw error;
   }
 };
 
-// 5. Восстановление покупок
 export const restorePurchases = async (): Promise<CustomerInfo | null> => {
+  if (!isConfigured) {
+    const success = await initializeRevenueCat();
+    if (!success) return null;
+  }
+
   try {
+    console.log('[RevenueCat] Restoring purchases...');
     const info = await Purchases.restorePurchases();
+    console.log('[RevenueCat] ✅ Restore complete');
     return info;
   } catch (error) {
-    console.error('[RevenueCat] Ошибка восстановления:', error);
+    console.error('[RevenueCat] Restore error:', error);
     return null;
   }
 };
 
-// 6. Получение информации о клиенте
-export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
-  try {
-    return await Purchases.getCustomerInfo();
-  } catch (error) {
-    return null;
-  }
+export const getCachedOfferings = () => cachedOfferings;
+
+export const findPackageByIdentifier = (identifier: string): PurchasesPackage | null => {
+  if (!cachedOfferings?.current) return null;
+  
+  return cachedOfferings.current.availablePackages.find(
+    pkg => pkg.identifier === identifier || pkg.product.identifier === identifier
+  ) || null;
 };
 
-// --- Функции для совместимости с вашим хуком use-subscription-store ---
-
-// Кеш для совместимости
-let cachedPackages: PurchasesPackage[] = [];
-
-export const getOfferingsWithCache = async () => {
-  const offerings = await getOfferings();
-  if (offerings?.current) {
-    cachedPackages = offerings.current.availablePackages;
-  }
-  return offerings;
-};
-
-export const getOriginalPackages = () => cachedPackages;
-
-export const purchasePackageByIdentifier = async (identifier: string) => {
-  const pkg = cachedPackages.find(
-    p => p.identifier === identifier || p.product.identifier === identifier
-  );
-
-  if (!pkg) {
-    console.error('[RevenueCat] Пакет не найден в кеше:', identifier);
-    return null;
-  }
-
-  const result = await purchasePackage(pkg);
-  return {
-    info: result.customerInfo,
-    purchasedPackage: pkg
-  };
-};
-
-export const restorePurchasesFromRevenueCat = restorePurchases;
-export const syncWithRevenueCat = getCustomerInfo;
-export const invalidateCustomerInfoCache = async () => {
-    // В новых версиях SDK это делается автоматически или через getCustomerInfo
-    await getCustomerInfo();
-};
+export const isRevenueCatConfigured = () => isConfigured;

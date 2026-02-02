@@ -21,12 +21,6 @@ const FEATURES = [
   'Weekly AI Report — Accurate insights and recommendations.',
   'All Personalized Tips — Tasks tailored to your profile.',
   'Smart Tasks — AI generates tasks for your goals.',
-  'History 7–90 Days — Analytics and trends.',
-  'Levels & Rewards — Boost motivation and achievements.',
-  'AI Chat Assistant — Quick answers and support.',
-  'Priority Speed — Features work faster.',
-  'Smart Pomodoro Timer with Analytics — Detailed focus statistics.',
-  'All Future Features — Access to all updates.',
 ];
 
 export type PaywallVariant = 'trial' | 'blocking' | 'feature';
@@ -61,7 +55,7 @@ export default function PaywallModal({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const ctaScale = useRef(new Animated.Value(1)).current;
-  const { restorePurchases, isRestoring } = useSubscription();
+  const { restorePurchases, isPurchasing } = useSubscription();
 
   useEffect(() => {
     if (visible) {
@@ -86,17 +80,17 @@ export default function PaywallModal({
 
   const title = useMemo(() => {
     if (variant === 'blocking') {
-      return 'Trial Period Ended';
+      return 'Premium Required';
     }
     if (variant === 'feature') {
       return 'Premium Feature';
     }
-    return 'Try GoalForge Premium — 1 Day Free';
+    return 'Try GoalForge Premium';
   }, [variant]);
 
   const subtitle = useMemo(() => {
     if (variant === 'blocking') {
-      return 'Subscribe to keep access to GoalForge and analytics.';
+      return 'Subscribe to access GoalForge and all features.';
     }
     if (variant === 'feature') {
       return featureName
@@ -142,11 +136,9 @@ export default function PaywallModal({
       Alert.alert('Restored', 'Your subscription is active.');
       onRequestClose?.();
     } else {
-      Alert.alert('Not found', 'No active subscription was found for this Apple ID / Google account.');
+      Alert.alert('Not found', 'No active subscription was found.');
     }
   };
-
-  const cards = useMemo(() => FEATURES.slice(0, 5), []);
 
   if (!visible) {
     return null;
@@ -156,7 +148,7 @@ export default function PaywallModal({
     <Modal visible transparent animationType="fade" onRequestClose={onRequestClose}>
       <View style={styles.overlay}>
         <LinearGradient
-          colors={['rgba(255, 215, 0, 0.2)', 'rgba(0,0,0,0)']}
+          colors={['rgba(78, 205, 196, 0.2)', 'rgba(0,0,0,0)']}
           style={styles.glow}
           start={{ x: 0.3, y: 0 }}
           end={{ x: 0.7, y: 1 }}
@@ -178,19 +170,19 @@ export default function PaywallModal({
 
           <View style={styles.iconWrapper}>
             <LinearGradient
-              colors={['#FFD700', '#FFB300']}
+              colors={['#4ECDC4', '#44A08D']}
               style={styles.iconGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               {variant === 'blocking' ? (
-                <Lock size={32} color="#000" />
+                <Lock size={32} color="#fff" />
               ) : (
-                <Crown size={32} color="#000" />
+                <Crown size={32} color="#fff" />
               )}
             </LinearGradient>
             <View style={styles.sparklesBadge}>
-              <Sparkles size={14} color="#000" />
+              <Sparkles size={14} color="#0f0f23" />
             </View>
           </View>
 
@@ -198,10 +190,10 @@ export default function PaywallModal({
           <Text style={styles.subtitle}>{subtitle}</Text>
 
           <View style={styles.featureList}>
-            {cards.map((text, index) => (
+            {FEATURES.map((text) => (
               <View key={text} style={styles.featureCard}>
                 <View style={styles.featureIcon}>
-                  <Sparkles size={18} color="#FFD700" />
+                  <Sparkles size={16} color="#4ECDC4" />
                 </View>
                 <Text style={styles.featureText}>{text}</Text>
               </View>
@@ -209,7 +201,7 @@ export default function PaywallModal({
           </View>
 
           <View style={styles.ctaZone}>
-            <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
+            <Animated.View style={{ transform: [{ scale: ctaScale }], width: '100%' }}>
               <TouchableOpacity
                 style={styles.ctaButton}
                 onPress={handlePrimary}
@@ -220,10 +212,10 @@ export default function PaywallModal({
                 testID="paywall-primary-cta"
               >
                 {loading ? (
-                  <ActivityIndicator color="#000" />
+                  <ActivityIndicator color="#0f0f23" />
                 ) : (
                   <Text style={styles.ctaText}>
-                    {primaryLabel || (variant === 'trial' ? 'Start Free Trial' : 'Get Premium')}
+                    {primaryLabel || 'Get Premium'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -245,12 +237,12 @@ export default function PaywallModal({
               onPress={handleRestore}
               style={styles.restoreButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              disabled={isRestoring}
+              disabled={isPurchasing}
               accessibilityLabel="Restore purchases"
               testID="paywall-restore-purchases"
             >
-              <Text style={[styles.restoreText, isRestoring && styles.restoreTextDisabled]}>
-                {isRestoring ? 'Restoring…' : 'Restore Purchases'}
+              <Text style={[styles.restoreText, isPurchasing && styles.restoreTextDisabled]}>
+                {isPurchasing ? 'Restoring…' : 'Restore Purchases'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -263,7 +255,7 @@ export default function PaywallModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: 'rgba(15,15,35,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
@@ -273,119 +265,111 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: 28,
-    padding: 28,
+    maxWidth: 400,
+    borderRadius: 24,
+    padding: 24,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.12)',
+    borderColor: 'rgba(78,205,196,0.2)',
   },
   closeButton: {
     position: 'absolute',
     top: 14,
     right: 14,
     padding: 6,
+    zIndex: 10,
   },
   iconWrapper: {
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   iconGradient: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
   },
   sparklesBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFD700',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#4ECDC4',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#000',
+    borderColor: '#0f0f23',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '700' as const,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
+    marginBottom: 20,
+    lineHeight: 20,
   },
   featureList: {
-    gap: 12,
-    marginBottom: 28,
+    gap: 10,
+    marginBottom: 24,
   },
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   featureIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,215,0,0.12)',
-    marginRight: 12,
+    backgroundColor: 'rgba(78,205,196,0.15)',
+    marginRight: 10,
   },
   featureText: {
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    lineHeight: 18,
   },
   ctaZone: {
-    marginTop: 8,
     alignItems: 'center',
   },
   ctaButton: {
-    height: 64,
-    borderRadius: 40,
+    height: 56,
+    borderRadius: 28,
     paddingHorizontal: 24,
-    backgroundColor: '#FFD700',
+    backgroundColor: '#4ECDC4',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
   },
   ctaText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#0f0f23',
   },
   secondaryButton: {
     marginTop: 12,
     paddingVertical: 8,
   },
   secondaryText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
   },
   restoreButton: {
-    marginTop: 16,
+    marginTop: 12,
     padding: 4,
   },
   restoreText: {
