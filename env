@@ -21,14 +21,14 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=769966215817-92j42af735k7005djr2aes0vuvs1m9h1.a
 # Получите их из RevenueCat Dashboard -> Project Settings -> API Keys
 # См. инструкции в REVENUECAT_SETUP.md
 
-# ВАЖНО: Для тестирования в Rork используйте Web Billing API Key
-# Найдите его в RevenueCat Dashboard -> Apps -> [Your App] -> API keys -> Web Billing
-# Этот ключ нужен только для тестирования в веб-версии (preview в Rork)
-# На реальном iPhone будет использоваться IOS ключ выше
-EXPO_PUBLIC_REVENUECAT_WEB_KEY=
+# Test API Key (для тестирования в Rork web preview)
+EXPO_PUBLIC_REVENUECAT_TEST_API_KEY=test_KFhPFPhDhlpsOUNUJCbnuUKFPGa
 
-EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_NIzzmGwASbGFsnfAddnshynSnsG
-EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=
+# iOS API Key (для реального iPhone - App Store)
+EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=appl_bmkkzdEXxXZssjjCwTmHdUpuRHC
+
+# Android API Key
+EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY=
 DATABASE_URL=postgresql://postgres.lcdrxhwkuyobxroclmhi:1o1YAYGRAFTIXiLX@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
 
 # Firebase Configuration
