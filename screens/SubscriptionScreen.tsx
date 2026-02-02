@@ -55,6 +55,7 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     isPremium,
     isInitialized,
     error,
+    reloadOfferings,
   } = useSubscription();
 
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
@@ -292,12 +293,23 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
             </Animated.View>
           ) : (
             <View style={styles.loadingSection}>
-              <ActivityIndicator size="large" color="#4ECDC4" />
-              <Text style={styles.loadingText}>
-                {isInitialized ? 'Loading plans...' : 'Connecting to store...'}
-              </Text>
-              {error && (
-                <Text style={styles.errorText}>{error}</Text>
+              {!error ? (
+                <>
+                  <ActivityIndicator size="large" color="#4ECDC4" />
+                  <Text style={styles.loadingText}>
+                    {isInitialized ? 'Loading plans...' : 'Connecting to store...'}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.errorText}>{error}</Text>
+                  <TouchableOpacity 
+                    style={styles.retryButton}
+                    onPress={reloadOfferings}
+                  >
+                    <Text style={styles.retryButtonText}>Try Again</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           )}
@@ -523,10 +535,24 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#FF6B6B',
     textAlign: 'center',
     paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4ECDC4',
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#4ECDC4',
   },
   ctaSection: {
     position: 'absolute',

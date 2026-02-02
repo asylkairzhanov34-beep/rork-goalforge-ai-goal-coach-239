@@ -70,7 +70,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           setStatus('free');
         }
 
-        if (offerings?.current?.availablePackages) {
+        if (offerings?.current?.availablePackages && offerings.current.availablePackages.length > 0) {
           const formatted: SubscriptionPackage[] = offerings.current.availablePackages.map((pkg) => ({
             identifier: pkg.identifier,
             product: {
@@ -86,6 +86,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           console.log('[Subscription] Loaded', formatted.length, 'packages');
         } else {
           console.warn('[Subscription] No packages available');
+          setError('No subscription plans found. Please check your RevenueCat dashboard.');
         }
 
         setIsInitialized(true);
@@ -186,6 +187,34 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     }
   }, []);
 
+  const reloadOfferings = useCallback(async () => {
+    console.log('[Subscription] Reloading offerings...');
+    setError(null);
+    try {
+      const offerings = await getOfferings();
+      if (offerings?.current?.availablePackages && offerings.current.availablePackages.length > 0) {
+        const formatted: SubscriptionPackage[] = offerings.current.availablePackages.map((pkg) => ({
+          identifier: pkg.identifier,
+          product: {
+            identifier: pkg.product.identifier,
+            title: pkg.product.title,
+            description: pkg.product.description,
+            price: pkg.product.price,
+            priceString: pkg.product.priceString,
+            currencyCode: pkg.product.currencyCode,
+          },
+        }));
+        setPackages(formatted);
+        console.log('[Subscription] Reloaded', formatted.length, 'packages');
+      } else {
+        setError('No subscription plans found');
+      }
+    } catch (err: any) {
+      console.error('[Subscription] Reload error:', err);
+      setError(err.message || 'Failed to load plans');
+    }
+  }, []);
+
   return {
     isInitialized,
     status,
@@ -198,6 +227,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     purchasePackage: handlePurchase,
     restorePurchases: handleRestore,
     refreshStatus,
+    reloadOfferings,
     setIsFirstLaunch,
   };
 });

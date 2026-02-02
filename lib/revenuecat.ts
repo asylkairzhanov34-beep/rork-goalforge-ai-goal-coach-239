@@ -11,14 +11,25 @@ export type RevenueCatPackage = PurchasesPackage;
 export type RevenueCatOfferings = PurchasesOfferings;
 
 function getRevenueCatApiKey(): string | undefined {
-  if (__DEV__ || Platform.OS === 'web') {
-    return process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
+  const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
+  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
+  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
+  
+  console.log('[RevenueCat] Keys available - TEST:', !!testKey, 'iOS:', !!iosKey, 'Android:', !!androidKey);
+  
+  if (Platform.OS === 'web') {
+    return testKey;
   }
-  return Platform.select({
-    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
-    android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
-    default: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY,
-  });
+  
+  if (Platform.OS === 'ios') {
+    return iosKey || testKey;
+  }
+  
+  if (Platform.OS === 'android') {
+    return androidKey || testKey;
+  }
+  
+  return testKey;
 }
 
 let isConfigured = false;
@@ -86,19 +97,36 @@ export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
     console.log('[RevenueCat] Fetching offerings...');
     const offerings = await Purchases.getOfferings();
     
+    console.log('[RevenueCat] Raw offerings:', JSON.stringify(offerings, null, 2));
+    console.log('[RevenueCat] All offerings keys:', Object.keys(offerings.all || {}));
+    
     if (offerings.current) {
-      console.log('[RevenueCat] ✅ Offerings loaded:', offerings.current.availablePackages.length, 'packages');
+      console.log('[RevenueCat] ✅ Current offering:', offerings.current.identifier);
+      console.log('[RevenueCat] Available packages:', offerings.current.availablePackages.length);
       offerings.current.availablePackages.forEach((pkg, i) => {
         console.log(`[RevenueCat] Package ${i + 1}:`, pkg.identifier, '-', pkg.product.priceString);
       });
       cachedOfferings = offerings;
     } else {
-      console.warn('[RevenueCat] ⚠️ No current offering found');
+      console.warn('[RevenueCat] ⚠️ No current offering - check RevenueCat dashboard');
+      console.warn('[RevenueCat] Make sure you have an offering set as CURRENT');
+      
+      const allKeys = Object.keys(offerings.all || {});
+      if (allKeys.length > 0) {
+        console.log('[RevenueCat] Found other offerings:', allKeys);
+        const firstOffering = offerings.all[allKeys[0]];
+        if (firstOffering?.availablePackages?.length > 0) {
+          console.log('[RevenueCat] Using first available offering:', allKeys[0]);
+          cachedOfferings = { ...offerings, current: firstOffering };
+          return cachedOfferings;
+        }
+      }
     }
     
     return offerings;
-  } catch (error) {
-    console.error('[RevenueCat] Error fetching offerings:', error);
+  } catch (error: any) {
+    console.error('[RevenueCat] Error fetching offerings:', error?.message || error);
+    console.error('[RevenueCat] Error code:', error?.code);
     return null;
   }
 };
