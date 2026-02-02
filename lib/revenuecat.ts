@@ -1,728 +1,149 @@
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Purchases, { 
+  CustomerInfo, 
+  PurchasesPackage, 
+  PurchasesOffering 
+} from 'react-native-purchases';
 
-export interface RevenueCatCustomerInfo {
-  activeSubscriptions: string[];
-  allPurchasedProductIdentifiers: string[];
-  entitlements: {
-    active: Record<string, {
-      identifier: string;
-      productIdentifier: string;
-      isActive: boolean;
-    }>;
-  };
-}
-
-export interface RevenueCatProduct {
-  identifier: string;
-  title: string;
-  description: string;
-  price: number;
-  priceString: string;
-  currencyCode: string;
-}
-
-export interface RevenueCatPackage {
-  identifier: string;
-  product: RevenueCatProduct;
-}
-
-export interface RevenueCatOfferings {
-  current: {
-    identifier: string;
-    availablePackages: RevenueCatPackage[];
-  } | null;
-  all: Record<string, unknown>;
-}
-
-type PurchasesModule = {
-  configure: (config: { apiKey: string }) => Promise<void>;
-  setLogLevel: (level: unknown) => Promise<void>;
-  LOG_LEVEL: { DEBUG: unknown; VERBOSE: unknown };
-  getOfferings: () => Promise<RevenueCatOfferings>;
-  getCustomerInfo: () => Promise<RevenueCatCustomerInfo>;
-  purchasePackage: (pkg: RevenueCatPackage) => Promise<{ customerInfo: RevenueCatCustomerInfo }>;
-  restorePurchases: () => Promise<RevenueCatCustomerInfo>;
+// Типы для совместимости с вашим проектом
+export type RevenueCatCustomerInfo = CustomerInfo;
+export type RevenueCatPackage = PurchasesPackage;
+export type RevenueCatOfferings = {
+  current: PurchasesOffering | null;
+  all: { [key: string]: PurchasesOffering };
 };
 
+// 1. Получаем ключ (Исправлено имя переменной!)
 const API_KEYS = {
-  test: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '',
-  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '',
-  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '',
+  // Проверяем оба варианта написания, чтобы точно найти ключ
+  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
+  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
 };
 
-type RevenueCatApiKeySource = 'test' | 'ios' | 'android' | 'missing';
-
-const getApiKeyForPlatform = (): { apiKey: string; source: RevenueCatApiKeySource } => {
-  const testKey = API_KEYS.test;
-
-  if (Platform.OS === 'web') {
-    return { apiKey: testKey, source: testKey ? 'test' : 'missing' };
-  }
-
-  if (Platform.OS === 'ios') {
-    const apiKey = API_KEYS.ios || testKey;
-    return { apiKey, source: API_KEYS.ios ? 'ios' : apiKey ? 'test' : 'missing' };
-  }
-
-  if (Platform.OS === 'android') {
-    const apiKey = API_KEYS.android || testKey;
-    return { apiKey, source: API_KEYS.android ? 'android' : apiKey ? 'test' : 'missing' };
-  }
-
-  return { apiKey: testKey, source: testKey ? 'test' : 'missing' };
-};
-
-/**
- * =====================================================
- * EXPO GO DETECTION & MOCK MODE
- * =====================================================
- * 
- * IMPORTANT: Expo Go does NOT support native StoreKit/Play Store functionality.
- * RevenueCat requires native modules that are only available in:
- * - Development builds (expo dev client)
- * - Production/standalone builds
- * 
- * When running in Expo Go:
- * - Native store APIs are unavailable
- * - RevenueCat configuration will fail with "Invalid API key" errors
- * - We must use mock mode to prevent crashes and misleading errors
- * 
- * Reference: https://docs.expo.dev/workflow/overview/#expo-go
- */
-
-// Flag to track if we're in mock mode (set during initialization)
-let isMockMode = false;
-
-// Проверка Expo Go - только для мобильных платформ
-const getIsExpoGo = (): boolean => {
-  if (Platform.OS === 'web') return false;
-  // appOwnership === 'expo' означает Expo Go
-  // appOwnership === 'standalone' или undefined означает production build
-  // appOwnership === null означает development build (expo dev client)
-  const ownership = Constants?.appOwnership;
-  console.log('[RevenueCat] Constants.appOwnership:', ownership);
-  return ownership === 'expo';
-};
-
-// Export getter for mock mode status
-export const getIsMockMode = (): boolean => isMockMode;
-
-export const shouldUseRealPurchases = (): boolean => {
-  const env = getEnvironmentInfo();
-  return env.isRealDevice && !isMockMode;
-};
-
-const detectRorkSandbox = (): boolean => {
-  // Только для web проверяем hostname
-  if (Platform.OS !== 'web') {
-    return false; // На нативных платформах не может быть Rork Sandbox
-  }
-  if (typeof window !== 'undefined' && (window as any).__RORK_SANDBOX__) {
-    return true;
-  }
-  if (typeof window !== 'undefined' && window.location?.hostname?.includes('e2b.app')) {
-    return true;
-  }
-  if (typeof window !== 'undefined' && window.location?.hostname?.includes('rork')) {
-    return true;
-  }
-  return false;
-};
-
-// Вычисляем при каждом использовании для точности
-const getEnvironmentInfo = () => {
-  const isExpoGo = getIsExpoGo();
-  const isRorkSandbox = detectRorkSandbox();
-  const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
-  const isRealDevice = isNativePlatform && !isExpoGo;
-  const shouldUseMock = Platform.OS === 'web' || isRorkSandbox || isExpoGo;
-
-  return {
-    isExpoGo,
-    isRorkSandbox,
-    isNativePlatform,
-    isRealDevice,
-    shouldUseMock,
-  };
-};
-
-// ВАЖНО: НЕ кешируем значения - всегда вычисляем динамически!
-// В TestFlight Constants.appOwnership может быть null/undefined, что корректно означает production build
-
-/**
- * ВАЖНО: Mock mode обязателен ТОЛЬКО в следующих случаях:
- * - Web платформа (нет нативных сторов)
- * - Rork Sandbox (нет доступа к сторам)  
- * - Expo Go (appOwnership === 'expo')
- * 
- * На реальных устройствах в dev/production/TestFlight билдах используется настоящий RevenueCat.
- * В TestFlight appOwnership будет null или undefined - это НЕ Expo Go!
- */
-
-let hasLoggedStatus = false;
-const logStatus = (message: string) => {
-  if (hasLoggedStatus) return;
-  hasLoggedStatus = true;
-  console.log(`[RevenueCat] ${message}`);
-};
-
-let moduleRef: PurchasesModule | null = null;
 let isConfigured = false;
 
-const getApiKey = (): { apiKey: string; source: RevenueCatApiKeySource } => {
-  const env = getEnvironmentInfo();
-
-  if (env.isRorkSandbox) {
-    console.log('[RevenueCat] Rork Sandbox detected - using TEST API key');
-    const apiKey = API_KEYS.test;
-    return { apiKey, source: apiKey ? 'test' : 'missing' };
-  }
-
-  return getApiKeyForPlatform();
-};
-
-const loadPurchasesModule = (): PurchasesModule | null => {
-  if (moduleRef) {
-    console.log('[RevenueCat] Using cached module ref');
-    return moduleRef;
-  }
-
-  // КРИТИЧНО: Вычисляем окружение ДИНАМИЧЕСКИ при каждом вызове!
-  const currentEnv = getEnvironmentInfo();
-  
-  console.log('[RevenueCat] loadPurchasesModule - Environment check:');
-  console.log('[RevenueCat]   Platform.OS:', Platform.OS);
-  console.log('[RevenueCat]   Constants.appOwnership:', Constants?.appOwnership);
-  console.log('[RevenueCat]   isExpoGo:', currentEnv.isExpoGo);
-  console.log('[RevenueCat]   isRorkSandbox:', currentEnv.isRorkSandbox);
-  console.log('[RevenueCat]   isRealDevice:', currentEnv.isRealDevice);
-  console.log('[RevenueCat]   shouldUseMock:', currentEnv.shouldUseMock);
-
-  /**
-   * EXPO GO & MOCK MODE HANDLING
-   * - In Expo Go (appOwnership === 'expo'), StoreKit/Play Store are unavailable
-   * - In TestFlight/Production, appOwnership is null/undefined - NOT Expo Go!
-   * - RevenueCat cannot initialize without native store access in Expo Go
-   */
-  
-  // ВАЖНО: Для iOS/Android с appOwnership !== 'expo' - это РЕАЛЬНЫЙ билд!
-  if (Platform.OS === 'web') {
-    logStatus('Web platform - using mock mode');
-    isMockMode = true;
-    return null;
-  }
-  
-  if (currentEnv.isRorkSandbox) {
-    logStatus('Rork Sandbox detected - using mock mode');
-    isMockMode = true;
-    return null;
-  }
-  
-  // КРИТИЧНО: Только если appOwnership ТОЧНО равен 'expo' - это Expo Go
-  // null, undefined, 'standalone' - это все реальные билды!
-  if (Constants?.appOwnership === 'expo') {
-    logStatus('Expo Go detected (appOwnership === "expo") - using mock mode');
-    isMockMode = true;
-    return null;
-  }
-
-  // Это реальное устройство (TestFlight, Production, Dev Build) - загружаем нативный модуль
-  console.log('[RevenueCat] 🚀 REAL BUILD DETECTED - loading native RevenueCat');
-  console.log('[RevenueCat] appOwnership:', Constants?.appOwnership, '(null/undefined = production build)');
-  
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const RNPurchases = require('react-native-purchases');
-    moduleRef = RNPurchases.default ?? RNPurchases;
-    console.log('[RevenueCat] ✅ Native module loaded successfully');
-    isMockMode = false;
-    return moduleRef;
-  } catch (error: any) {
-    console.error('[RevenueCat] ❌ Native module failed to load');
-    console.error('[RevenueCat] Error:', error?.message || error);
-    // На реальном билде это критическая ошибка
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      console.error('[RevenueCat] ❌ CRITICAL: Native module required but failed to load!');
-      throw new Error('RevenueCat module required for purchases but failed to load: ' + error?.message);
-    }
-    isMockMode = true;
-    return null;
-  }
-};
-
+// 2. Инициализация
 export const initializeRevenueCat = async (): Promise<boolean> => {
-  if (isConfigured && moduleRef) {
-    console.log('[RevenueCat] Already configured and module loaded');
-    return true;
-  }
+  if (Platform.OS === 'web') return false;
 
-  const currentSandboxCheck = detectRorkSandbox();
-  const currentIsExpoGo = getIsExpoGo();
+  if (isConfigured) return true;
 
-  const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
-  const isNativeBuild = isNativePlatform && !currentIsExpoGo && !currentSandboxCheck;
+  const apiKey = Platform.OS === 'ios' ? API_KEYS.ios : API_KEYS.android;
 
-  const currentShouldMock = Platform.OS === 'web' || currentSandboxCheck || currentIsExpoGo;
-
-  console.log('========== REVENUECAT INITIALIZATION ==========');
-  console.log('[RevenueCat] Platform:', Platform.OS);
-  console.log('[RevenueCat] Constants.appOwnership:', Constants?.appOwnership);
-  console.log('[RevenueCat] isExpoGo:', currentIsExpoGo);
-  console.log('[RevenueCat] isRorkSandbox:', currentSandboxCheck);
-  console.log('[RevenueCat] shouldUseMock:', currentShouldMock);
-  console.log('[RevenueCat] isNativeBuild:', isNativeBuild);
-
-  if (currentShouldMock) {
-    isMockMode = true;
-    if (currentIsExpoGo) {
-      console.log('[RevenueCat] ℹ️ RevenueCat unavailable in Expo Go – using mock data');
-      console.log('[RevenueCat] ℹ️ To use real purchases, create a development build');
-    } else {
-      console.log('[RevenueCat] ℹ️ Sandbox/Web detected - using mock mode');
-    }
+  if (!apiKey) {
+    console.error('[RevenueCat] ❌ Ключ API не найден! Проверьте файл .env');
+    console.error('[RevenueCat] Ищем EXPO_PUBLIC_REVENUECAT_IOS_KEY');
     return false;
   }
 
-  isMockMode = false;
-
   try {
-    const module = loadPurchasesModule();
-    if (!module) {
-      console.log('[RevenueCat] Module not loaded - using mock mode');
-      return false;
+    if (__DEV__) {
+      await Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
     }
-
-    console.log('[RevenueCat] Module loaded successfully');
-    console.log('[RevenueCat] Module type:', typeof module);
-    console.log('[RevenueCat] Module.configure exists:', typeof module.configure === 'function');
-    console.log('[RevenueCat] Module.purchasePackage exists:', typeof module.purchasePackage === 'function');
-
-    const { apiKey, source } = getApiKey();
-    if (!apiKey) {
-      console.warn('[RevenueCat] ❌ No RevenueCat API key configured for this platform');
-      console.warn('[RevenueCat] Expected env vars:', {
-        test: 'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
-        ios: 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
-        android: 'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
-      });
-      return false;
-    }
-
-    console.log('[RevenueCat] API key source:', source);
-    console.log('[RevenueCat] API key length:', apiKey.length);
-    console.log('[RevenueCat] API key prefix:', apiKey.substring(0, 10) + '...');
-    console.log('[RevenueCat] Configuring with API key...');
-
-    // Включаем verbose логирование для отладки
-    if (module.LOG_LEVEL) {
-      try {
-        await module.setLogLevel(module.LOG_LEVEL.VERBOSE);
-        console.log('[RevenueCat] Verbose logging enabled');
-      } catch (logError: any) {
-        console.warn('[RevenueCat] Failed to enable verbose logging:', logError?.message);
-      }
-    }
-
-    await module.configure({ apiKey });
+    
+    await Purchases.configure({ apiKey });
     isConfigured = true;
-    console.log('[RevenueCat] ✅ Configuration successful');
-    console.log('[RevenueCat] ✅ isConfigured is now:', isConfigured);
+    console.log('[RevenueCat] ✅ Успешно подключено к', Platform.OS);
     return true;
-  } catch (error: any) {
-    console.error('[RevenueCat] ❌ Initialization/Configuration failed');
-    console.error('[RevenueCat] Error message:', error?.message);
-    console.error('[RevenueCat] Error code:', error?.code);
-
-    if (error?.message?.includes('sandbox') || error?.message?.includes('Rork')) {
-      console.log('[RevenueCat] ℹ️ Sandbox environment detected from error - using mock mode');
-      return false;
-    }
-
-    // Если это ошибка "already configured", считаем это успехом
-    if (error?.message?.includes('already configured') || error?.message?.includes('has been configured')) {
-      console.log('[RevenueCat] ℹ️ Already configured (from error) - treating as success');
-      isConfigured = true;
-      return true;
-    }
-
-    console.error('[RevenueCat] Full error:', JSON.stringify(error, null, 2));
+  } catch (error) {
+    console.error('[RevenueCat] ❌ Ошибка конфигурации:', error);
     return false;
   }
 };
 
-export const isRevenueCatAvailable = (): boolean => {
-  const env = getEnvironmentInfo();
-  // Для реальных устройств ВСЕГДА возвращаем true после загрузки модуля
-  if (env.isRealDevice) {
-    return !!loadPurchasesModule();
-  }
-  return !env.shouldUseMock && !!loadPurchasesModule();
-};
-
+// 3. Получение тарифов (Offerings)
 export const getOfferings = async (): Promise<RevenueCatOfferings | null> => {
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.error('[RevenueCat] ❌ getOfferings - module not ready');
-    return null;
-  }
+  if (!isConfigured) await initializeRevenueCat();
 
   try {
-    console.log('[RevenueCat] 📦 Fetching offerings...');
-    const offerings = await module.getOfferings();
-
-    if (!offerings?.current) {
-      console.warn('[RevenueCat] ⚠️ No current offering available');
-      console.warn('[RevenueCat] Check RevenueCat Dashboard → Offerings');
-      return null;
+    const offerings = await Purchases.getOfferings();
+    if (offerings.current) {
+      console.log('[RevenueCat] 📦 Тарифы загружены:', offerings.current.availablePackages.length);
+    } else {
+      console.warn('[RevenueCat] ⚠️ Offerings пусты (проверьте Dashboard)');
     }
-
-    console.log('[RevenueCat] ✅ Offerings fetched');
-    console.log('[RevenueCat] Current offering:', offerings.current.identifier);
-    console.log('[RevenueCat] Available packages:', offerings.current.availablePackages?.length ?? 0);
-
-    offerings.current.availablePackages?.forEach((pkg: RevenueCatPackage, index: number) => {
-      console.log(`[RevenueCat] Package ${index + 1}:`, pkg.product.identifier, '-', pkg.product.priceString);
-    });
-
     return offerings;
   } catch (error) {
-    console.error('[RevenueCat] ❌ getOfferings failed:', error);
+    console.error('[RevenueCat] ❌ Ошибка загрузки тарифов:', error);
     return null;
   }
 };
 
-export const getCustomerInfo = async (): Promise<RevenueCatCustomerInfo | null> => {
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.log('[RevenueCat] getCustomerInfo - module not ready');
-    return null;
-  }
-
-  try {
-    const info = await module.getCustomerInfo();
-    console.log('[RevenueCat] Customer info fetched, active subs:', info?.activeSubscriptions?.length ?? 0);
-    return info;
-  } catch (error) {
-    console.error('[RevenueCat] getCustomerInfo failed:', error);
-    return null;
-  }
-};
-
+// 4. Покупка пакета
 export const purchasePackage = async (
-  pkg: RevenueCatPackage | any
-): Promise<{ customerInfo: RevenueCatCustomerInfo } | null> => {
-  const env = getEnvironmentInfo();
-
-  console.log('========== PURCHASE PACKAGE START ==========');
-  console.log('[RevenueCat] 🛒 purchasePackage called');
-  console.log('[RevenueCat] Platform.OS:', Platform.OS);
-  console.log('[RevenueCat] Environment:', JSON.stringify(env, null, 2));
-  console.log('[RevenueCat] isConfigured:', isConfigured);
-  console.log('[RevenueCat] moduleRef exists:', !!moduleRef);
-  console.log('[RevenueCat] Constants.appOwnership:', Constants?.appOwnership);
-
-  // КРИТИЧНО: Если это реальное устройство, НЕ используем mock
-  if (env.isRealDevice) {
-    console.log('[RevenueCat] ✅ REAL DEVICE DETECTED - will use native RevenueCat');
-  } else {
-    console.log('[RevenueCat] ⚠️ NOT a real device build');
-    console.log('[RevenueCat] isExpoGo:', env.isExpoGo);
-    console.log('[RevenueCat] isRorkSandbox:', env.isRorkSandbox);
-  }
-
-  // Попробуем переинициализировать если не сконфигурировано
-  if (!isConfigured) {
-    console.log('[RevenueCat] ⚠️ Not configured, attempting to initialize...');
-    const initialized = await initializeRevenueCat();
-    if (!initialized) {
-      console.error('[RevenueCat] ❌ Failed to initialize before purchase');
-      if (env.isRealDevice) {
-        throw new Error('RevenueCat must be initialized on real devices');
-      }
-      return null;
-    }
-  }
-
-  const module = loadPurchasesModule();
-  if (!module) {
-    console.error('[RevenueCat] ❌ purchasePackage - module not loaded');
-    if (env.isRealDevice) {
-      throw new Error('RevenueCat module must be loaded on real devices');
-    }
-    return null;
-  }
-
+  pkg: PurchasesPackage
+): Promise<{ customerInfo: CustomerInfo }> => {
   try {
-    console.log('[RevenueCat] 🛒 Initiating NATIVE purchase...');
-    console.log('[RevenueCat] Package identifier:', pkg?.identifier);
-    console.log('[RevenueCat] Product identifier:', pkg?.product?.identifier);
-    console.log('[RevenueCat] Product price:', pkg?.product?.priceString);
-    console.log('[RevenueCat] Package constructor:', pkg?.constructor?.name);
-    console.log('[RevenueCat] Package keys:', Object.keys(pkg || {}));
-    console.log('[RevenueCat] Module.purchasePackage type:', typeof module.purchasePackage);
-
-    // ВАЖНО: Это должно вызвать нативный диалог Apple!
-    console.log('[RevenueCat] 📱 Calling module.purchasePackage() - Apple sheet should appear NOW...');
-    const result = await module.purchasePackage(pkg);
-
-    console.log('[RevenueCat] ✅ Purchase completed!');
-    console.log('[RevenueCat] Active subscriptions:', result.customerInfo.activeSubscriptions?.length ?? 0);
-    console.log('[RevenueCat] Active entitlements:', Object.keys(result.customerInfo.entitlements?.active ?? {}).join(', '));
-    console.log('========== PURCHASE PACKAGE END ==========');
-
-    return result;
+    console.log('[RevenueCat] 💰 Попытка покупки:', pkg.product.identifier);
+    // Это вызывает системное окно Apple Pay
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    console.log('[RevenueCat] ✅ Покупка успешна!');
+    return { customerInfo };
   } catch (error: any) {
-    console.log('========== PURCHASE ERROR ==========');
-
-    if (error?.userCancelled || error?.code === 1 || error?.code === 'PURCHASE_CANCELLED') {
-      console.log('[RevenueCat] ℹ️ Purchase cancelled by user');
+    if (error.userCancelled) {
+      console.log('[RevenueCat] ℹ️ Пользователь отменил покупку');
       throw { userCancelled: true };
     }
-
-    console.error('[RevenueCat] ❌ Purchase failed');
-    console.error('[RevenueCat] Error code:', error?.code);
-    console.error('[RevenueCat] Error message:', error?.message);
-    console.error('[RevenueCat] Error domain:', error?.domain);
-    console.error('[RevenueCat] Error underlyingErrorMessage:', error?.underlyingErrorMessage);
-    console.error('[RevenueCat] Error readableErrorCode:', error?.readableErrorCode);
-    console.error('[RevenueCat] Full error:', JSON.stringify(error, null, 2));
-
+    console.error('[RevenueCat] ❌ Ошибка покупки:', error);
     throw error;
   }
 };
 
-export const restorePurchases = async (): Promise<RevenueCatCustomerInfo | null> => {
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.log('[RevenueCat] restorePurchases - module not ready');
-    return null;
-  }
-
+// 5. Восстановление покупок
+export const restorePurchases = async (): Promise<CustomerInfo | null> => {
   try {
-    console.log('[RevenueCat] Restoring purchases...');
-    const info = await module.restorePurchases();
-    console.log('[RevenueCat] Restore successful, active subs:', info?.activeSubscriptions?.length ?? 0);
+    const info = await Purchases.restorePurchases();
     return info;
   } catch (error) {
-    console.error('[RevenueCat] Restore failed:', error);
-    throw error;
+    console.error('[RevenueCat] Ошибка восстановления:', error);
+    return null;
   }
 };
 
-// Хранилище для оригинальных пакетов RevenueCat
-let cachedOriginalPackages: any[] = [];
-let lastOfferingsFetchTime = 0;
-const OFFERINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-export const getOriginalPackages = (): any[] => cachedOriginalPackages;
-
-export const setCachedPackages = (packages: any[]): void => {
-  if (packages && packages.length > 0) {
-    cachedOriginalPackages = packages;
-    lastOfferingsFetchTime = Date.now();
-    console.log('[RevenueCat] ✅ Cached', packages.length, 'packages');
-  }
-};
-
-/**
- * Get RevenueCat offerings with caching of original package objects.
- * 
- * IMPORTANT: This function should only be called after initializeRevenueCat() 
- * returns true. In Expo Go / mock mode, it will return null without errors.
- * 
- * The subscription provider should handle null returns by using mock packages.
- */
-export const getOfferingsWithCache = async (): Promise<RevenueCatOfferings | null> => {
-  if (isMockMode) {
-    console.log('[RevenueCat] ℹ️ getOfferingsWithCache - mock mode, skipping');
-    return null;
-  }
-
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.log('[RevenueCat] getOfferingsWithCache - not configured');
-    return null;
-  }
-
+// 6. Получение информации о клиенте
+export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
   try {
-    console.log('[RevenueCat] 📦 Fetching offerings...');
-    const offerings = await module.getOfferings();
-
-    console.log('[RevenueCat] 📦 Offerings:', {
-      hasCurrent: !!offerings?.current,
-      currentId: offerings?.current?.identifier,
-      packagesCount: offerings?.current?.availablePackages?.length || 0,
-    });
-
-    if (offerings?.current?.availablePackages?.length) {
-      // Кэшируем оригинальные пакеты
-      cachedOriginalPackages = offerings.current.availablePackages;
-      lastOfferingsFetchTime = Date.now();
-      
-      console.log('[RevenueCat] ✅ Cached', cachedOriginalPackages.length, 'packages:');
-      cachedOriginalPackages.forEach((pkg: any, idx: number) => {
-        console.log(`  ${idx + 1}. ${pkg.identifier} -> ${pkg.product?.identifier} (${pkg.product?.priceString})`);
-      });
-    } else {
-      console.warn('[RevenueCat] ⚠️ No packages in offering!');
-    }
-
-    return offerings;
-  } catch (error: any) {
-    console.error('[RevenueCat] ❌ getOfferingsWithCache failed:', error?.message);
+    return await Purchases.getCustomerInfo();
+  } catch (error) {
     return null;
   }
 };
 
-// Legacy exports for compatibility
-export const initializeSubscriptionFlow = initializeRevenueCat;
-export const fetchOfferings = getOfferings;
-export const fetchCustomerInfo = getCustomerInfo;
-export const purchasePackageByIdentifier = async (
-  identifier: string
-): Promise<{ info: RevenueCatCustomerInfo; purchasedPackage: RevenueCatPackage } | null> => {
-  console.log('========== PURCHASE BY IDENTIFIER START ==========');
-  console.log('[RevenueCat] 🛒 Identifier:', identifier);
-  console.log('[RevenueCat] 🛒 Cached packages:', cachedOriginalPackages.length);
-  console.log('[RevenueCat] 🛒 isMockMode:', isMockMode);
-  console.log('[RevenueCat] 🛒 isConfigured:', isConfigured);
-  console.log('[RevenueCat] 🛒 moduleRef exists:', !!moduleRef);
+// --- Функции для совместимости с вашим хуком use-subscription-store ---
 
-  const env = getEnvironmentInfo();
-  console.log('[RevenueCat] 🛒 Environment:', JSON.stringify(env, null, 2));
-  
-  // На реальном устройстве отключаем mock mode принудительно
-  if (env.isRealDevice && isMockMode) {
-    console.log('[RevenueCat] 🔄 Real device but isMockMode=true, forcing real mode...');
-    isMockMode = false;
+// Кеш для совместимости
+let cachedPackages: PurchasesPackage[] = [];
+
+export const getOfferingsWithCache = async () => {
+  const offerings = await getOfferings();
+  if (offerings?.current) {
+    cachedPackages = offerings.current.availablePackages;
   }
+  return offerings;
+};
 
-  // Убеждаемся что RevenueCat инициализирован
-  if (!isConfigured && env.isRealDevice) {
-    console.log('[RevenueCat] ⚠️ Not configured on real device, attempting init...');
-    const initResult = await initializeRevenueCat();
-    console.log('[RevenueCat] Init result:', initResult);
-  }
+export const getOriginalPackages = () => cachedPackages;
 
-  // Проверяем кэш - используем если есть и не устарел
-  const cacheAge = Date.now() - lastOfferingsFetchTime;
-  const cacheValid = cachedOriginalPackages.length > 0 && cacheAge < OFFERINGS_CACHE_TTL;
-  
-  console.log('[RevenueCat] 🛒 Cache age:', cacheAge, 'ms, valid:', cacheValid);
-
-  // Загружаем пакеты только если кэш пуст или устарел
-  if (!cacheValid) {
-    console.log('[RevenueCat] 🔄 Cache empty or stale, fetching offerings...');
-    
-    const module = loadPurchasesModule();
-    if (module && isConfigured) {
-      try {
-        const offerings = await module.getOfferings();
-        console.log('[RevenueCat] 📦 Offerings result:', {
-          hasCurrent: !!offerings?.current,
-          packagesCount: offerings?.current?.availablePackages?.length || 0,
-        });
-        
-        if (offerings?.current?.availablePackages?.length) {
-          cachedOriginalPackages = offerings.current.availablePackages;
-          lastOfferingsFetchTime = Date.now();
-          console.log('[RevenueCat] ✅ Fetched', cachedOriginalPackages.length, 'packages');
-        }
-      } catch (e: any) {
-        console.error('[RevenueCat] ❌ Fetch failed:', e?.message);
-        // Продолжаем с существующим кэшем если есть
-      }
-    } else {
-      console.warn('[RevenueCat] ⚠️ Module not ready:', { module: !!module, isConfigured });
-    }
-  }
-
-  // Выводим все доступные пакеты для отладки
-  console.log('[RevenueCat] 📦 Available packages:');
-  cachedOriginalPackages.forEach((p: any, idx: number) => {
-    console.log(`  ${idx + 1}. id: "${p.identifier}", product: "${p.product?.identifier}", price: ${p.product?.priceString}`);
-  });
-
-  if (cachedOriginalPackages.length === 0) {
-    console.error('[RevenueCat] ❌ No packages available!');
-    return null;
-  }
-
-  // Ищем пакет - проверяем оба идентификатора
-  const pkg = cachedOriginalPackages.find(
-    (p: any) => p.identifier === identifier || p.product?.identifier === identifier
+export const purchasePackageByIdentifier = async (identifier: string) => {
+  const pkg = cachedPackages.find(
+    p => p.identifier === identifier || p.product.identifier === identifier
   );
 
   if (!pkg) {
-    console.error('[RevenueCat] ❌ Package not found for:', identifier);
+    console.error('[RevenueCat] Пакет не найден в кеше:', identifier);
     return null;
   }
 
-  console.log('[RevenueCat] ✅ Found package:', pkg.identifier);
-  console.log('[RevenueCat] 📱 Calling native purchasePackage...');
-
-  // Передаем ОРИГИНАЛЬНЫЙ нативный объект
   const result = await purchasePackage(pkg);
-  if (!result) {
-    console.error('[RevenueCat] ❌ Purchase returned null');
-    return null;
-  }
-
-  console.log('[RevenueCat] ✅ Purchase successful!');
-  console.log('========== PURCHASE BY IDENTIFIER END ==========');
-
   return {
     info: result.customerInfo,
-    purchasedPackage: {
-      identifier: pkg.identifier,
-      product: {
-        identifier: pkg.product?.identifier,
-        title: pkg.product?.title,
-        description: pkg.product?.description,
-        price: pkg.product?.price,
-        priceString: pkg.product?.priceString,
-        currencyCode: pkg.product?.currencyCode,
-      }
-    }
+    purchasedPackage: pkg
   };
 };
+
 export const restorePurchasesFromRevenueCat = restorePurchases;
-
-export const syncWithRevenueCat = async (): Promise<RevenueCatCustomerInfo | null> => {
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.log('[RevenueCat] syncWithRevenueCat - module not ready');
-    return null;
-  }
-
-  try {
-    console.log('[RevenueCat] Force syncing customer info from server...');
-    const info = await module.getCustomerInfo();
-    console.log('[RevenueCat] Sync complete, active entitlements:', Object.keys(info?.entitlements?.active ?? {}));
-    return info;
-  } catch (error) {
-    console.error('[RevenueCat] Sync failed:', error);
-    return null;
-  }
-};
-
-export const invalidateCustomerInfoCache = async (): Promise<void> => {
-  const module = loadPurchasesModule();
-  if (!module || !isConfigured) {
-    console.log('[RevenueCat] invalidateCustomerInfoCache - module not ready');
-    return;
-  }
-
-  try {
-    if (typeof (module as any).invalidateCustomerInfoCache === 'function') {
-      await (module as any).invalidateCustomerInfoCache();
-      console.log('[RevenueCat] Customer info cache invalidated');
-    } else {
-      console.log('[RevenueCat] invalidateCustomerInfoCache not available, fetching fresh info');
-      await module.getCustomerInfo();
-    }
-  } catch (error) {
-    console.error('[RevenueCat] Cache invalidation failed:', error);
-  }
+export const syncWithRevenueCat = getCustomerInfo;
+export const invalidateCustomerInfoCache = async () => {
+    // В новых версиях SDK это делается автоматически или через getCustomerInfo
+    await getCustomerInfo();
 };
