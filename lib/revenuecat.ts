@@ -45,19 +45,32 @@ type PurchasesModule = {
   restorePurchases: () => Promise<RevenueCatCustomerInfo>;
 };
 
-// PRODUCTION RevenueCat API Key - NEVER use mock mode with this key on real devices
-const HARDCODED_IOS_KEY = 'appl_bmkkzdEXxXZssjjCwTmHdUpuRHC';
-const TEST_STORE_KEY = 'rcb_nEoCBBLpFGWnfNlHgmMcVhiVTPw';
-const EXPO_TEST_KEY = 'test_KFhPFPhDhlpsOUNUJCbnuUKFPGa';
-
-// CRITICAL: Force disable mock mode for production builds
-let FORCE_REAL_PURCHASES = false;
-
 const API_KEYS = {
-  ios: HARDCODED_IOS_KEY,
-  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? '',
-  testStore: TEST_STORE_KEY,
-  expoTest: EXPO_TEST_KEY,
+  test: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '',
+  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '',
+  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '',
+};
+
+type RevenueCatApiKeySource = 'test' | 'ios' | 'android' | 'missing';
+
+const getApiKeyForPlatform = (): { apiKey: string; source: RevenueCatApiKeySource } => {
+  const testKey = API_KEYS.test;
+
+  if (Platform.OS === 'web') {
+    return { apiKey: testKey, source: testKey ? 'test' : 'missing' };
+  }
+
+  if (Platform.OS === 'ios') {
+    const apiKey = API_KEYS.ios || testKey;
+    return { apiKey, source: API_KEYS.ios ? 'ios' : apiKey ? 'test' : 'missing' };
+  }
+
+  if (Platform.OS === 'android') {
+    const apiKey = API_KEYS.android || testKey;
+    return { apiKey, source: API_KEYS.android ? 'android' : apiKey ? 'test' : 'missing' };
+  }
+
+  return { apiKey: testKey, source: testKey ? 'test' : 'missing' };
 };
 
 /**
@@ -95,7 +108,6 @@ const getIsExpoGo = (): boolean => {
 // Export getter for mock mode status
 export const getIsMockMode = (): boolean => isMockMode;
 
-// Export function to check if we should use real purchases (critical for preventing mock mode on real devices)
 export const shouldUseRealPurchases = (): boolean => {
   const env = getEnvironmentInfo();
   return env.isRealDevice && !isMockMode;
@@ -158,15 +170,16 @@ const logStatus = (message: string) => {
 let moduleRef: PurchasesModule | null = null;
 let isConfigured = false;
 
-const getApiKey = (): string => {
-  const currentSandbox = detectRorkSandbox();
-  if (currentSandbox) {
-    console.log('[RevenueCat] Rork Sandbox detected - using Test Store API Key');
-    return API_KEYS.testStore;
+const getApiKey = (): { apiKey: string; source: RevenueCatApiKeySource } => {
+  const env = getEnvironmentInfo();
+
+  if (env.isRorkSandbox) {
+    console.log('[RevenueCat] Rork Sandbox detected - using TEST API key');
+    const apiKey = API_KEYS.test;
+    return { apiKey, source: apiKey ? 'test' : 'missing' };
   }
-  if (Platform.OS === 'ios') return API_KEYS.ios;
-  if (Platform.OS === 'android') return API_KEYS.android;
-  return '';
+
+  return getApiKeyForPlatform();
 };
 
 const loadPurchasesModule = (): PurchasesModule | null => {
@@ -224,7 +237,6 @@ const loadPurchasesModule = (): PurchasesModule | null => {
     moduleRef = RNPurchases.default ?? RNPurchases;
     console.log('[RevenueCat] ✅ Native module loaded successfully');
     isMockMode = false;
-    FORCE_REAL_PURCHASES = true;
     return moduleRef;
   } catch (error: any) {
     console.error('[RevenueCat] ❌ Native module failed to load');
@@ -247,16 +259,10 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
 
   const currentSandboxCheck = detectRorkSandbox();
   const currentIsExpoGo = getIsExpoGo();
-  
-  // CRITICAL: On iOS/Android native platforms (not Expo Go), NEVER use mock mode
-  const isNativeBuild = (Platform.OS === 'ios' || Platform.OS === 'android') && !currentIsExpoGo && !currentSandboxCheck;
-  
-  if (isNativeBuild) {
-    FORCE_REAL_PURCHASES = true;
-    isMockMode = false;
-    console.log('[RevenueCat] 🚀 NATIVE BUILD DETECTED - forcing real purchases');
-  }
-  
+
+  const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
+  const isNativeBuild = isNativePlatform && !currentIsExpoGo && !currentSandboxCheck;
+
   const currentShouldMock = Platform.OS === 'web' || currentSandboxCheck || currentIsExpoGo;
 
   console.log('========== REVENUECAT INITIALIZATION ==========');
@@ -266,19 +272,8 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
   console.log('[RevenueCat] isRorkSandbox:', currentSandboxCheck);
   console.log('[RevenueCat] shouldUseMock:', currentShouldMock);
   console.log('[RevenueCat] isNativeBuild:', isNativeBuild);
-  console.log('[RevenueCat] FORCE_REAL_PURCHASES:', FORCE_REAL_PURCHASES);
 
-  /**
-   * EARLY EXIT FOR EXPO GO / WEB / SANDBOX
-   * 
-   * In these environments, RevenueCat cannot function:
-   * - Expo Go: No StoreKit/Play Store access (requires dev build)
-   * - Web: No native store APIs
-   * - Rork Sandbox: Sandboxed environment without store access
-   * 
-   * CRITICAL: NEVER skip initialization on native builds!
-   */
-  if (currentShouldMock && !FORCE_REAL_PURCHASES) {
+  if (currentShouldMock) {
     isMockMode = true;
     if (currentIsExpoGo) {
       console.log('[RevenueCat] ℹ️ RevenueCat unavailable in Expo Go – using mock data');
@@ -288,12 +283,8 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
     }
     return false;
   }
-  
-  // Force real mode for native builds
-  if (FORCE_REAL_PURCHASES) {
-    isMockMode = false;
-    console.log('[RevenueCat] 🚀 FORCE_REAL_PURCHASES active - proceeding with real RevenueCat');
-  }
+
+  isMockMode = false;
 
   try {
     const module = loadPurchasesModule();
@@ -307,13 +298,19 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
     console.log('[RevenueCat] Module.configure exists:', typeof module.configure === 'function');
     console.log('[RevenueCat] Module.purchasePackage exists:', typeof module.purchasePackage === 'function');
 
-    const apiKey = getApiKey();
+    const { apiKey, source } = getApiKey();
     if (!apiKey) {
-      console.warn('[RevenueCat] ❌ No API key for platform:', Platform.OS);
+      console.warn('[RevenueCat] ❌ No RevenueCat API key configured for this platform');
+      console.warn('[RevenueCat] Expected env vars:', {
+        test: 'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
+        ios: 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
+        android: 'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
+      });
       return false;
     }
 
-    console.log('[RevenueCat] API key found, length:', apiKey.length);
+    console.log('[RevenueCat] API key source:', source);
+    console.log('[RevenueCat] API key length:', apiKey.length);
     console.log('[RevenueCat] API key prefix:', apiKey.substring(0, 10) + '...');
     console.log('[RevenueCat] Configuring with API key...');
 
@@ -589,7 +586,6 @@ export const purchasePackageByIdentifier = async (
   console.log('[RevenueCat] 🛒 purchasePackageByIdentifier called with:', identifier);
   console.log('[RevenueCat] 🛒 Cached packages count:', cachedOriginalPackages.length);
   console.log('[RevenueCat] 🛒 isMockMode:', isMockMode);
-  console.log('[RevenueCat] 🛒 FORCE_REAL_PURCHASES:', FORCE_REAL_PURCHASES);
   console.log('[RevenueCat] 🛒 isConfigured:', isConfigured);
   console.log('[RevenueCat] 🛒 Platform.OS:', Platform.OS);
   console.log('[RevenueCat] 🛒 Constants.appOwnership:', Constants?.appOwnership);
@@ -600,7 +596,6 @@ export const purchasePackageByIdentifier = async (
   if (env.isRealDevice && isMockMode) {
     console.log('[RevenueCat] 🔄 Real device detected but isMockMode=true, forcing real mode...');
     isMockMode = false;
-    FORCE_REAL_PURCHASES = true;
   }
 
   // Если нет закешированных пакетов или это реальное устройство - загружаем
