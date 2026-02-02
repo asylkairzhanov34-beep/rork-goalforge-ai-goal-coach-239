@@ -521,8 +521,27 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         }
 
         if (!initialized) {
-          // RevenueCat init returned false - this is expected in Expo Go/sandbox
-          // Use mock mode in these environments
+          // RevenueCat init returned false
+          // CRITICAL: On real devices, this should NOT happen - throw error for debugging
+          if (isRealDevice) {
+            console.error('[SubscriptionProvider] ❌ CRITICAL: RevenueCat failed on REAL DEVICE!');
+            console.error('[SubscriptionProvider] This should NOT happen in production builds');
+            // Try one more time
+            const retryInit = await initializeRevenueCat();
+            if (retryInit) {
+              console.log('[SubscriptionProvider] ✅ Retry successful!');
+              setIsMockMode(false);
+              const info = await getCustomerInfo();
+              if (info) {
+                await persistCustomerInfo(info);
+              }
+              await loadOfferingsFromRevenueCat();
+              setIsInitialized(true);
+              return;
+            }
+          }
+          
+          // Use mock mode only in non-production environments
           console.log('[SubscriptionProvider] RevenueCat initialization returned false - using mock mode');
           setIsMockMode(true);
           setPackages(WEB_MOCK_PACKAGES);
@@ -678,7 +697,14 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[SubscriptionProvider] Available packages:', packages.length);
       console.log('[SubscriptionProvider] Packages:', packages.map(p => p.identifier).join(', '));
 
-      if (isMockMode || Platform.OS === 'web') {
+      // CRITICAL: On real iOS/Android devices, NEVER use mock purchase flow
+      const isExpoGoEnv = Constants?.appOwnership === 'expo';
+      const isRealDeviceForPurchase = (Platform.OS === 'ios' || Platform.OS === 'android') && !isExpoGoEnv;
+      
+      if (isRealDeviceForPurchase) {
+        console.log('[SubscriptionProvider] 🚀 REAL DEVICE - forcing real purchase flow');
+        // Skip mock mode check and proceed to real purchase
+      } else if (isMockMode || Platform.OS === 'web') {
         console.log('[SubscriptionProvider] Using MOCK purchase flow');
         setIsPurchasing(true);
         try {
@@ -722,7 +748,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         }
       }
 
-      console.log('[SubscriptionProvider] Using REAL RevenueCat purchase flow');
+      console.log('[SubscriptionProvider] 🚀 Using REAL RevenueCat purchase flow (Apple/Google Pay)');
       setIsPurchasing(true);
       emitAnalytics(ANALYTICS_EVENTS.PURCHASE_INITIATED, { packageIdentifier });
 

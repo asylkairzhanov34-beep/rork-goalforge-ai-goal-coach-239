@@ -2,7 +2,7 @@
   "expo": {
     "name": "GoalForge AI Goal Coach Clone 2",
     "slug": "goalforge-ai-goal-coach-clone-2",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",

@@ -45,9 +45,13 @@ type PurchasesModule = {
   restorePurchases: () => Promise<RevenueCatCustomerInfo>;
 };
 
+// PRODUCTION RevenueCat API Key - NEVER use mock mode with this key on real devices
 const HARDCODED_IOS_KEY = 'appl_bmkkzdEXxXZssjjCwTmHdUpuRHC';
 const TEST_STORE_KEY = 'rcb_nEoCBBLpFGWnfNlHgmMcVhiVTPw';
 const EXPO_TEST_KEY = 'test_KFhPFPhDhlpsOUNUJCbnuUKFPGa';
+
+// CRITICAL: Force disable mock mode for production builds
+let FORCE_REAL_PURCHASES = false;
 
 const API_KEYS = {
   ios: HARDCODED_IOS_KEY,
@@ -224,6 +228,16 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
 
   const currentSandboxCheck = detectRorkSandbox();
   const currentIsExpoGo = getIsExpoGo();
+  
+  // CRITICAL: On iOS/Android native platforms (not Expo Go), NEVER use mock mode
+  const isNativeBuild = (Platform.OS === 'ios' || Platform.OS === 'android') && !currentIsExpoGo && !currentSandboxCheck;
+  
+  if (isNativeBuild) {
+    FORCE_REAL_PURCHASES = true;
+    isMockMode = false;
+    console.log('[RevenueCat] 🚀 NATIVE BUILD DETECTED - forcing real purchases');
+  }
+  
   const currentShouldMock = Platform.OS === 'web' || currentSandboxCheck || currentIsExpoGo;
 
   console.log('========== REVENUECAT INITIALIZATION ==========');
@@ -242,8 +256,10 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
    * - Expo Go: No StoreKit/Play Store access (requires dev build)
    * - Web: No native store APIs
    * - Rork Sandbox: Sandboxed environment without store access
+   * 
+   * CRITICAL: NEVER skip initialization on native builds!
    */
-  if (currentShouldMock) {
+  if (currentShouldMock && !FORCE_REAL_PURCHASES) {
     isMockMode = true;
     if (currentIsExpoGo) {
       console.log('[RevenueCat] ℹ️ RevenueCat unavailable in Expo Go – using mock data');
@@ -252,6 +268,12 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
       console.log('[RevenueCat] ℹ️ Sandbox/Web detected - using mock mode');
     }
     return false;
+  }
+  
+  // Force real mode for native builds
+  if (FORCE_REAL_PURCHASES) {
+    isMockMode = false;
+    console.log('[RevenueCat] 🚀 FORCE_REAL_PURCHASES active - proceeding with real RevenueCat');
   }
 
   try {
