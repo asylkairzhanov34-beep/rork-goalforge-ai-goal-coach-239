@@ -129,21 +129,18 @@ const getEnvironmentInfo = () => {
   };
 };
 
-// Для обратной совместимости
-const isExpoGoRuntime = getIsExpoGo();
-const isRorkSandbox = detectRorkSandbox();
-const canUseNativeRevenueCat = Platform.OS !== 'web' && !isExpoGoRuntime && !isRorkSandbox;
-const isRealDevice = (Platform.OS === 'ios' || Platform.OS === 'android') && !isExpoGoRuntime && !isRorkSandbox;
+// ВАЖНО: НЕ кешируем значения - всегда вычисляем динамически!
+// В TestFlight Constants.appOwnership может быть null/undefined, что корректно означает production build
 
 /**
- * ВАЖНО: Mock mode обязателен в следующих случаях:
+ * ВАЖНО: Mock mode обязателен ТОЛЬКО в следующих случаях:
  * - Web платформа (нет нативных сторов)
- * - Rork Sandbox (нет доступа к сторам)
- * - Expo Go (StoreKit/Play Store недоступны, RevenueCat не работает)
+ * - Rork Sandbox (нет доступа к сторам)  
+ * - Expo Go (appOwnership === 'expo')
  * 
- * На реальных устройствах в dev/production билдах используется настоящий RevenueCat.
+ * На реальных устройствах в dev/production/TestFlight билдах используется настоящий RevenueCat.
+ * В TestFlight appOwnership будет null или undefined - это НЕ Expo Go!
  */
-const shouldUseMockMode = Platform.OS === 'web' || isRorkSandbox || isExpoGoRuntime;
 
 let hasLoggedStatus = false;
 const logStatus = (message: string) => {
@@ -156,7 +153,8 @@ let moduleRef: PurchasesModule | null = null;
 let isConfigured = false;
 
 const getApiKey = (): string => {
-  if (isRorkSandbox) {
+  const currentSandbox = detectRorkSandbox();
+  if (currentSandbox) {
     console.log('[RevenueCat] Rork Sandbox detected - using Test Store API Key');
     return API_KEYS.testStore;
   }
@@ -166,55 +164,70 @@ const getApiKey = (): string => {
 };
 
 const loadPurchasesModule = (): PurchasesModule | null => {
-  if (moduleRef) return moduleRef;
+  if (moduleRef) {
+    console.log('[RevenueCat] Using cached module ref');
+    return moduleRef;
+  }
+
+  // КРИТИЧНО: Вычисляем окружение ДИНАМИЧЕСКИ при каждом вызове!
+  const currentEnv = getEnvironmentInfo();
+  
+  console.log('[RevenueCat] loadPurchasesModule - Environment check:');
+  console.log('[RevenueCat]   Platform.OS:', Platform.OS);
+  console.log('[RevenueCat]   Constants.appOwnership:', Constants?.appOwnership);
+  console.log('[RevenueCat]   isExpoGo:', currentEnv.isExpoGo);
+  console.log('[RevenueCat]   isRorkSandbox:', currentEnv.isRorkSandbox);
+  console.log('[RevenueCat]   isRealDevice:', currentEnv.isRealDevice);
+  console.log('[RevenueCat]   shouldUseMock:', currentEnv.shouldUseMock);
 
   /**
    * EXPO GO & MOCK MODE HANDLING
-   * - In Expo Go, StoreKit/Play Store are unavailable
-   * - RevenueCat cannot initialize without native store access
-   * - Return null early to use mock mode instead
+   * - In Expo Go (appOwnership === 'expo'), StoreKit/Play Store are unavailable
+   * - In TestFlight/Production, appOwnership is null/undefined - NOT Expo Go!
+   * - RevenueCat cannot initialize without native store access in Expo Go
    */
-  if (shouldUseMockMode) {
-    if (isRorkSandbox) {
-      logStatus('Rork Sandbox detected - using mock mode');
-    } else if (Platform.OS === 'web') {
-      logStatus('Web platform - using mock mode');
-    } else if (isExpoGoRuntime) {
-      logStatus('Expo Go detected - RevenueCat unavailable, using mock mode');
-    }
+  
+  // ВАЖНО: Для iOS/Android с appOwnership !== 'expo' - это РЕАЛЬНЫЙ билд!
+  if (Platform.OS === 'web') {
+    logStatus('Web platform - using mock mode');
+    isMockMode = true;
+    return null;
+  }
+  
+  if (currentEnv.isRorkSandbox) {
+    logStatus('Rork Sandbox detected - using mock mode');
+    isMockMode = true;
+    return null;
+  }
+  
+  // КРИТИЧНО: Только если appOwnership ТОЧНО равен 'expo' - это Expo Go
+  // null, undefined, 'standalone' - это все реальные билды!
+  if (Constants?.appOwnership === 'expo') {
+    logStatus('Expo Go detected (appOwnership === "expo") - using mock mode');
     isMockMode = true;
     return null;
   }
 
-  // Real device (dev build or production) - load native module
-  if (isRealDevice) {
-    console.log('[RevenueCat] Real device (dev/production build) - loading native RevenueCat');
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const RNPurchases = require('react-native-purchases');
-      moduleRef = RNPurchases.default ?? RNPurchases;
-      console.log('[RevenueCat] ✅ Module loaded successfully for real device');
-      isMockMode = false;
-      return moduleRef;
-    } catch (error: any) {
-      console.error('[RevenueCat] ❌ Module failed to load on real device');
-      console.error('[RevenueCat] Error details:', error?.message || error);
-      console.error('[RevenueCat] Make sure react-native-purchases is properly installed');
-      throw new Error('RevenueCat module required for real devices but failed to load');
-    }
-  }
-
-  // Fallback: try to load module
+  // Это реальное устройство (TestFlight, Production, Dev Build) - загружаем нативный модуль
+  console.log('[RevenueCat] 🚀 REAL BUILD DETECTED - loading native RevenueCat');
+  console.log('[RevenueCat] appOwnership:', Constants?.appOwnership, '(null/undefined = production build)');
+  
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const RNPurchases = require('react-native-purchases');
     moduleRef = RNPurchases.default ?? RNPurchases;
-    console.log('[RevenueCat] Module loaded successfully');
+    console.log('[RevenueCat] ✅ Native module loaded successfully');
     isMockMode = false;
+    FORCE_REAL_PURCHASES = true;
     return moduleRef;
   } catch (error: any) {
-    console.log('[RevenueCat] Module not available - enabling mock mode');
-    console.log('[RevenueCat] Error:', error?.message || error);
+    console.error('[RevenueCat] ❌ Native module failed to load');
+    console.error('[RevenueCat] Error:', error?.message || error);
+    // На реальном билде это критическая ошибка
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      console.error('[RevenueCat] ❌ CRITICAL: Native module required but failed to load!');
+      throw new Error('RevenueCat module required for purchases but failed to load: ' + error?.message);
+    }
     isMockMode = true;
     return null;
   }
@@ -246,8 +259,8 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
   console.log('[RevenueCat] isExpoGo:', currentIsExpoGo);
   console.log('[RevenueCat] isRorkSandbox:', currentSandboxCheck);
   console.log('[RevenueCat] shouldUseMock:', currentShouldMock);
-  console.log('[RevenueCat] canUseNativeRevenueCat:', canUseNativeRevenueCat);
-  console.log('[RevenueCat] isRealDevice:', isRealDevice);
+  console.log('[RevenueCat] isNativeBuild:', isNativeBuild);
+  console.log('[RevenueCat] FORCE_REAL_PURCHASES:', FORCE_REAL_PURCHASES);
 
   /**
    * EARLY EXIT FOR EXPO GO / WEB / SANDBOX
@@ -336,11 +349,12 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
 };
 
 export const isRevenueCatAvailable = (): boolean => {
+  const env = getEnvironmentInfo();
   // Для реальных устройств ВСЕГДА возвращаем true после загрузки модуля
-  if (isRealDevice) {
+  if (env.isRealDevice) {
     return !!loadPurchasesModule();
   }
-  return canUseNativeRevenueCat && !!loadPurchasesModule();
+  return !env.shouldUseMock && !!loadPurchasesModule();
 };
 
 export const getOfferings = async (): Promise<RevenueCatOfferings | null> => {
