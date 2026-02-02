@@ -594,19 +594,44 @@ export const purchasePackageByIdentifier = async (
   console.log('[RevenueCat] 🛒 Platform.OS:', Platform.OS);
   console.log('[RevenueCat] 🛒 Constants.appOwnership:', Constants?.appOwnership);
 
-  // ВСЕГДА загружаем свежие offerings для получения актуальных нативных объектов
-  console.log('[RevenueCat] 🔄 Fetching fresh offerings to get native package objects...');
-  const offerings = await getOfferingsWithCache();
+  const env = getEnvironmentInfo();
+  
+  // На реальном устройстве отключаем mock mode принудительно
+  if (env.isRealDevice && isMockMode) {
+    console.log('[RevenueCat] 🔄 Real device detected but isMockMode=true, forcing real mode...');
+    isMockMode = false;
+    FORCE_REAL_PURCHASES = true;
+  }
 
-  if (!offerings?.current?.availablePackages?.length) {
-    console.error('[RevenueCat] ❌ No offerings/packages available');
-    console.error('[RevenueCat] offerings:', !!offerings);
-    console.error('[RevenueCat] current:', !!offerings?.current);
-    console.error('[RevenueCat] availablePackages:', offerings?.current?.availablePackages?.length);
+  // Если нет закешированных пакетов или это реальное устройство - загружаем
+  if (cachedOriginalPackages.length === 0 || env.isRealDevice) {
+    console.log('[RevenueCat] 🔄 Fetching fresh offerings...');
+    
+    // Для реального устройства загружаем напрямую без проверки isMockMode
+    if (env.isRealDevice) {
+      const module = loadPurchasesModule();
+      if (module && isConfigured) {
+        try {
+          const offerings = await module.getOfferings();
+          if (offerings?.current?.availablePackages) {
+            cachedOriginalPackages = offerings.current.availablePackages;
+            console.log('[RevenueCat] ✅ Direct fetch: cached', cachedOriginalPackages.length, 'packages');
+          }
+        } catch (e: any) {
+          console.error('[RevenueCat] Direct fetch failed:', e?.message);
+        }
+      }
+    } else {
+      await getOfferingsWithCache();
+    }
+  }
+
+  if (cachedOriginalPackages.length === 0) {
+    console.error('[RevenueCat] ❌ No packages available after fetch');
     return null;
   }
 
-  // Ищем пакет в свежезагруженных offerings
+  // Ищем пакет в закешированных offerings
   const pkg = cachedOriginalPackages.find(
     (p: any) => p.identifier === identifier || p.product?.identifier === identifier
   );
