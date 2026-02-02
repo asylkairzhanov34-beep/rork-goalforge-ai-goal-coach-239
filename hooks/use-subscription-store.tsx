@@ -15,6 +15,7 @@ import {
   invalidateCustomerInfoCache,
   getOfferingsWithCache,
   getOriginalPackages,
+  setCachedPackages,
   RevenueCatCustomerInfo,
   RevenueCatPackage,
 } from '@/lib/revenuecat';
@@ -361,7 +362,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const loadOfferingsFromRevenueCat = useCallback(async () => {
     console.log('[SubscriptionProvider] 📦 Loading offerings from RevenueCat...');
 
-    // Используем getOfferingsWithCache для сохранения оригинальных пакетов
     const offerings = await getOfferingsWithCache();
 
     console.log('[SubscriptionProvider] 📦 Offerings result:', {
@@ -371,7 +371,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     });
 
     if (offerings?.current?.availablePackages?.length) {
-      const formatted = offerings.current.availablePackages.map((pkg: RevenueCatPackage) => ({
+      const originalPackages = offerings.current.availablePackages;
+      
+      // Кэшируем оригинальные пакеты для покупки
+      setCachedPackages(originalPackages);
+      
+      const formatted = originalPackages.map((pkg: RevenueCatPackage) => ({
         identifier: pkg.identifier,
         product: {
           identifier: pkg.product.identifier,
@@ -383,28 +388,20 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         },
       }));
       setPackages(formatted);
-      console.log('[SubscriptionProvider] ✅ Loaded offerings:', formatted.length, 'packages');
+      console.log('[SubscriptionProvider] ✅ Loaded', formatted.length, 'packages');
       console.log('[SubscriptionProvider] ✅ Original packages cached:', getOriginalPackages().length);
 
-      // Логируем каждый пакет
       formatted.forEach((pkg, idx) => {
-        console.log(`[SubscriptionProvider] Package ${idx + 1}: ${pkg.product.identifier} - ${pkg.product.priceString}`);
+        console.log(`[SubscriptionProvider] Package ${idx + 1}: ${pkg.identifier} - ${pkg.product.priceString}`);
       });
     } else {
-      // No packages received - use mock packages in appropriate environments
-      // This is expected in Expo Go where RevenueCat cannot fetch real offerings
       const isExpoGoEnv = Constants?.appOwnership === 'expo';
 
       if (isMockMode || Platform.OS === 'web' || isExpoGoEnv) {
-        console.log('[SubscriptionProvider] ℹ️ No packages from RevenueCat - using mock packages');
-        if (isExpoGoEnv) {
-          console.log('[SubscriptionProvider] ℹ️ This is expected in Expo Go (StoreKit unavailable)');
-        }
+        console.log('[SubscriptionProvider] ℹ️ No RevenueCat packages - using mock');
         setPackages(WEB_MOCK_PACKAGES);
       } else {
-        // Only log warning (not error) for real devices - could be a temporary issue
-        console.warn('[SubscriptionProvider] ⚠️ No packages received on real device');
-        console.warn('[SubscriptionProvider] ⚠️ Check RevenueCat dashboard configuration');
+        console.warn('[SubscriptionProvider] ⚠️ No packages on real device');
       }
     }
   }, [isMockMode]);

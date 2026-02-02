@@ -512,8 +512,18 @@ export const restorePurchases = async (): Promise<RevenueCatCustomerInfo | null>
 
 // Хранилище для оригинальных пакетов RevenueCat
 let cachedOriginalPackages: any[] = [];
+let lastOfferingsFetchTime = 0;
+const OFFERINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export const getOriginalPackages = (): any[] => cachedOriginalPackages;
+
+export const setCachedPackages = (packages: any[]): void => {
+  if (packages && packages.length > 0) {
+    cachedOriginalPackages = packages;
+    lastOfferingsFetchTime = Date.now();
+    console.log('[RevenueCat] ✅ Cached', packages.length, 'packages');
+  }
+};
 
 /**
  * Get RevenueCat offerings with caching of original package objects.
@@ -524,54 +534,43 @@ export const getOriginalPackages = (): any[] => cachedOriginalPackages;
  * The subscription provider should handle null returns by using mock packages.
  */
 export const getOfferingsWithCache = async (): Promise<RevenueCatOfferings | null> => {
-  // In mock mode, return null gracefully without error logging
-  // The calling code should use mock packages instead
   if (isMockMode) {
-    console.log('[RevenueCat] ℹ️ getOfferingsWithCache skipped - mock mode active');
+    console.log('[RevenueCat] ℹ️ getOfferingsWithCache - mock mode, skipping');
     return null;
   }
 
   const module = loadPurchasesModule();
   if (!module || !isConfigured) {
-    // Only log info level in this case - not an error if RevenueCat isn't configured
-    console.log('[RevenueCat] getOfferingsWithCache - RevenueCat not configured, returning null');
+    console.log('[RevenueCat] getOfferingsWithCache - not configured');
     return null;
   }
 
   try {
-    console.log('[RevenueCat] 📦 Fetching offerings with cache...');
+    console.log('[RevenueCat] 📦 Fetching offerings...');
     const offerings = await module.getOfferings();
 
-    console.log('[RevenueCat] 📦 Raw offerings response:', JSON.stringify(offerings, null, 2));
-    console.log('[RevenueCat] 📦 Has current offering:', !!offerings?.current);
-    console.log('[RevenueCat] 📦 Current offering identifier:', offerings?.current?.identifier);
-    console.log('[RevenueCat] 📦 All offerings:', Object.keys(offerings?.all || {}));
+    console.log('[RevenueCat] 📦 Offerings:', {
+      hasCurrent: !!offerings?.current,
+      currentId: offerings?.current?.identifier,
+      packagesCount: offerings?.current?.availablePackages?.length || 0,
+    });
 
-    if (offerings?.current?.availablePackages) {
-      // Сохраняем оригинальные пакеты для покупки
+    if (offerings?.current?.availablePackages?.length) {
+      // Кэшируем оригинальные пакеты
       cachedOriginalPackages = offerings.current.availablePackages;
-      console.log('[RevenueCat] ✅ Cached', cachedOriginalPackages.length, 'original packages');
-
-      // Детальная информация о каждом пакете
+      lastOfferingsFetchTime = Date.now();
+      
+      console.log('[RevenueCat] ✅ Cached', cachedOriginalPackages.length, 'packages:');
       cachedOriginalPackages.forEach((pkg: any, idx: number) => {
-        console.log(`[RevenueCat] Package ${idx + 1}:`);
-        console.log(`  - identifier: ${pkg.identifier}`);
-        console.log(`  - product.identifier: ${pkg.product?.identifier}`);
-        console.log(`  - product.title: ${pkg.product?.title}`);
-        console.log(`  - product.priceString: ${pkg.product?.priceString}`);
-        console.log(`  - product.price: ${pkg.product?.price}`);
+        console.log(`  ${idx + 1}. ${pkg.identifier} -> ${pkg.product?.identifier} (${pkg.product?.priceString})`);
       });
     } else {
-      console.warn('[RevenueCat] ⚠️ NO availablePackages in current offering!');
+      console.warn('[RevenueCat] ⚠️ No packages in offering!');
     }
 
     return offerings;
   } catch (error: any) {
-    console.error('[RevenueCat] ❌ getOfferingsWithCache failed');
-    console.error('[RevenueCat] Error message:', error?.message);
-    console.error('[RevenueCat] Error code:', error?.code);
-    console.error('[RevenueCat] Error stack:', error?.stack);
-    console.error('[RevenueCat] Full error:', JSON.stringify(error, null, 2));
+    console.error('[RevenueCat] ❌ getOfferingsWithCache failed:', error?.message);
     return null;
   }
 };
@@ -583,75 +582,95 @@ export const fetchCustomerInfo = getCustomerInfo;
 export const purchasePackageByIdentifier = async (
   identifier: string
 ): Promise<{ info: RevenueCatCustomerInfo; purchasedPackage: RevenueCatPackage } | null> => {
-  console.log('[RevenueCat] 🛒 purchasePackageByIdentifier called with:', identifier);
-  console.log('[RevenueCat] 🛒 Cached packages count:', cachedOriginalPackages.length);
+  console.log('========== PURCHASE BY IDENTIFIER START ==========');
+  console.log('[RevenueCat] 🛒 Identifier:', identifier);
+  console.log('[RevenueCat] 🛒 Cached packages:', cachedOriginalPackages.length);
   console.log('[RevenueCat] 🛒 isMockMode:', isMockMode);
   console.log('[RevenueCat] 🛒 isConfigured:', isConfigured);
-  console.log('[RevenueCat] 🛒 Platform.OS:', Platform.OS);
-  console.log('[RevenueCat] 🛒 Constants.appOwnership:', Constants?.appOwnership);
+  console.log('[RevenueCat] 🛒 moduleRef exists:', !!moduleRef);
 
   const env = getEnvironmentInfo();
+  console.log('[RevenueCat] 🛒 Environment:', JSON.stringify(env, null, 2));
   
   // На реальном устройстве отключаем mock mode принудительно
   if (env.isRealDevice && isMockMode) {
-    console.log('[RevenueCat] 🔄 Real device detected but isMockMode=true, forcing real mode...');
+    console.log('[RevenueCat] 🔄 Real device but isMockMode=true, forcing real mode...');
     isMockMode = false;
   }
 
-  // Если нет закешированных пакетов или это реальное устройство - загружаем
-  if (cachedOriginalPackages.length === 0 || env.isRealDevice) {
-    console.log('[RevenueCat] 🔄 Fetching fresh offerings...');
+  // Убеждаемся что RevenueCat инициализирован
+  if (!isConfigured && env.isRealDevice) {
+    console.log('[RevenueCat] ⚠️ Not configured on real device, attempting init...');
+    const initResult = await initializeRevenueCat();
+    console.log('[RevenueCat] Init result:', initResult);
+  }
+
+  // Проверяем кэш - используем если есть и не устарел
+  const cacheAge = Date.now() - lastOfferingsFetchTime;
+  const cacheValid = cachedOriginalPackages.length > 0 && cacheAge < OFFERINGS_CACHE_TTL;
+  
+  console.log('[RevenueCat] 🛒 Cache age:', cacheAge, 'ms, valid:', cacheValid);
+
+  // Загружаем пакеты только если кэш пуст или устарел
+  if (!cacheValid) {
+    console.log('[RevenueCat] 🔄 Cache empty or stale, fetching offerings...');
     
-    // Для реального устройства загружаем напрямую без проверки isMockMode
-    if (env.isRealDevice) {
-      const module = loadPurchasesModule();
-      if (module && isConfigured) {
-        try {
-          const offerings = await module.getOfferings();
-          if (offerings?.current?.availablePackages) {
-            cachedOriginalPackages = offerings.current.availablePackages;
-            console.log('[RevenueCat] ✅ Direct fetch: cached', cachedOriginalPackages.length, 'packages');
-          }
-        } catch (e: any) {
-          console.error('[RevenueCat] Direct fetch failed:', e?.message);
+    const module = loadPurchasesModule();
+    if (module && isConfigured) {
+      try {
+        const offerings = await module.getOfferings();
+        console.log('[RevenueCat] 📦 Offerings result:', {
+          hasCurrent: !!offerings?.current,
+          packagesCount: offerings?.current?.availablePackages?.length || 0,
+        });
+        
+        if (offerings?.current?.availablePackages?.length) {
+          cachedOriginalPackages = offerings.current.availablePackages;
+          lastOfferingsFetchTime = Date.now();
+          console.log('[RevenueCat] ✅ Fetched', cachedOriginalPackages.length, 'packages');
         }
+      } catch (e: any) {
+        console.error('[RevenueCat] ❌ Fetch failed:', e?.message);
+        // Продолжаем с существующим кэшем если есть
       }
     } else {
-      await getOfferingsWithCache();
+      console.warn('[RevenueCat] ⚠️ Module not ready:', { module: !!module, isConfigured });
     }
   }
 
+  // Выводим все доступные пакеты для отладки
+  console.log('[RevenueCat] 📦 Available packages:');
+  cachedOriginalPackages.forEach((p: any, idx: number) => {
+    console.log(`  ${idx + 1}. id: "${p.identifier}", product: "${p.product?.identifier}", price: ${p.product?.priceString}`);
+  });
+
   if (cachedOriginalPackages.length === 0) {
-    console.error('[RevenueCat] ❌ No packages available after fetch');
+    console.error('[RevenueCat] ❌ No packages available!');
     return null;
   }
 
-  // Ищем пакет в закешированных offerings
+  // Ищем пакет - проверяем оба идентификатора
   const pkg = cachedOriginalPackages.find(
     (p: any) => p.identifier === identifier || p.product?.identifier === identifier
   );
 
   if (!pkg) {
-    console.error('[RevenueCat] ❌ Package not found:', identifier);
-    console.error('[RevenueCat] Available packages:');
-    cachedOriginalPackages.forEach((p: any, idx: number) => {
-      console.error(`  ${idx + 1}. identifier: "${p.identifier}", product.identifier: "${p.product?.identifier}"`);
-    });
+    console.error('[RevenueCat] ❌ Package not found for:', identifier);
     return null;
   }
 
   console.log('[RevenueCat] ✅ Found package:', pkg.identifier);
-  console.log('[RevenueCat] Package is native object:', pkg?.constructor?.name || typeof pkg);
-  console.log('[RevenueCat] Package product:', pkg.product?.identifier, '-', pkg.product?.priceString);
+  console.log('[RevenueCat] 📱 Calling native purchasePackage...');
 
-  // Передаем ОРИГИНАЛЬНЫЙ нативный объект пакета из RevenueCat SDK
+  // Передаем ОРИГИНАЛЬНЫЙ нативный объект
   const result = await purchasePackage(pkg);
   if (!result) {
-    console.error('[RevenueCat] ❌ purchasePackage returned null');
+    console.error('[RevenueCat] ❌ Purchase returned null');
     return null;
   }
 
-  console.log('[RevenueCat] ✅ Purchase completed successfully');
+  console.log('[RevenueCat] ✅ Purchase successful!');
+  console.log('========== PURCHASE BY IDENTIFIER END ==========');
 
   return {
     info: result.customerInfo,
