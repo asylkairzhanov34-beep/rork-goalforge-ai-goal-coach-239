@@ -95,6 +95,12 @@ const getIsExpoGo = (): boolean => {
 // Export getter for mock mode status
 export const getIsMockMode = (): boolean => isMockMode;
 
+// Export function to check if we should use real purchases (critical for preventing mock mode on real devices)
+export const shouldUseRealPurchases = (): boolean => {
+  const env = getEnvironmentInfo();
+  return env.isRealDevice && !isMockMode;
+};
+
 const detectRorkSandbox = (): boolean => {
   // Только для web проверяем hostname
   if (Platform.OS !== 'web') {
@@ -582,6 +588,11 @@ export const purchasePackageByIdentifier = async (
 ): Promise<{ info: RevenueCatCustomerInfo; purchasedPackage: RevenueCatPackage } | null> => {
   console.log('[RevenueCat] 🛒 purchasePackageByIdentifier called with:', identifier);
   console.log('[RevenueCat] 🛒 Cached packages count:', cachedOriginalPackages.length);
+  console.log('[RevenueCat] 🛒 isMockMode:', isMockMode);
+  console.log('[RevenueCat] 🛒 FORCE_REAL_PURCHASES:', FORCE_REAL_PURCHASES);
+  console.log('[RevenueCat] 🛒 isConfigured:', isConfigured);
+  console.log('[RevenueCat] 🛒 Platform.OS:', Platform.OS);
+  console.log('[RevenueCat] 🛒 Constants.appOwnership:', Constants?.appOwnership);
 
   // ВСЕГДА загружаем свежие offerings для получения актуальных нативных объектов
   console.log('[RevenueCat] 🔄 Fetching fresh offerings to get native package objects...');

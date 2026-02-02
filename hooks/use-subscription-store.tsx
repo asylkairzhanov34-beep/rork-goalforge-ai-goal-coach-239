@@ -694,17 +694,25 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[SubscriptionProvider] Package identifier:', packageIdentifier);
       console.log('[SubscriptionProvider] isMockMode:', isMockMode);
       console.log('[SubscriptionProvider] Platform.OS:', Platform.OS);
+      console.log('[SubscriptionProvider] Constants.appOwnership:', Constants?.appOwnership);
       console.log('[SubscriptionProvider] Available packages:', packages.length);
       console.log('[SubscriptionProvider] Packages:', packages.map(p => p.identifier).join(', '));
 
       // CRITICAL: On real iOS/Android devices, NEVER use mock purchase flow
+      // Check current environment, not cached isMockMode flag
       const isExpoGoEnv = Constants?.appOwnership === 'expo';
       const isRealDeviceForPurchase = (Platform.OS === 'ios' || Platform.OS === 'android') && !isExpoGoEnv;
       
+      console.log('[SubscriptionProvider] Environment check:');
+      console.log('[SubscriptionProvider]   isExpoGoEnv:', isExpoGoEnv);
+      console.log('[SubscriptionProvider]   isRealDeviceForPurchase:', isRealDeviceForPurchase);
+      
+      // Real device ALWAYS uses real RevenueCat, regardless of isMockMode flag
       if (isRealDeviceForPurchase) {
-        console.log('[SubscriptionProvider] 🚀 REAL DEVICE - forcing real purchase flow');
-        // Skip mock mode check and proceed to real purchase
-      } else if (isMockMode || Platform.OS === 'web') {
+        console.log('[SubscriptionProvider] 🚀 REAL DEVICE CONFIRMED - using REAL RevenueCat purchase');
+        console.log('[SubscriptionProvider] 📱 Apple payment sheet will appear...');
+        // SKIP to real purchase flow below
+      } else if (Platform.OS === 'web' || isExpoGoEnv) {
         console.log('[SubscriptionProvider] Using MOCK purchase flow');
         setIsPurchasing(true);
         try {
@@ -748,7 +756,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         }
       }
 
-      console.log('[SubscriptionProvider] 🚀 Using REAL RevenueCat purchase flow (Apple/Google Pay)');
+      // Real RevenueCat purchase flow for native devices
+      console.log('[SubscriptionProvider] ========================================');
+      console.log('[SubscriptionProvider] 🚀 INITIATING REAL REVENUECAT PURCHASE');
+      console.log('[SubscriptionProvider] 📱 Platform:', Platform.OS);
+      console.log('[SubscriptionProvider] 🔑 Package ID:', packageIdentifier);
+      console.log('[SubscriptionProvider] ========================================');
       setIsPurchasing(true);
       emitAnalytics(ANALYTICS_EVENTS.PURCHASE_INITIATED, { packageIdentifier });
 
