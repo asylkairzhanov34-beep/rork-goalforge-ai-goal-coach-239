@@ -10,81 +10,114 @@ export type RevenueCatCustomerInfo = CustomerInfo;
 export type RevenueCatPackage = PurchasesPackage;
 export type RevenueCatOfferings = PurchasesOfferings;
 
-function getRevenueCatApiKey(): string | undefined {
-  const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
-  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
-  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
-  
-  console.log('[RevenueCat] Keys available - TEST:', !!testKey, 'iOS:', !!iosKey, 'Android:', !!androidKey);
-  
-  if (Platform.OS === 'web') {
-    return testKey;
-  }
-  
-  if (Platform.OS === 'ios') {
-    return iosKey || testKey;
-  }
-  
-  if (Platform.OS === 'android') {
-    return androidKey || testKey;
-  }
-  
-  return testKey;
-}
+const TEST_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
+const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
+const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
 
 let isConfigured = false;
 let cachedOfferings: PurchasesOfferings | null = null;
+let currentApiKeyType: 'test' | 'ios' | 'android' = 'test';
 
-export const initializeRevenueCat = async (): Promise<boolean> => {
+function getPrimaryApiKey(): { key: string | undefined; type: 'test' | 'ios' | 'android' } {
   if (Platform.OS === 'web') {
-    console.log('[RevenueCat] Web platform - using Test Store');
-    const apiKey = getRevenueCatApiKey();
-    if (!apiKey) {
-      console.error('[RevenueCat] No TEST_API_KEY found for web');
-      return false;
-    }
-    try {
-      Purchases.configure({ apiKey });
-      isConfigured = true;
-      console.log('[RevenueCat] ✅ Web configured with Test Store');
-      return true;
-    } catch (error) {
-      console.error('[RevenueCat] Web configuration error:', error);
-      return false;
-    }
+    return { key: TEST_KEY, type: 'test' };
   }
-
-  if (isConfigured) {
-    console.log('[RevenueCat] Already configured');
-    return true;
+  
+  if (Platform.OS === 'ios' && IOS_KEY) {
+    return { key: IOS_KEY, type: 'ios' };
   }
-
-  const apiKey = getRevenueCatApiKey();
-
-  if (!apiKey) {
-    console.error('[RevenueCat] ❌ API key not found!');
-    console.error('[RevenueCat] __DEV__:', __DEV__);
-    console.error('[RevenueCat] Platform:', Platform.OS);
-    return false;
+  
+  if (Platform.OS === 'android' && ANDROID_KEY) {
+    return { key: ANDROID_KEY, type: 'android' };
   }
+  
+  return { key: TEST_KEY, type: 'test' };
+}
 
+const configureWithKey = async (apiKey: string, keyType: 'test' | 'ios' | 'android'): Promise<boolean> => {
   try {
-    if (__DEV__) {
-      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-    }
-    
+    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     Purchases.configure({ apiKey });
     isConfigured = true;
-    
-    console.log('[RevenueCat] ✅ Configured successfully');
-    console.log('[RevenueCat] Platform:', Platform.OS);
-    console.log('[RevenueCat] Mode:', __DEV__ ? 'Development (Test Store)' : 'Production');
-    
+    currentApiKeyType = keyType;
+    console.log(`[RevenueCat] ✅ Configured with ${keyType.toUpperCase()} key`);
     return true;
   } catch (error) {
-    console.error('[RevenueCat] Configuration error:', error);
+    console.error(`[RevenueCat] Configuration error (${keyType}):`, error);
     return false;
   }
+};
+
+export const initializeRevenueCat = async (): Promise<boolean> => {
+  if (isConfigured) {
+    console.log('[RevenueCat] Already configured with', currentApiKeyType);
+    return true;
+  }
+
+  console.log('[RevenueCat] 🚀 Initializing...');
+  console.log('[RevenueCat] Platform:', Platform.OS);
+  console.log('[RevenueCat] Keys available - TEST:', !!TEST_KEY, 'iOS:', !!IOS_KEY, 'Android:', !!ANDROID_KEY);
+
+  const primary = getPrimaryApiKey();
+  
+  if (!primary.key) {
+    console.error('[RevenueCat] ❌ No API key found!');
+    return false;
+  }
+
+  return configureWithKey(primary.key, primary.type);
+};
+
+const reconfigureWithTestStore = async (): Promise<boolean> => {
+  if (!TEST_KEY) {
+    console.log('[RevenueCat] No TEST_KEY for fallback');
+    return false;
+  }
+  
+  if (currentApiKeyType === 'test') {
+    console.log('[RevenueCat] Already using test store');
+    return false;
+  }
+
+  console.log('[RevenueCat] 🔄 Switching to Test Store...');
+  isConfigured = false;
+  cachedOfferings = null;
+  
+  return configureWithKey(TEST_KEY, 'test');
+};
+
+const fetchOfferingsInternal = async (): Promise<PurchasesOfferings | null> => {
+  const offerings = await Purchases.getOfferings();
+  
+  console.log('[RevenueCat] ========== OFFERINGS DEBUG ==========');
+  console.log('[RevenueCat] Using key type:', currentApiKeyType);
+  console.log('[RevenueCat] Has offerings:', !!offerings);
+  console.log('[RevenueCat] All offerings keys:', Object.keys(offerings?.all || {}));
+  console.log('[RevenueCat] Has current:', !!offerings?.current);
+  
+  const currentPackages = offerings?.current?.availablePackages;
+  if (currentPackages && currentPackages.length > 0) {
+    console.log('[RevenueCat] ✅ Current offering:', offerings.current?.identifier);
+    currentPackages.forEach((pkg, i) => {
+      console.log(`[RevenueCat] Package ${i + 1}:`, {
+        id: pkg.identifier,
+        productId: pkg.product?.identifier,
+        price: pkg.product?.priceString,
+      });
+    });
+    return offerings;
+  }
+  
+  const allKeys = Object.keys(offerings?.all || {});
+  for (const key of allKeys) {
+    const offering = offerings.all[key];
+    if (offering?.availablePackages?.length > 0) {
+      console.log('[RevenueCat] 🔄 Using fallback offering:', key);
+      return { ...offerings, current: offering };
+    }
+  }
+  
+  return null;
 };
 
 export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
@@ -98,65 +131,60 @@ export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
 
   try {
     console.log('[RevenueCat] 📦 Fetching offerings...');
-    console.log('[RevenueCat] Platform:', Platform.OS);
-    console.log('[RevenueCat] Is DEV:', __DEV__);
     
-    const offerings = await Purchases.getOfferings();
+    let offerings = await fetchOfferingsInternal();
     
-    console.log('[RevenueCat] ========== OFFERINGS DEBUG ==========');
-    console.log('[RevenueCat] Has offerings object:', !!offerings);
-    console.log('[RevenueCat] All offerings keys:', Object.keys(offerings?.all || {}));
-    console.log('[RevenueCat] Has current offering:', !!offerings?.current);
-    
-    if (offerings?.current) {
-      console.log('[RevenueCat] ✅ Current offering ID:', offerings.current.identifier);
-      console.log('[RevenueCat] Packages count:', offerings.current.availablePackages?.length || 0);
-      
-      if (offerings.current.availablePackages?.length > 0) {
-        offerings.current.availablePackages.forEach((pkg, i) => {
-          console.log(`[RevenueCat] Package ${i + 1}:`, {
-            id: pkg.identifier,
-            productId: pkg.product?.identifier,
-            price: pkg.product?.priceString,
-            title: pkg.product?.title,
-          });
-        });
-        cachedOfferings = offerings;
-        return offerings;
-      } else {
-        console.warn('[RevenueCat] ⚠️ Current offering has NO packages!');
-        console.warn('[RevenueCat] Check that products are attached to your offering in RevenueCat');
-      }
-    } else {
-      console.warn('[RevenueCat] ⚠️ No CURRENT offering found!');
-      console.warn('[RevenueCat] Go to RevenueCat Dashboard → Offerings → Set one as Current');
+    const pkgs = offerings?.current?.availablePackages;
+    if (pkgs && pkgs.length > 0) {
+      cachedOfferings = offerings;
+      return offerings;
     }
     
-    // Try to use any available offering as fallback
-    const allKeys = Object.keys(offerings?.all || {});
-    console.log('[RevenueCat] Checking fallback offerings:', allKeys);
+    console.warn('[RevenueCat] ⚠️ No packages found with', currentApiKeyType, 'key');
     
-    for (const key of allKeys) {
-      const offering = offerings.all[key];
-      if (offering?.availablePackages?.length > 0) {
-        console.log('[RevenueCat] 🔄 Using fallback offering:', key);
-        cachedOfferings = { ...offerings, current: offering };
-        return cachedOfferings;
+    if (currentApiKeyType !== 'test' && TEST_KEY) {
+      console.log('[RevenueCat] 🔄 Trying Test Store as fallback...');
+      const switched = await reconfigureWithTestStore();
+      
+      if (switched) {
+        offerings = await fetchOfferingsInternal();
+        
+        const testPkgs = offerings?.current?.availablePackages;
+        if (testPkgs && testPkgs.length > 0) {
+          console.log('[RevenueCat] ✅ Test Store has packages!');
+          cachedOfferings = offerings;
+          return offerings;
+        }
       }
     }
     
     console.error('[RevenueCat] ❌ NO OFFERINGS WITH PACKAGES FOUND');
     console.error('[RevenueCat] Possible causes:');
-    console.error('[RevenueCat] 1. No offering set as Current in RevenueCat');
-    console.error('[RevenueCat] 2. No products attached to offerings');
-    console.error('[RevenueCat] 3. Products pending approval in App Store Connect');
-    console.error('[RevenueCat] 4. Wrong API key for this environment');
+    console.error('[RevenueCat] 1. Products pending approval in App Store Connect');
+    console.error('[RevenueCat] 2. No products attached to offerings in RevenueCat');
+    console.error('[RevenueCat] 3. Bundle ID mismatch');
     
-    return offerings;
+    return null;
   } catch (error: any) {
     console.error('[RevenueCat] ❌ Error fetching offerings:', error?.message || error);
-    console.error('[RevenueCat] Error code:', error?.code);
-    console.error('[RevenueCat] Full error:', JSON.stringify(error, null, 2));
+    
+    if (currentApiKeyType !== 'test' && TEST_KEY) {
+      console.log('[RevenueCat] 🔄 Error occurred, trying Test Store...');
+      try {
+        const switched = await reconfigureWithTestStore();
+        if (switched) {
+          const offerings = await fetchOfferingsInternal();
+          const fallbackPkgs = offerings?.current?.availablePackages;
+          if (fallbackPkgs && fallbackPkgs.length > 0) {
+            cachedOfferings = offerings;
+            return offerings;
+          }
+        }
+      } catch (fallbackError) {
+        console.error('[RevenueCat] Test Store fallback failed:', fallbackError);
+      }
+    }
+    
     return null;
   }
 };
