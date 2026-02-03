@@ -290,6 +290,14 @@ function RootLayoutNav() {
           animation: 'slide_from_bottom'
         }} 
       />
+      <Stack.Screen 
+        name="meditation-feed" 
+        options={{ 
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          animation: 'fade'
+        }} 
+      />
     </Stack>
   );
 }

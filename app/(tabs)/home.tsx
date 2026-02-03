@@ -6,7 +6,7 @@ import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen } from 'lucide-react-native';
+import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight } from 'lucide-react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
@@ -548,6 +548,34 @@ export default function TodayScreen() {
             </View>
           </View>
 
+          <TouchableOpacity
+            style={styles.meditationFeedCard}
+            onPress={() => router.push('/meditation-feed')}
+            activeOpacity={0.9}
+          >
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80' }}
+              style={styles.meditationFeedImage}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              style={styles.meditationFeedGradient}
+            />
+            <View style={styles.meditationFeedContent}>
+              <View style={styles.meditationFeedBadge}>
+                <Leaf size={14} color="#4ADE80" />
+                <Text style={styles.meditationFeedBadgeText}>Pre-Focus</Text>
+              </View>
+              <Text style={styles.meditationFeedTitle}>Mindful Moments</Text>
+              <Text style={styles.meditationFeedSubtitle}>Calm your mind before deep work</Text>
+              <View style={styles.meditationFeedButton}>
+                <Text style={styles.meditationFeedButtonText}>Start</Text>
+                <ChevronRight size={16} color="#000" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
           <View style={styles.forYouSection}>
             <Text style={styles.sectionTitle}>For You</Text>
             <Text style={styles.forYouSubtitle}>Breathing techniques to calm your mind</Text>
@@ -881,6 +909,70 @@ const styles = StyleSheet.create({
   },
 
 
+  meditationFeedCard: {
+    height: 180,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 24,
+    position: 'relative',
+  },
+  meditationFeedImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  meditationFeedGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  meditationFeedContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+  },
+  meditationFeedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    gap: 5,
+  },
+  meditationFeedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#4ADE80',
+  },
+  meditationFeedTitle: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: '#fff',
+    marginBottom: 4,
+  },
+  meditationFeedSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 12,
+  },
+  meditationFeedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  meditationFeedButtonText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#000',
+  },
   forYouSection: {
     marginTop: 8,
     marginBottom: 24,
