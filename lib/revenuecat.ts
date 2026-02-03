@@ -90,43 +90,73 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
 export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
   if (!isConfigured) {
     const success = await initializeRevenueCat();
-    if (!success) return null;
+    if (!success) {
+      console.error('[RevenueCat] Cannot fetch offerings - not configured');
+      return null;
+    }
   }
 
   try {
-    console.log('[RevenueCat] Fetching offerings...');
+    console.log('[RevenueCat] 📦 Fetching offerings...');
+    console.log('[RevenueCat] Platform:', Platform.OS);
+    console.log('[RevenueCat] Is DEV:', __DEV__);
+    
     const offerings = await Purchases.getOfferings();
     
-    console.log('[RevenueCat] Raw offerings:', JSON.stringify(offerings, null, 2));
-    console.log('[RevenueCat] All offerings keys:', Object.keys(offerings.all || {}));
+    console.log('[RevenueCat] ========== OFFERINGS DEBUG ==========');
+    console.log('[RevenueCat] Has offerings object:', !!offerings);
+    console.log('[RevenueCat] All offerings keys:', Object.keys(offerings?.all || {}));
+    console.log('[RevenueCat] Has current offering:', !!offerings?.current);
     
-    if (offerings.current) {
-      console.log('[RevenueCat] ✅ Current offering:', offerings.current.identifier);
-      console.log('[RevenueCat] Available packages:', offerings.current.availablePackages.length);
-      offerings.current.availablePackages.forEach((pkg, i) => {
-        console.log(`[RevenueCat] Package ${i + 1}:`, pkg.identifier, '-', pkg.product.priceString);
-      });
-      cachedOfferings = offerings;
-    } else {
-      console.warn('[RevenueCat] ⚠️ No current offering - check RevenueCat dashboard');
-      console.warn('[RevenueCat] Make sure you have an offering set as CURRENT');
+    if (offerings?.current) {
+      console.log('[RevenueCat] ✅ Current offering ID:', offerings.current.identifier);
+      console.log('[RevenueCat] Packages count:', offerings.current.availablePackages?.length || 0);
       
-      const allKeys = Object.keys(offerings.all || {});
-      if (allKeys.length > 0) {
-        console.log('[RevenueCat] Found other offerings:', allKeys);
-        const firstOffering = offerings.all[allKeys[0]];
-        if (firstOffering?.availablePackages?.length > 0) {
-          console.log('[RevenueCat] Using first available offering:', allKeys[0]);
-          cachedOfferings = { ...offerings, current: firstOffering };
-          return cachedOfferings;
-        }
+      if (offerings.current.availablePackages?.length > 0) {
+        offerings.current.availablePackages.forEach((pkg, i) => {
+          console.log(`[RevenueCat] Package ${i + 1}:`, {
+            id: pkg.identifier,
+            productId: pkg.product?.identifier,
+            price: pkg.product?.priceString,
+            title: pkg.product?.title,
+          });
+        });
+        cachedOfferings = offerings;
+        return offerings;
+      } else {
+        console.warn('[RevenueCat] ⚠️ Current offering has NO packages!');
+        console.warn('[RevenueCat] Check that products are attached to your offering in RevenueCat');
+      }
+    } else {
+      console.warn('[RevenueCat] ⚠️ No CURRENT offering found!');
+      console.warn('[RevenueCat] Go to RevenueCat Dashboard → Offerings → Set one as Current');
+    }
+    
+    // Try to use any available offering as fallback
+    const allKeys = Object.keys(offerings?.all || {});
+    console.log('[RevenueCat] Checking fallback offerings:', allKeys);
+    
+    for (const key of allKeys) {
+      const offering = offerings.all[key];
+      if (offering?.availablePackages?.length > 0) {
+        console.log('[RevenueCat] 🔄 Using fallback offering:', key);
+        cachedOfferings = { ...offerings, current: offering };
+        return cachedOfferings;
       }
     }
     
+    console.error('[RevenueCat] ❌ NO OFFERINGS WITH PACKAGES FOUND');
+    console.error('[RevenueCat] Possible causes:');
+    console.error('[RevenueCat] 1. No offering set as Current in RevenueCat');
+    console.error('[RevenueCat] 2. No products attached to offerings');
+    console.error('[RevenueCat] 3. Products pending approval in App Store Connect');
+    console.error('[RevenueCat] 4. Wrong API key for this environment');
+    
     return offerings;
   } catch (error: any) {
-    console.error('[RevenueCat] Error fetching offerings:', error?.message || error);
+    console.error('[RevenueCat] ❌ Error fetching offerings:', error?.message || error);
     console.error('[RevenueCat] Error code:', error?.code);
+    console.error('[RevenueCat] Full error:', JSON.stringify(error, null, 2));
     return null;
   }
 };
