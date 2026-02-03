@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Settings, Volume2, Check, Play, Headphones, VolumeX } from 'lucide-react-native';
+import { Settings, Volume2, Check, Play, Headphones, VolumeX, Music, Waves, Sparkles } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -14,9 +15,11 @@ import { SoundManager } from '@/utils/SoundManager';
 const AMBIENT_STORAGE_KEY = '@timer_ambient_settings';
 
 const AMBIENT_SOUNDS = [
-  { id: 'ambient1', name: 'Focus Flow', description: 'Calm ambient for deep work', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142014/3gwt67NbS8Go3MhssMPz_oo3xfu.mp4' },
-  { id: 'ambient2', name: 'Zen Waves', description: 'Peaceful concentration tones', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142016/hYCBEvsXvN3tenAHl9PZ_unyiy9.mp4' },
+  { id: 'ambient1', name: 'Focus Flow', description: 'Calm ambient for deep work', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142014/3gwt67NbS8Go3MhssMPz_oo3xfu.mp4', icon: Music, gradient: ['#667eea', '#764ba2'] as const },
+  { id: 'ambient2', name: 'Zen Waves', description: 'Peaceful concentration tones', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142016/hYCBEvsXvN3tenAHl9PZ_unyiy9.mp4', icon: Waves, gradient: ['#11998e', '#38ef7d'] as const },
 ];
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 
 export default function TimerScreen() {
@@ -320,94 +323,138 @@ export default function TimerScreen() {
         
         {/* Focus Sounds Section */}
         <View style={styles.focusSoundsSection}>
-          <Text style={styles.sectionTitle}>Focus Sounds</Text>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Sparkles size={18} color="#a78bfa" />
+              <Text style={styles.sectionTitle}>Focus Sounds</Text>
+            </View>
+            <Text style={styles.sectionSubtitle}>Ambient audio for deep concentration</Text>
+          </View>
           
+          {/* Main Toggle Card */}
           <TouchableOpacity
-            style={[
-              styles.ambientSoundButton,
-              ambientEnabled && styles.ambientSoundButtonActive,
-            ]}
+            style={styles.mainToggleCard}
             onPress={handleToggleAmbient}
-            
-            activeOpacity={0.8}
+            activeOpacity={0.9}
           >
-            <View style={styles.ambientSoundContent}>
-              <View style={[
-                styles.ambientIconContainer,
-                ambientEnabled && styles.ambientIconContainerActive,
-              ]}>
-                {ambientEnabled ? (
-                  <Headphones size={22} color="#8B5CF6" />
-                ) : (
-                  <VolumeX size={22} color="rgba(255, 255, 255, 0.4)" />
-                )}
-              </View>
-              <View style={styles.ambientTextContainer}>
-                <Text style={[
-                  styles.ambientTitle,
-                  ambientEnabled && styles.ambientTitleActive,
+            <LinearGradient
+              colors={ambientEnabled 
+                ? ['rgba(139, 92, 246, 0.15)', 'rgba(99, 102, 241, 0.08)']
+                : ['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.02)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.mainToggleGradient}
+            >
+              <View style={styles.mainToggleContent}>
+                <View style={[
+                  styles.mainToggleIcon,
+                  ambientEnabled && styles.mainToggleIconActive,
                 ]}>
-                  {ambientEnabled 
-                    ? AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId)?.name || 'Focus Flow'
-                    : 'Focus Sounds'
-                  }
-                </Text>
-                <Text style={styles.ambientSubtitle}>
-                  {ambientEnabled 
-                    ? 'Playing • Hold to change' 
-                    : 'Ambient sounds for concentration'}
-                </Text>
+                  {ambientEnabled ? (
+                    <Headphones size={26} color="#a78bfa" />
+                  ) : (
+                    <VolumeX size={26} color="rgba(255, 255, 255, 0.3)" />
+                  )}
+                  {ambientEnabled && (
+                    <View style={styles.pulseRing} />
+                  )}
+                </View>
+                <View style={styles.mainToggleText}>
+                  <Text style={[
+                    styles.mainToggleTitle,
+                    ambientEnabled && styles.mainToggleTitleActive,
+                  ]}>
+                    {ambientEnabled ? 'Now Playing' : 'Focus Sounds Off'}
+                  </Text>
+                  <Text style={styles.mainToggleSubtitle}>
+                    {ambientEnabled 
+                      ? `${AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId)?.name || 'Focus Flow'} • Tap to pause`
+                      : 'Tap to enable ambient sounds'
+                    }
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={[
-              styles.ambientToggle,
-              ambientEnabled && styles.ambientToggleActive,
-            ]}>
-              <Text style={[
-                styles.ambientToggleText,
-                ambientEnabled && styles.ambientToggleTextActive,
+              <View style={[
+                styles.toggleSwitch,
+                ambientEnabled && styles.toggleSwitchActive,
               ]}>
-                {ambientEnabled ? 'ON' : 'OFF'}
-              </Text>
-            </View>
+                <View style={[
+                  styles.toggleKnob,
+                  ambientEnabled && styles.toggleKnobActive,
+                ]} />
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
           
-          {/* Sound Selection Buttons */}
-          <View style={styles.ambientSoundsList}>
-            {AMBIENT_SOUNDS.map((sound) => {
+          {/* Sound Cards */}
+          <View style={styles.soundCardsContainer}>
+            {AMBIENT_SOUNDS.map((sound, index) => {
               const isActive = selectedAmbientId === sound.id;
+              const IconComponent = sound.icon;
               return (
                 <TouchableOpacity
                   key={sound.id}
                   style={[
-                    styles.ambientSoundItem,
-                    isActive && styles.ambientSoundItemActive,
+                    styles.soundCard,
+                    isActive && styles.soundCardActive,
                   ]}
                   onPress={() => handleAmbientSelect(sound.id)}
+                  activeOpacity={0.85}
                 >
-                  <View style={[
-                    styles.ambientSoundItemIcon,
-                    isActive && styles.ambientSoundItemIconActive,
-                  ]}>
-                    <Headphones 
-                      size={18} 
-                      color={isActive ? '#8B5CF6' : 'rgba(255, 255, 255, 0.4)'} 
-                    />
-                  </View>
-                  <View style={styles.ambientSoundItemTextContainer}>
-                    <Text style={[
-                      styles.ambientSoundItemText,
-                      isActive && styles.ambientSoundItemTextActive,
+                  <LinearGradient
+                    colors={isActive 
+                      ? [sound.gradient[0] + '25', sound.gradient[1] + '15']
+                      : ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)']
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.soundCardGradient}
+                  >
+                    <View style={styles.soundCardHeader}>
+                      <LinearGradient
+                        colors={isActive ? [...sound.gradient] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.soundCardIcon}
+                      >
+                        <IconComponent 
+                          size={22} 
+                          color={isActive ? '#fff' : 'rgba(255, 255, 255, 0.4)'} 
+                        />
+                      </LinearGradient>
+                      {isActive && (
+                        <View style={styles.activeIndicator}>
+                          <View style={[styles.equalizerBar, styles.bar1]} />
+                          <View style={[styles.equalizerBar, styles.bar2]} />
+                          <View style={[styles.equalizerBar, styles.bar3]} />
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View style={styles.soundCardContent}>
+                      <Text style={[
+                        styles.soundCardTitle,
+                        isActive && { color: sound.gradient[0] },
+                      ]}>
+                        {sound.name}
+                      </Text>
+                      <Text style={styles.soundCardDescription}>
+                        {sound.description}
+                      </Text>
+                    </View>
+                    
+                    <View style={[
+                      styles.soundCardCheck,
+                      isActive && { backgroundColor: sound.gradient[0] + '30', borderColor: sound.gradient[0] + '50' },
                     ]}>
-                      {sound.name}
-                    </Text>
-                    <Text style={styles.ambientSoundItemDescription}>
-                      {sound.description}
-                    </Text>
-                  </View>
-                  {isActive && (
-                    <Check size={18} color="#8B5CF6" />
-                  )}
+                      {isActive ? (
+                        <Check size={14} color={sound.gradient[0]} strokeWidth={3} />
+                      ) : (
+                        <Play size={12} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
+                      )}
+                    </View>
+                  </LinearGradient>
                 </TouchableOpacity>
               );
             })}
@@ -570,122 +617,178 @@ const styles = StyleSheet.create({
   },
   focusSoundsSection: {
     paddingHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+  },
+  sectionHeader: {
+    marginBottom: theme.spacing.lg,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
+    fontSize: 20,
+    fontWeight: '700' as const,
     color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-    letterSpacing: 0.3,
+    letterSpacing: -0.3,
   },
-  ambientSoundButton: {
+  sectionSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginLeft: 26,
+  },
+  mainToggleCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  mainToggleGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    marginBottom: theme.spacing.md,
+    padding: 18,
   },
-  ambientSoundButtonActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderColor: 'rgba(139, 92, 246, 0.25)',
-  },
-  ambientSoundContent: {
+  mainToggleContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  ambientIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  mainToggleIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  ambientIconContainerActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  mainToggleIconActive: {
+    backgroundColor: 'rgba(167, 139, 250, 0.15)',
   },
-  ambientTextContainer: {
+  pulseRing: {
+    position: 'absolute',
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(167, 139, 250, 0.3)',
+  },
+  mainToggleText: {
     flex: 1,
   },
-  ambientTitle: {
-    fontSize: 15,
+  mainToggleTitle: {
+    fontSize: 16,
     fontWeight: '600' as const,
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  ambientTitleActive: {
-    color: '#8B5CF6',
-  },
-  ambientSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.4)',
-  },
-  ambientToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  ambientToggleActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-  },
-  ambientToggleText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
     color: 'rgba(255, 255, 255, 0.5)',
+    marginBottom: 3,
   },
-  ambientToggleTextActive: {
-    color: '#8B5CF6',
+  mainToggleTitleActive: {
+    color: '#a78bfa',
   },
-  ambientSoundsList: {
-    gap: 10,
+  mainToggleSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.35)',
   },
-  ambientSoundItem: {
+  toggleSwitch: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.4)',
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  toggleKnobActive: {
+    backgroundColor: '#a78bfa',
+    alignSelf: 'flex-end',
+  },
+  soundCardsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    gap: 12,
+  },
+  soundCard: {
+    flex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  ambientSoundItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+  soundCardActive: {
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
-  ambientSoundItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  soundCardGradient: {
+    padding: 16,
+    minHeight: 140,
+  },
+  soundCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  soundCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  ambientSoundItemIconActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  activeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+    height: 18,
   },
-  ambientSoundItemTextContainer: {
+  equalizerBar: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: '#a78bfa',
+  },
+  bar1: {
+    height: 8,
+  },
+  bar2: {
+    height: 14,
+  },
+  bar3: {
+    height: 10,
+  },
+  soundCardContent: {
     flex: 1,
   },
-  ambientSoundItemText: {
-    fontSize: 14,
-    fontWeight: '500' as const,
+  soundCardTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
     color: theme.colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  ambientSoundItemTextActive: {
-    color: '#8B5CF6',
-  },
-  ambientSoundItemDescription: {
+  soundCardDescription: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.4)',
+    lineHeight: 16,
+  },
+  soundCardCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 8,
   },
 });
