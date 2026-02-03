@@ -18,7 +18,7 @@ import { FocusShieldProvider } from '@/hooks/use-focus-shield-store';
 import { trpc, trpcReactClient } from '@/lib/trpc';
 
 import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
-import { DynamicIslandTimer } from '@/components/DynamicIslandTimer';
+
 import { FloatingDynamicIslandStreak } from '@/components/FloatingDynamicIslandStreak';
 import { StreakCelebrationProvider, useStreakCelebration } from '@/hooks/use-streak-celebration';
 import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
@@ -226,14 +226,7 @@ function RootLayoutNav() {
           animation: 'slide_from_bottom'
         }} 
       />
-      <Stack.Screen 
-        name="timer-fullscreen" 
-        options={{ 
-          headerShown: false,
-          presentation: 'fullScreenModal',
-          animation: 'fade'
-        }} 
-      />
+
       <Stack.Screen 
         name="settings" 
         options={{ 
@@ -355,7 +348,6 @@ export default function RootLayout() {
                                 <FocusShieldProvider>
                                   <StreakCelebrationProvider>
                                     <RootLayoutNav />
-                                    <DynamicIslandTimer />
                                     <StreakCelebrationOverlay />
                                   </StreakCelebrationProvider>
                                 </FocusShieldProvider>
