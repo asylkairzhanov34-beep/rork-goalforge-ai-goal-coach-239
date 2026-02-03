@@ -68,6 +68,8 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
     }
   }, [currentStreak, lastShownStreak, isControlledExternally]);
 
+  const celebrationAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+
   useEffect(() => {
     if (shouldShow) {
       if (Platform.OS !== 'web') {
@@ -89,7 +91,7 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
         }),
       ]).start();
 
-      Animated.loop(
+      celebrationAnimRef.current = Animated.loop(
         Animated.sequence([
           Animated.timing(celebrationAnim, {
             toValue: 1,
@@ -102,8 +104,14 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
             useNativeDriver: false,
           }),
         ])
-      ).start();
+      );
+      celebrationAnimRef.current.start();
     } else {
+      if (celebrationAnimRef.current) {
+        celebrationAnimRef.current.stop();
+        celebrationAnimRef.current = null;
+      }
+      
       Animated.parallel([
         Animated.timing(opacityAnim, {
           toValue: 0,
@@ -118,6 +126,12 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
       ]).start();
       setIsExpanded(false);
     }
+    
+    return () => {
+      if (celebrationAnimRef.current) {
+        celebrationAnimRef.current.stop();
+      }
+    };
   }, [shouldShow, opacityAnim, scaleAnim, celebrationAnim]);
 
   useEffect(() => {

@@ -334,30 +334,28 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     const checkKey = `${currentGoal.id}_${dailyTasks.map((t) => `${t.id}:${t.date}:${t.completed}`).join(',')}`;
     if (streakCheckedRef.current === checkKey) return;
     
+    streakCheckedRef.current = checkKey;
+    
     const calculated = calculateStreakFromHistory(dailyTasks, currentGoal.id);
     
-    if (calculated.currentStreak !== profile.currentStreak) {
-      console.log('[Streak] Correcting streak:', {
-        stored: profile.currentStreak,
-        calculated: calculated.currentStreak
-      });
+    setProfile(prev => {
+      if (calculated.currentStreak === prev.currentStreak && 
+          calculated.lastStreakDate === prev.lastStreakDate) {
+        return prev;
+      }
       
-      streakCheckedRef.current = checkKey;
-      
-      const bestStreak = Math.max(calculated.currentStreak, profile.bestStreak || 0);
-      
+      const bestStreak = Math.max(calculated.currentStreak, prev.bestStreak || 0);
       const newProfile = { 
-        ...profile,
+        ...prev,
         currentStreak: calculated.currentStreak,
         bestStreak,
         lastStreakDate: calculated.lastStreakDate,
       };
-      setProfile(newProfile);
+      
       saveProfile(newProfile);
-    } else {
-      streakCheckedRef.current = checkKey;
-    }
-  }, [dailyTasks, currentGoal?.id, profile, saveProfile, calculateStreakFromHistory]);
+      return newProfile;
+    });
+  }, [dailyTasks, currentGoal?.id, saveProfile, calculateStreakFromHistory]);
 
   const saveTasksMutation = useMutation({
     mutationFn: async (tasks: DailyTask[]) => {
