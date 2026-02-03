@@ -17,7 +17,7 @@ import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Picker } from '@react-native-picker/picker';
-import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check, Music, Bell, Zap, Radio, Sparkles } from 'lucide-react-native';
+import { X, Settings, Play, Pause, Wind, RotateCcw, Shield, ShieldCheck, Lock, Unlock, AlertTriangle, Volume2, Check, Music, Bell, Zap, Radio, Sparkles, Headphones, VolumeX } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useTimer } from '@/hooks/use-timer-store';
@@ -45,6 +45,12 @@ const TIMER_SOUNDS = [
 ];
 
 const SOUND_STORAGE_KEY = '@timer_selected_sound';
+const AMBIENT_STORAGE_KEY = '@timer_ambient_settings';
+
+const AMBIENT_SOUNDS = [
+  { id: 'ambient1', name: 'Focus Flow', description: 'Calm ambient for deep work', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142014/3gwt67NbS8Go3MhssMPz_oo3xfu.mp4' },
+  { id: 'ambient2', name: 'Zen Waves', description: 'Peaceful concentration tones', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142016/hYCBEvsXvN3tenAHl9PZ_unyiy9.mp4' },
+];
 
 
 
@@ -70,6 +76,12 @@ export default function TimerFullscreenScreen() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const soundRef = useRef<Audio.Sound | null>(null);
   const hasPlayedCompletionSound = useRef<boolean>(false);
+
+  const [ambientEnabled, setAmbientEnabled] = useState<boolean>(false);
+  const [selectedAmbientId, setSelectedAmbientId] = useState<string>('ambient1');
+  const [showAmbientModal, setShowAmbientModal] = useState<boolean>(false);
+  const ambientSoundRef = useRef<Audio.Sound | null>(null);
+  
 
   const isRunning = timerStore?.isRunning ?? false;
   const isPaused = timerStore?.isPaused ?? false;
@@ -102,6 +114,120 @@ export default function TimerFullscreenScreen() {
     };
     loadSoundSettings();
   }, []);
+
+  useEffect(() => {
+    const loadAmbientSettings = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(AMBIENT_STORAGE_KEY);
+        if (stored) {
+          const settings = JSON.parse(stored);
+          setSelectedAmbientId(settings.soundId || 'ambient1');
+          setAmbientEnabled(settings.enabled === true);
+        }
+      } catch (error) {
+        console.log('Error loading ambient settings:', error);
+      }
+    };
+    loadAmbientSettings();
+  }, []);
+
+  const saveAmbientSettings = useCallback(async (soundId: string, enabled: boolean) => {
+    try {
+      await AsyncStorage.setItem(AMBIENT_STORAGE_KEY, JSON.stringify({ soundId, enabled }));
+    } catch (error) {
+      console.log('Error saving ambient settings:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleAmbientPlayback = async () => {
+      if (isRunning && !isPaused && ambientEnabled) {
+        const selectedAmbient = AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId);
+        if (!selectedAmbient) return;
+        try {
+          if (ambientSoundRef.current) {
+            await ambientSoundRef.current.unloadAsync();
+            ambientSoundRef.current = null;
+          }
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+          });
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: selectedAmbient.url },
+            { shouldPlay: true, isLooping: true, volume: 0.6 }
+          );
+          ambientSoundRef.current = sound;
+        } catch (error) {
+          console.log('Error playing ambient sound:', error);
+        }
+      } else if (isPaused && ambientSoundRef.current) {
+        try {
+          await ambientSoundRef.current.pauseAsync();
+        } catch (error) {
+          console.log('Error pausing ambient sound:', error);
+        }
+      } else if (!isRunning && ambientSoundRef.current) {
+        try {
+          await ambientSoundRef.current.stopAsync();
+          await ambientSoundRef.current.unloadAsync();
+          ambientSoundRef.current = null;
+        } catch (error) {
+          console.log('Error stopping ambient sound:', error);
+        }
+      }
+    };
+    handleAmbientPlayback();
+  }, [isRunning, isPaused, ambientEnabled, selectedAmbientId]);
+
+  const handleToggleAmbient = useCallback(async () => {
+    const newEnabled = !ambientEnabled;
+    setAmbientEnabled(newEnabled);
+    saveAmbientSettings(selectedAmbientId, newEnabled);
+    
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    if (!newEnabled && ambientSoundRef.current) {
+      try {
+        await ambientSoundRef.current.stopAsync();
+        await ambientSoundRef.current.unloadAsync();
+        ambientSoundRef.current = null;
+      } catch (error) {
+        console.log('Error stopping ambient:', error);
+      }
+    }
+  }, [ambientEnabled, selectedAmbientId, saveAmbientSettings]);
+
+  const handleAmbientSelect = useCallback(async (soundId: string) => {
+    setSelectedAmbientId(soundId);
+    saveAmbientSettings(soundId, ambientEnabled);
+    
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync();
+    }
+
+    if (isRunning && !isPaused && ambientEnabled) {
+      try {
+        if (ambientSoundRef.current) {
+          await ambientSoundRef.current.stopAsync();
+          await ambientSoundRef.current.unloadAsync();
+          ambientSoundRef.current = null;
+        }
+        const newAmbient = AMBIENT_SOUNDS.find(s => s.id === soundId);
+        if (newAmbient) {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: newAmbient.url },
+            { shouldPlay: true, isLooping: true, volume: 0.6 }
+          );
+          ambientSoundRef.current = sound;
+        }
+      } catch (error) {
+        console.log('Error switching ambient sound:', error);
+      }
+    }
+  }, [ambientEnabled, saveAmbientSettings, isRunning, isPaused]);
 
   const saveSoundSettings = useCallback(async (soundId: string, enabled: boolean) => {
     try {
@@ -201,6 +327,9 @@ export default function TimerFullscreenScreen() {
     return () => {
       if (soundRef.current) {
         soundRef.current.unloadAsync();
+      }
+      if (ambientSoundRef.current) {
+        ambientSoundRef.current.unloadAsync();
       }
     };
   }, []);
@@ -679,6 +808,48 @@ export default function TimerFullscreenScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[
+              styles.ambientSoundButton,
+              ambientEnabled && styles.ambientSoundButtonActive,
+            ]}
+            onPress={handleToggleAmbient}
+            onLongPress={() => setShowAmbientModal(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.ambientSoundContent}>
+              <View style={[
+                styles.ambientIconContainer,
+                ambientEnabled && styles.ambientIconContainerActive,
+              ]}>
+                {ambientEnabled ? (
+                  <Headphones size={20} color="#8B5CF6" />
+                ) : (
+                  <VolumeX size={20} color={theme.colors.textSecondary} />
+                )}
+              </View>
+              <View style={styles.ambientTextContainer}>
+                <Text style={styles.ambientTitle}>Focus Sounds</Text>
+                <Text style={styles.ambientSubtitle}>
+                  {ambientEnabled 
+                    ? `${AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId)?.name || 'Playing'} • Hold to change` 
+                    : 'Ambient sounds for concentration'}
+                </Text>
+              </View>
+            </View>
+            <View style={[
+              styles.ambientToggle,
+              ambientEnabled && styles.ambientToggleActive,
+            ]}>
+              <Text style={[
+                styles.ambientToggleText,
+                ambientEnabled && styles.ambientToggleTextActive,
+              ]}>
+                {ambientEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.breathingButton}
             onPress={() => router.push('/breathing')}
           >
@@ -890,6 +1061,74 @@ export default function TimerFullscreenScreen() {
                   );
                 })}
               </ScrollView>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showAmbientModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAmbientModal(false)}
+      >
+        <Pressable style={styles.ambientModalOverlay} onPress={() => setShowAmbientModal(false)}>
+          <Pressable style={styles.ambientModalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.ambientModalHeader}>
+              <View style={styles.ambientModalTitleRow}>
+                <Headphones size={22} color="#8B5CF6" />
+                <Text style={styles.ambientModalTitle}>Focus Sounds</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.ambientModalCloseButton}
+                onPress={() => setShowAmbientModal(false)}
+              >
+                <X size={22} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.ambientModalSubtitle}>Choose ambient sound for your focus session</Text>
+            
+            <View style={styles.ambientSoundList}>
+              {AMBIENT_SOUNDS.map((sound) => {
+                const isActive = selectedAmbientId === sound.id;
+                return (
+                  <TouchableOpacity
+                    key={sound.id}
+                    style={[
+                      styles.ambientSoundItem,
+                      isActive && styles.ambientSoundItemActive,
+                    ]}
+                    onPress={() => handleAmbientSelect(sound.id)}
+                  >
+                    <View style={styles.ambientSoundItemLeft}>
+                      <View style={[
+                        styles.ambientSoundItemIcon,
+                        isActive && styles.ambientSoundItemIconActive,
+                      ]}>
+                        <Headphones 
+                          size={22} 
+                          color={isActive ? '#8B5CF6' : theme.colors.textSecondary} 
+                        />
+                      </View>
+                      <View style={styles.ambientSoundItemTextContainer}>
+                        <Text style={[
+                          styles.ambientSoundItemText,
+                          isActive && styles.ambientSoundItemTextActive,
+                        ]}>
+                          {sound.name}
+                        </Text>
+                        <Text style={styles.ambientSoundItemDescription}>
+                          {sound.description}
+                        </Text>
+                      </View>
+                    </View>
+                    {isActive && (
+                      <Check size={20} color="#8B5CF6" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </Pressable>
         </Pressable>
@@ -1646,5 +1885,164 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.semibold as any,
     color: '#FF6B6B',
+  },
+  ambientSoundButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.glassBorder,
+    marginBottom: 10,
+  },
+  ambientSoundButtonActive: {
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  },
+  ambientSoundContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  ambientIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  ambientIconContainerActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  ambientTextContainer: {
+    flex: 1,
+  },
+  ambientTitle: {
+    fontSize: 15,
+    fontWeight: theme.fontWeight.semibold as any,
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  ambientSubtitle: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  ambientToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  ambientToggleActive: {
+    backgroundColor: '#8B5CF6',
+  },
+  ambientToggleText: {
+    fontSize: 12,
+    fontWeight: theme.fontWeight.bold as any,
+    color: theme.colors.textSecondary,
+  },
+  ambientToggleTextActive: {
+    color: '#fff',
+  },
+  ambientModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  ambientModalSheet: {
+    backgroundColor: '#0E0E0E',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderTopWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  ambientModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 20,
+    marginBottom: 8,
+  },
+  ambientModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  ambientModalTitle: {
+    fontSize: 20,
+    fontWeight: theme.fontWeight.bold as any,
+    color: theme.colors.text,
+  },
+  ambientModalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  ambientModalSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: 20,
+  },
+  ambientSoundList: {
+    gap: 12,
+  },
+  ambientSoundItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  ambientSoundItemActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+  },
+  ambientSoundItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  ambientSoundItemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ambientSoundItemIconActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  ambientSoundItemTextContainer: {
+    flex: 1,
+  },
+  ambientSoundItemText: {
+    fontSize: 16,
+    fontWeight: theme.fontWeight.semibold as any,
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  ambientSoundItemTextActive: {
+    color: '#8B5CF6',
+  },
+  ambientSoundItemDescription: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
   },
 });
