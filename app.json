@@ -34,7 +34,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "app.goalforge_ai_goal_coach",
+      "package": "app.goalforge-ai-goal-coach",
       "permissions": [
         "RECORD_AUDIO",
         "android.permission.VIBRATE",
