@@ -43,6 +43,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const [timeLeft, setTimeLeft] = useState(item.duration);
   const [isPaused, setIsPaused] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [actualDuration, setActualDuration] = useState(item.duration);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -50,6 +51,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const videoRef = useRef<VideoType>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const durationDetected = useRef(false);
 
   useEffect(() => {
     const loadSound = async () => {
@@ -65,6 +67,14 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
           { isLooping: true, volume: 0.7 }
         );
         soundRef.current = sound;
+        
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish && !status.isLooping) {
+            sound.setPositionAsync(0);
+            sound.playAsync();
+          }
+        });
+        
         console.log('[MeditationFeed] Sound loaded for slide:', index);
       } catch (error) {
         console.error('[MeditationFeed] Error loading sound:', error);
@@ -86,7 +96,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
   useEffect(() => {
     if (isActive) {
-      setTimeLeft(item.duration);
+      durationDetected.current = false;
+      setTimeLeft(actualDuration);
       setIsComplete(false);
       setIsPaused(false);
       progressAnim.setValue(0);
@@ -108,7 +119,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
       progressAnimRef.current = Animated.timing(progressAnim, {
         toValue: 1,
-        duration: item.duration * 1000,
+        duration: actualDuration * 1000,
         useNativeDriver: false,
       });
       progressAnimRef.current.start();
@@ -125,6 +136,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
     } else {
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.95);
+      durationDetected.current = false;
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -149,10 +161,10 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         progressAnimRef.current.stop();
       }
     };
-  }, [isActive, item.duration, fadeAnim, progressAnim, scaleAnim, onSlideReady]);
+  }, [isActive, actualDuration, fadeAnim, progressAnim, scaleAnim, onSlideReady]);
 
   useEffect(() => {
-    if (isActive && !isPaused && timeLeft > 0) {
+    if (isActive && !isPaused && timeLeft > 0 && !isComplete) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
@@ -176,7 +188,40 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         clearInterval(timerRef.current);
       }
     };
-  }, [isActive, isPaused, timeLeft, onSlideReady]);
+  }, [isActive, isPaused, timeLeft, isComplete, onSlideReady]);
+
+  const handleVideoPlaybackStatus = useCallback((status: any) => {
+    if (!status.isLoaded) return;
+    
+    if (status.durationMillis && !durationDetected.current && isActive) {
+      const videoDurationSec = Math.ceil(status.durationMillis / 1000);
+      if (videoDurationSec > 0 && videoDurationSec !== actualDuration) {
+        console.log('[MeditationFeed] Video duration detected:', videoDurationSec, 'seconds');
+        durationDetected.current = true;
+        setActualDuration(videoDurationSec);
+        setTimeLeft(videoDurationSec);
+        
+        if (progressAnimRef.current) {
+          progressAnimRef.current.stop();
+        }
+        progressAnim.setValue(0);
+        progressAnimRef.current = Animated.timing(progressAnim, {
+          toValue: 1,
+          duration: videoDurationSec * 1000,
+          useNativeDriver: false,
+        });
+        progressAnimRef.current.start();
+      }
+    }
+    
+    if (status.didJustFinish && isActive && !isPaused) {
+      console.log('[MeditationFeed] Video finished, restarting loop');
+      if (videoRef.current) {
+        videoRef.current.setPositionAsync(0);
+        videoRef.current.playAsync();
+      }
+    }
+  }, [isActive, isPaused, actualDuration, progressAnim]);
 
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -240,9 +285,10 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         source={{ uri: item.videoUrl }}
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
-        isLooping={true}
+        isLooping={false}
         isMuted={true}
         shouldPlay={isActive && !isPaused}
+        onPlaybackStatusUpdate={handleVideoPlaybackStatus}
       />
       
       <LinearGradient
