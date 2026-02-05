@@ -364,7 +364,7 @@ const ChatScreenContent: React.FC = () => {
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   
@@ -442,39 +442,57 @@ const ChatScreenContent: React.FC = () => {
       
       if (Platform.OS === 'web') {
         // Web: use MediaRecorder API
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        audioChunksRef.current = [];
-        
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
-        
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.start();
-        setIsRecording(true);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          audioChunksRef.current = [];
+          
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              audioChunksRef.current.push(event.data);
+            }
+          };
+          
+          mediaRecorderRef.current = mediaRecorder;
+          mediaRecorder.start();
+          setIsRecording(true);
+          console.log('[ChatScreen] Web recording started');
+        } catch (webError) {
+          console.error('[ChatScreen] Web recording error:', webError);
+          throw webError;
+        }
       } else {
-        // Mobile: use expo-av
-        await Audio.requestPermissionsAsync();
+        // Mobile: use expo-av with new API
+        console.log('[ChatScreen] Requesting audio permissions...');
+        const permissionResponse = await Audio.requestPermissionsAsync();
+        console.log('[ChatScreen] Permission response:', permissionResponse);
+        
+        if (permissionResponse.status !== 'granted') {
+          console.error('[ChatScreen] Audio permission not granted');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          return;
+        }
+        
+        console.log('[ChatScreen] Setting audio mode...');
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
         
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(
+        console.log('[ChatScreen] Creating recording...');
+        const { recording: newRecording } = await Audio.Recording.createAsync(
           Audio.RecordingOptionsPresets.HIGH_QUALITY
         );
         
-        await recording.startAsync();
-        recordingRef.current = recording;
+        setRecording(newRecording);
         setIsRecording(true);
+        console.log('[ChatScreen] Mobile recording started');
       }
     } catch (error) {
       console.error('[ChatScreen] Failed to start recording:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      setIsRecording(false);
+      setRecording(null);
     }
   }, []);
 
@@ -491,7 +509,11 @@ const ChatScreenContent: React.FC = () => {
       if (Platform.OS === 'web') {
         // Web: stop MediaRecorder
         const mediaRecorder = mediaRecorderRef.current;
-        if (!mediaRecorder) return;
+        if (!mediaRecorder) {
+          console.log('[ChatScreen] No web mediaRecorder found');
+          setIsTranscribing(false);
+          return;
+        }
         
         await new Promise<void>((resolve) => {
           mediaRecorder.onstop = () => resolve();
@@ -504,77 +526,89 @@ const ChatScreenContent: React.FC = () => {
         audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         fileName = 'recording.webm';
         mediaRecorderRef.current = null;
-      } else {
-        // Mobile: stop expo-av recording
-        const recording = recordingRef.current;
-        if (!recording) return;
         
-        await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-        
-        const uri = recording.getURI();
-        if (!uri) throw new Error('No recording URI');
-        
-        const uriParts = uri.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        
-        // For mobile, send as file object
+        // Web: send blob to STT API
         const formData = new FormData();
-        formData.append('audio', {
-          uri,
-          name: `recording.${fileType}`,
-          type: `audio/${fileType}`,
-        } as any);
+        formData.append('audio', audioBlob, fileName);
         
-        console.log('[ChatScreen] Sending audio for transcription...');
+        console.log('[ChatScreen] Sending web audio for transcription...');
         const response = await fetch(STT_API_URL, {
           method: 'POST',
           body: formData,
         });
         
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[ChatScreen] STT API error:', response.status, errorText);
           throw new Error(`STT API error: ${response.status}`);
         }
         
         const result = await response.json();
-        console.log('[ChatScreen] Transcription result:', result);
+        console.log('[ChatScreen] Web transcription result:', result);
+        
+        if (result.text) {
+          setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
+        }
+      } else {
+        // Mobile: stop expo-av recording
+        if (!recording) {
+          console.log('[ChatScreen] No mobile recording found');
+          setIsTranscribing(false);
+          return;
+        }
+        
+        console.log('[ChatScreen] Stopping mobile recording...');
+        await recording.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        
+        const uri = recording.getURI();
+        console.log('[ChatScreen] Recording URI:', uri);
+        
+        if (!uri) {
+          console.error('[ChatScreen] No recording URI');
+          throw new Error('No recording URI');
+        }
+        
+        const uriParts = uri.split('.');
+        const fileType = uriParts[uriParts.length - 1] || 'm4a';
+        
+        // For mobile, send as file object
+        const formData = new FormData();
+        formData.append('audio', {
+          uri,
+          name: `recording.${fileType}`,
+          type: fileType === 'm4a' ? 'audio/mp4' : `audio/${fileType}`,
+        } as any);
+        
+        console.log('[ChatScreen] Sending mobile audio for transcription...');
+        const response = await fetch(STT_API_URL, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[ChatScreen] STT API error:', response.status, errorText);
+          throw new Error(`STT API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[ChatScreen] Mobile transcription result:', result);
         
         if (result.text) {
           setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
         }
         
-        recordingRef.current = null;
-        setIsTranscribing(false);
-        return;
-      }
-      
-      // Web: send blob to STT API
-      const formData = new FormData();
-      formData.append('audio', audioBlob, fileName);
-      
-      console.log('[ChatScreen] Sending audio for transcription...');
-      const response = await fetch(STT_API_URL, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error(`STT API error: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('[ChatScreen] Transcription result:', result);
-      
-      if (result.text) {
-        setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
+        setRecording(null);
       }
     } catch (error) {
       console.error('[ChatScreen] Failed to stop recording:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     } finally {
       setIsTranscribing(false);
+      setRecording(null);
     }
-  }, []);
+  }, [recording]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
