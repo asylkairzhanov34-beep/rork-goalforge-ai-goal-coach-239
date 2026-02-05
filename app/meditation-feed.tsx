@@ -10,7 +10,8 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { Video, ResizeMode, Audio } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
+import { Audio } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,13 +32,7 @@ interface SlideItemProps {
   onSlideReady: (ready: boolean) => void;
 }
 
-const AFFIRMATION_SOUNDS = [
-  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3',
-  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3',
-  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3',
-  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3',
-  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3',
-];
+
 
 function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideReady }: SlideItemProps) {
   const [timeLeft, setTimeLeft] = useState(item.duration);
@@ -49,43 +44,10 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<VideoType>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
   const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const durationDetected = useRef(false);
 
-  useEffect(() => {
-    const loadSound = async () => {
-      try {
-        if (soundRef.current) {
-          await soundRef.current.unloadAsync();
-          soundRef.current = null;
-        }
-        
-        const soundUrl = AFFIRMATION_SOUNDS[index % AFFIRMATION_SOUNDS.length];
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: soundUrl },
-          { isLooping: true, volume: 1.0, shouldPlay: true }
-        );
-        soundRef.current = sound;
-        
-        console.log('[MeditationFeed] Sound loaded and playing for slide:', index);
-      } catch (error) {
-        console.error('[MeditationFeed] Error loading sound:', error);
-      }
-    };
 
-    if (isActive) {
-      loadSound();
-    }
-
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.stopAsync();
-        soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-    };
-  }, [isActive, index]);
 
   useEffect(() => {
     if (isActive) {
@@ -134,10 +96,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       if (videoRef.current) {
         videoRef.current.pauseAsync();
         videoRef.current.setPositionAsync(0);
-      }
-      if (soundRef.current) {
-        soundRef.current.pauseAsync();
-        soundRef.current.setPositionAsync(0);
       }
     }
 
@@ -216,14 +174,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       }
     }
     
-    if (soundRef.current) {
-      if (newPausedState) {
-        soundRef.current.pauseAsync();
-      } else {
-        soundRef.current.playAsync();
-      }
-    }
-    
     if (progressAnimRef.current) {
       if (newPausedState) {
         progressAnimRef.current.stop();
@@ -243,9 +193,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    if (soundRef.current) {
-      soundRef.current.stopAsync();
-    }
     if (videoRef.current) {
       videoRef.current.pauseAsync();
     }
@@ -266,7 +213,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
         isLooping={true}
-        isMuted={true}
+        isMuted={false}
         shouldPlay={isActive && !isPaused}
         onPlaybackStatusUpdate={handleVideoPlaybackStatus}
       />
