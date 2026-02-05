@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
-
-
 import {
   initializeRevenueCat,
   getOfferings,
@@ -12,6 +10,11 @@ import {
   findPackageByIdentifier,
   RevenueCatCustomerInfo,
 } from '@/lib/revenuecat';
+import {
+  saveUserSubscription,
+  getUserSubscription,
+  getCurrentUser,
+} from '@/lib/firebase';
 
 export type SubscriptionStatus = 'loading' | 'free' | 'premium';
 
@@ -29,6 +32,15 @@ export interface SubscriptionPackage {
 
 const ENTITLEMENT_ID = 'Premium Subscriptions';
 
+interface FirebaseSubscriptionData {
+  isPremium: boolean;
+  status: SubscriptionStatus;
+  entitlements: string[];
+  originalAppUserId?: string;
+  latestExpirationDate?: string;
+  updatedAt: string;
+}
+
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus>('loading');
@@ -37,6 +49,62 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
+  const lastSyncedStatus = useRef<SubscriptionStatus | null>(null);
+
+  const syncSubscriptionToFirebase = useCallback(async (
+    newStatus: SubscriptionStatus,
+    info: RevenueCatCustomerInfo | null
+  ) => {
+    try {
+      const firebaseUser = getCurrentUser();
+      if (!firebaseUser) {
+        console.log('[Subscription] No Firebase user - skipping sync');
+        return;
+      }
+
+      if (lastSyncedStatus.current === newStatus) {
+        console.log('[Subscription] Status unchanged - skipping sync');
+        return;
+      }
+
+      const subscriptionData: FirebaseSubscriptionData = {
+        isPremium: newStatus === 'premium',
+        status: newStatus,
+        entitlements: info ? Object.keys(info.entitlements.active) : [],
+        originalAppUserId: info?.originalAppUserId,
+        latestExpirationDate: info?.latestExpirationDate ?? undefined,
+        updatedAt: new Date().toISOString(),
+      };
+
+      console.log('[Subscription] 🔄 Syncing to Firebase:', subscriptionData);
+      await saveUserSubscription(firebaseUser.uid, subscriptionData);
+      lastSyncedStatus.current = newStatus;
+      console.log('[Subscription] ✅ Synced to Firebase');
+    } catch (err) {
+      console.error('[Subscription] Firebase sync error:', err);
+    }
+  }, []);
+
+  const loadSubscriptionFromFirebase = useCallback(async (): Promise<FirebaseSubscriptionData | null> => {
+    try {
+      const firebaseUser = getCurrentUser();
+      if (!firebaseUser) {
+        console.log('[Subscription] No Firebase user - skipping load');
+        return null;
+      }
+
+      console.log('[Subscription] 📥 Loading from Firebase...');
+      const data = await getUserSubscription(firebaseUser.uid);
+      if (data) {
+        console.log('[Subscription] Found Firebase data:', data);
+        return data as FirebaseSubscriptionData;
+      }
+      return null;
+    } catch (err) {
+      console.error('[Subscription] Firebase load error:', err);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -45,12 +113,22 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[Subscription] __DEV__:', __DEV__);
 
       try {
+        const firebaseData = await loadSubscriptionFromFirebase();
+        
+        if (firebaseData?.isPremium) {
+          console.log('[Subscription] 📥 Found premium status in Firebase');
+          setStatus('premium');
+          lastSyncedStatus.current = 'premium';
+        }
+
         const rcInitialized = await initializeRevenueCat();
         
         if (!rcInitialized) {
           console.error('[Subscription] RevenueCat init failed');
           setError('Failed to initialize purchases');
-          setStatus('free');
+          if (!firebaseData?.isPremium) {
+            setStatus('free');
+          }
           setIsInitialized(true);
           return;
         }
@@ -64,9 +142,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           setCustomerInfo(info);
           const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
                             info.entitlements.active['premium'] !== undefined;
-          setStatus(hasPremium ? 'premium' : 'free');
-          console.log('[Subscription] Status:', hasPremium ? 'PREMIUM' : 'FREE');
-        } else {
+          const newStatus = hasPremium ? 'premium' : 'free';
+          setStatus(newStatus);
+          console.log('[Subscription] Status from RevenueCat:', hasPremium ? 'PREMIUM' : 'FREE');
+          
+          await syncSubscriptionToFirebase(newStatus, info);
+        } else if (!firebaseData?.isPremium) {
           setStatus('free');
         }
 
@@ -100,7 +181,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     };
 
     init();
-  }, []);
+  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase]);
 
   const handlePurchase = useCallback(async (packageIdentifier: string): Promise<boolean> => {
     console.log('[Subscription] 🛒 Purchase requested:', packageIdentifier);
@@ -125,6 +206,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         if (hasPremium) {
           setStatus('premium');
           console.log('[Subscription] ✅ Purchase successful - now PREMIUM');
+          
+          await syncSubscriptionToFirebase('premium', info);
+          
           return true;
         }
       }
@@ -141,7 +225,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     } finally {
       setIsPurchasing(false);
     }
-  }, []);
+  }, [syncSubscriptionToFirebase]);
 
   const handleRestore = useCallback(async (): Promise<boolean> => {
     console.log('[Subscription] 🔄 Restore requested');
@@ -158,6 +242,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         if (hasPremium) {
           setStatus('premium');
           console.log('[Subscription] ✅ Restore successful - now PREMIUM');
+          
+          await syncSubscriptionToFirebase('premium', info);
+          
           return true;
         }
       }
@@ -171,7 +258,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     } finally {
       setIsPurchasing(false);
     }
-  }, []);
+  }, [syncSubscriptionToFirebase]);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -180,12 +267,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         setCustomerInfo(info);
         const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
                           info.entitlements.active['premium'] !== undefined;
-        setStatus(hasPremium ? 'premium' : 'free');
+        const newStatus = hasPremium ? 'premium' : 'free';
+        setStatus(newStatus);
+        
+        await syncSubscriptionToFirebase(newStatus, info);
       }
     } catch (err) {
       console.error('[Subscription] Refresh error:', err);
     }
-  }, []);
+  }, [syncSubscriptionToFirebase]);
 
   const reloadOfferings = useCallback(async () => {
     console.log('[Subscription] Reloading offerings...');
