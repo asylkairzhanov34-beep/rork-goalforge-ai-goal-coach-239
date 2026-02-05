@@ -10,7 +10,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,9 +28,18 @@ interface SlideItemProps {
   isActive: boolean;
   onComplete: () => void;
   isLastSlide: boolean;
+  onSlideReady: (ready: boolean) => void;
 }
 
-function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItemProps) {
+const AFFIRMATION_SOUNDS = [
+  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131201_gqh9uh.mp3',
+  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131202_ztlcao.mp3',
+  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967705/sg_131203_iylq22.mp3',
+  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967714/sg_131204_scaxw5.mp3',
+  'https://res.cloudinary.com/dohdrsflw/video/upload/v1769967706/sg_131205_ch9myx.mp3',
+];
+
+function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideReady }: SlideItemProps) {
   const [timeLeft, setTimeLeft] = useState(item.duration);
   const [isPaused, setIsPaused] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -39,6 +48,41 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<VideoType>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    const loadSound = async () => {
+      try {
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+        
+        const soundUrl = AFFIRMATION_SOUNDS[index % AFFIRMATION_SOUNDS.length];
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: soundUrl },
+          { isLooping: true, volume: 0.7 }
+        );
+        soundRef.current = sound;
+        console.log('[MeditationFeed] Sound loaded for slide:', index);
+      } catch (error) {
+        console.error('[MeditationFeed] Error loading sound:', error);
+      }
+    };
+
+    if (isActive) {
+      loadSound();
+    }
+
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.stopAsync();
+        soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+    };
+  }, [isActive, index]);
 
   useEffect(() => {
     if (isActive) {
@@ -46,6 +90,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
       setIsComplete(false);
       setIsPaused(false);
       progressAnim.setValue(0);
+      onSlideReady(false);
       
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -61,14 +106,21 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
         }),
       ]).start();
 
-      Animated.timing(progressAnim, {
+      progressAnimRef.current = Animated.timing(progressAnim, {
         toValue: 1,
         duration: item.duration * 1000,
         useNativeDriver: false,
-      }).start();
+      });
+      progressAnimRef.current.start();
 
       if (videoRef.current) {
+        videoRef.current.setPositionAsync(0);
         videoRef.current.playAsync();
+      }
+      
+      if (soundRef.current) {
+        soundRef.current.setPositionAsync(0);
+        soundRef.current.playAsync();
       }
     } else {
       fadeAnim.setValue(0);
@@ -76,9 +128,16 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (progressAnimRef.current) {
+        progressAnimRef.current.stop();
+      }
       if (videoRef.current) {
         videoRef.current.pauseAsync();
         videoRef.current.setPositionAsync(0);
+      }
+      if (soundRef.current) {
+        soundRef.current.pauseAsync();
+        soundRef.current.setPositionAsync(0);
       }
     }
 
@@ -86,8 +145,11 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (progressAnimRef.current) {
+        progressAnimRef.current.stop();
+      }
     };
-  }, [isActive, item.duration, fadeAnim, progressAnim, scaleAnim]);
+  }, [isActive, item.duration, fadeAnim, progressAnim, scaleAnim, onSlideReady]);
 
   useEffect(() => {
     if (isActive && !isPaused && timeLeft > 0) {
@@ -98,7 +160,12 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
               clearInterval(timerRef.current);
             }
             setIsComplete(true);
+            onSlideReady(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            
+            if (soundRef.current) {
+              soundRef.current.stopAsync();
+            }
             return 0;
           }
           return prev - 1;
@@ -113,16 +180,41 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
         clearInterval(timerRef.current);
       }
     };
-  }, [isActive, isPaused, timeLeft]);
+  }, [isActive, isPaused, timeLeft, onSlideReady]);
 
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsPaused(!isPaused);
+    const newPausedState = !isPaused;
+    setIsPaused(newPausedState);
+    
     if (videoRef.current) {
-      if (isPaused) {
-        videoRef.current.playAsync();
-      } else {
+      if (newPausedState) {
         videoRef.current.pauseAsync();
+      } else {
+        videoRef.current.playAsync();
+      }
+    }
+    
+    if (soundRef.current) {
+      if (newPausedState) {
+        soundRef.current.pauseAsync();
+      } else {
+        soundRef.current.playAsync();
+      }
+    }
+    
+    if (progressAnimRef.current) {
+      if (newPausedState) {
+        progressAnimRef.current.stop();
+      } else {
+        const progress = (item.duration - timeLeft) / item.duration;
+        progressAnim.setValue(progress);
+        progressAnimRef.current = Animated.timing(progressAnim, {
+          toValue: 1,
+          duration: timeLeft * 1000,
+          useNativeDriver: false,
+        });
+        progressAnimRef.current.start();
       }
     }
   };
@@ -241,17 +333,40 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
 export default function MeditationFeedScreen() {
   const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [canScroll, setCanScroll] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    const setupAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+        console.log('[MeditationFeed] Audio mode configured');
+      } catch (error) {
+        console.error('[MeditationFeed] Error setting audio mode:', error);
+      }
+    };
+    setupAudio();
+  }, []);
+
+  const handleSlideReady = useCallback((ready: boolean) => {
+    console.log('[MeditationFeed] Slide ready:', ready);
+    setCanScroll(ready);
+  }, []);
 
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index;
-      if (newIndex !== null && newIndex !== undefined) {
+      if (newIndex !== null && newIndex !== undefined && newIndex !== activeIndex) {
         setActiveIndex(newIndex);
+        setCanScroll(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
-  }, []);
+  }, [activeIndex]);
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
@@ -284,8 +399,9 @@ export default function MeditationFeedScreen() {
       isActive={activeIndex === index}
       onComplete={() => handleSlideComplete(index)}
       isLastSlide={index === MEDITATION_SLIDES.length - 1}
+      onSlideReady={handleSlideReady}
     />
-  ), [activeIndex, handleSlideComplete]);
+  ), [activeIndex, handleSlideComplete, handleSlideReady]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
     length: SCREEN_HEIGHT,
@@ -319,6 +435,7 @@ export default function MeditationFeedScreen() {
         snapToInterval={SCREEN_HEIGHT}
         snapToAlignment="start"
         bounces={false}
+        scrollEnabled={canScroll}
       />
 
       <TouchableOpacity
