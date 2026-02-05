@@ -145,7 +145,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
         isLooping
-        isMuted
+        isMuted={false}
         shouldPlay={isActive && !isPaused}
       />
       
