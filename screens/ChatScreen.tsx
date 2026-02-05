@@ -12,14 +12,16 @@ import {
   KeyboardAvoidingView,
   Dimensions,
   Easing,
+  Image,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Send, MessageSquarePlus, Sparkles, X, TrendingUp, Zap, Lock, ClipboardList, Edit3, Plus } from 'lucide-react-native';
+import { Send, MessageSquarePlus, Sparkles, X, TrendingUp, Zap, Lock, ClipboardList, Edit3, Plus, Mic, ImageIcon, Camera, XCircle } from 'lucide-react-native';
 import { useChat } from '@/hooks/use-chat-store';
-import { ChatMessage } from '@/types/chat';
+import { ChatMessage, ChatAttachment } from '@/types/chat';
 import { theme } from '@/constants/theme';
 import { InlineChatTaskForm } from '@/components/InlineChatTaskForm';
 import { useGoalStore } from '@/hooks/use-goal-store';
@@ -28,6 +30,8 @@ import { DailyTask } from '@/types/goal';
 import PremiumGate from '@/components/PremiumGate';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const STT_API_URL = 'https://toolkit.rork.com/stt/transcribe/';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -97,6 +101,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isFirstInGroup, 
         message.isBot ? styles.botBubble : styles.userBubble,
         getBubbleStyle()
       ]}>
+        {message.attachments && message.attachments.length > 0 && (
+          <View style={styles.messageAttachments}>
+            {message.attachments.map((att, i) => (
+              <Image
+                key={i}
+                source={{ uri: att.uri }}
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+            ))}
+          </View>
+        )}
         <Text style={[
           styles.messageText,
           message.isBot ? styles.botText : styles.userText
@@ -344,6 +360,17 @@ const ChatScreenContent: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(messages.length === 0);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const prevMessagesLength = useRef(messages.length);
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  
+  // Image attachments state
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
   const availableTasks = dailyTasks.filter(t => t.goalId === currentGoal?.id);
 
@@ -387,19 +414,248 @@ const ChatScreenContent: React.FC = () => {
   }, [error]);
 
   const handleSend = useCallback(async () => {
-    if (inputText.trim()) {
-      const text = inputText.trim();
+    if (inputText.trim() || attachments.length > 0) {
+      const text = inputText.trim() || (attachments.length > 0 ? 'Посмотри на это изображение' : '');
+      const currentAttachments = [...attachments];
       setInputText('');
+      setAttachments([]);
       setIsSending(true);
       try {
-        await sendMessage(text);
+        if (currentAttachments.length > 0) {
+          await sendMessage({ text, attachments: currentAttachments });
+        } else {
+          await sendMessage(text);
+        }
       } catch (e) {
         console.error('[ChatScreen] sendMessage failed:', e);
       } finally {
         setIsSending(false);
       }
     }
-  }, [inputText, sendMessage]);
+  }, [inputText, attachments, sendMessage]);
+
+  // Voice recording handlers
+  const startRecording = useCallback(async () => {
+    try {
+      console.log('[ChatScreen] Starting voice recording...');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      
+      if (Platform.OS === 'web') {
+        // Web: use MediaRecorder API
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunksRef.current = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start();
+        setIsRecording(true);
+      } else {
+        // Mobile: use expo-av
+        await Audio.requestPermissionsAsync();
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        
+        await recording.startAsync();
+        recordingRef.current = recording;
+        setIsRecording(true);
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Failed to start recording:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    }
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    try {
+      console.log('[ChatScreen] Stopping voice recording...');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setIsRecording(false);
+      setIsTranscribing(true);
+      
+      let audioBlob: Blob;
+      let fileName: string;
+      
+      if (Platform.OS === 'web') {
+        // Web: stop MediaRecorder
+        const mediaRecorder = mediaRecorderRef.current;
+        if (!mediaRecorder) return;
+        
+        await new Promise<void>((resolve) => {
+          mediaRecorder.onstop = () => resolve();
+          mediaRecorder.stop();
+        });
+        
+        // Stop all tracks
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        
+        audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        fileName = 'recording.webm';
+        mediaRecorderRef.current = null;
+      } else {
+        // Mobile: stop expo-av recording
+        const recording = recordingRef.current;
+        if (!recording) return;
+        
+        await recording.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        
+        const uri = recording.getURI();
+        if (!uri) throw new Error('No recording URI');
+        
+        const uriParts = uri.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+        
+        // For mobile, send as file object
+        const formData = new FormData();
+        formData.append('audio', {
+          uri,
+          name: `recording.${fileType}`,
+          type: `audio/${fileType}`,
+        } as any);
+        
+        console.log('[ChatScreen] Sending audio for transcription...');
+        const response = await fetch(STT_API_URL, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`STT API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[ChatScreen] Transcription result:', result);
+        
+        if (result.text) {
+          setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
+        }
+        
+        recordingRef.current = null;
+        setIsTranscribing(false);
+        return;
+      }
+      
+      // Web: send blob to STT API
+      const formData = new FormData();
+      formData.append('audio', audioBlob, fileName);
+      
+      console.log('[ChatScreen] Sending audio for transcription...');
+      const response = await fetch(STT_API_URL, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`STT API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[ChatScreen] Transcription result:', result);
+      
+      if (result.text) {
+        setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Failed to stop recording:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  // Image picker handlers
+  const pickImage = useCallback(async () => {
+    try {
+      console.log('[ChatScreen] Opening image picker...');
+      Haptics.selectionAsync().catch(() => {});
+      setShowAttachmentMenu(false);
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const uri = asset.base64 
+          ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+          : asset.uri;
+        
+        setAttachments(prev => [...prev, {
+          type: 'image',
+          uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+        }]);
+        console.log('[ChatScreen] Image added to attachments');
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Failed to pick image:', error);
+    }
+  }, []);
+
+  const takePhoto = useCallback(async () => {
+    try {
+      console.log('[ChatScreen] Opening camera...');
+      Haptics.selectionAsync().catch(() => {});
+      setShowAttachmentMenu(false);
+      
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('[ChatScreen] Camera permission denied');
+        return;
+      }
+      
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const uri = asset.base64 
+          ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+          : asset.uri;
+        
+        setAttachments(prev => [...prev, {
+          type: 'image',
+          uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+        }]);
+        console.log('[ChatScreen] Photo added to attachments');
+      }
+    } catch (error) {
+      console.error('[ChatScreen] Failed to take photo:', error);
+    }
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSuggestionPress = useCallback((prompt: string) => {
     setInputText(prompt);
@@ -563,23 +819,90 @@ const ChatScreenContent: React.FC = () => {
           </View>
           
           <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            {/* Attachment Preview */}
+            {attachments.length > 0 && (
+              <View style={styles.attachmentPreviewContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {attachments.map((att, index) => (
+                    <View key={index} style={styles.attachmentPreviewItem}>
+                      <Image source={{ uri: att.uri }} style={styles.attachmentPreviewImage} />
+                      <TouchableOpacity
+                        style={styles.attachmentRemoveButton}
+                        onPress={() => removeAttachment(index)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <XCircle size={18} color="#FF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+            
+            {/* Attachment Menu */}
+            {showAttachmentMenu && (
+              <View style={styles.attachmentMenu}>
+                <TouchableOpacity style={styles.attachmentMenuItem} onPress={pickImage}>
+                  <ImageIcon size={20} color="#FFD600" />
+                  <Text style={styles.attachmentMenuText}>Галерея</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.attachmentMenuItem} onPress={takePhoto}>
+                  <Camera size={20} color="#FFD600" />
+                  <Text style={styles.attachmentMenuText}>Камера</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
             <View style={styles.inputWrapper}>
+              {/* Attachment Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setShowAttachmentMenu(!showAttachmentMenu);
+                }}
+                style={styles.attachButton}
+                activeOpacity={0.7}
+              >
+                <Plus size={20} color={showAttachmentMenu ? '#FFD600' : 'rgba(255,255,255,0.5)'} />
+              </TouchableOpacity>
+              
               <TextInput
                 style={styles.input}
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder="Type a message..."
+                placeholder={isRecording ? 'Говорите...' : 'Напишите сообщение...'}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 multiline
                 maxLength={1000}
                 returnKeyType="default"
+                editable={!isRecording}
               />
+              
+              {/* Voice Recording Button */}
+              <TouchableOpacity
+                onPress={toggleRecording}
+                disabled={isTranscribing}
+                style={[
+                  styles.voiceButton,
+                  isRecording && styles.voiceButtonActive,
+                  isTranscribing && styles.voiceButtonDisabled,
+                ]}
+                activeOpacity={0.7}
+              >
+                {isTranscribing ? (
+                  <ActivityIndicator size="small" color="#FFD600" />
+                ) : (
+                  <Mic size={18} color={isRecording ? '#000' : 'rgba(255,255,255,0.6)'} />
+                )}
+              </TouchableOpacity>
+              
+              {/* Send Button */}
               <TouchableOpacity
                 onPress={handleSend}
-                disabled={!inputText.trim() || isSending}
+                disabled={(!inputText.trim() && attachments.length === 0) || isSending}
                 style={[
                   styles.sendButton,
-                  (!inputText.trim() || isSending) && styles.sendButtonDisabled
+                  ((!inputText.trim() && attachments.length === 0) || isSending) && styles.sendButtonDisabled
                 ]}
                 activeOpacity={0.7}
               >
@@ -1063,6 +1386,82 @@ const styles = StyleSheet.create({
   taskPickerItemDesc: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.4)',
+  },
+  messageAttachments: {
+    marginBottom: 8,
+  },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  attachmentPreviewContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  attachmentPreviewItem: {
+    position: 'relative',
+    marginRight: 8,
+  },
+  attachmentPreviewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  attachmentRemoveButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#000',
+    borderRadius: 10,
+  },
+  attachmentMenu: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  attachmentMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,214,0,0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  attachmentMenuText: {
+    color: '#FFD600',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  attachButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  voiceButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginRight: 6,
+  },
+  voiceButtonActive: {
+    backgroundColor: '#FF4444',
+  },
+  voiceButtonDisabled: {
+    opacity: 0.5,
   },
 });
 

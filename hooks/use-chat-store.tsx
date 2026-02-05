@@ -1,16 +1,25 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useProgress } from '@/hooks/use-progress';
-import { ChatMessage } from '@/types/chat';
+import { ChatMessage, ChatAttachment } from '@/types/chat';
 
 import { useMemo, useCallback, useState, useRef } from 'react';
 
 // OpenAI API ключ
 const OPENAI_API_KEY = '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';
 
+type OpenAIContentPart = 
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | OpenAIContentPart[];
+}
+
+export interface MessageWithAttachments {
+  text: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface GeneratedTaskData {
@@ -307,17 +316,34 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
     return null;
   }, [generateTaskFromAI, detectConfirmation, detectCancellation]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (input: string | MessageWithAttachments) => {
+    const text = typeof input === 'string' ? input : input.text;
+    const attachments = typeof input === 'string' ? undefined : input.attachments;
+    
     if (!text.trim() || isProcessing) return;
 
     const trimmed = text.trim();
-    console.log('[Chat] Sending message:', trimmed.substring(0, 50));
+    console.log('[Chat] Sending message:', trimmed.substring(0, 50), 'with', attachments?.length || 0, 'attachments');
 
     setChatError(null);
     setIsProcessing(true);
 
-    const userMessage: OpenAIMessage = { role: 'user', content: trimmed };
-    setMessages(prev => [...prev, userMessage]);
+    // Build content with images if present
+    let userContent: string | OpenAIContentPart[];
+    if (attachments && attachments.length > 0) {
+      userContent = [
+        { type: 'text', text: trimmed },
+        ...attachments.map(att => ({
+          type: 'image_url' as const,
+          image_url: { url: att.uri.startsWith('data:') ? att.uri : `data:${att.mimeType};base64,${att.uri}` }
+        }))
+      ];
+    } else {
+      userContent = trimmed;
+    }
+
+    const userMessage: OpenAIMessage = { role: 'user', content: userContent };
+    setMessages(prev => [...prev, { ...userMessage, _attachments: attachments }] as any);
 
     try {
       if (taskCreationState.current.isActive) {
@@ -665,12 +691,19 @@ Respond in Russian.`;
   const uiMessages: ChatMessage[] = useMemo(() => {
     return messages
       .filter(m => m.role !== 'system')
-      .map((m, idx) => ({
-        id: `msg-${idx}-${m.role}`,
-        text: m.content,
-        isBot: m.role === 'assistant',
-        timestamp: new Date(),
-      }));
+      .map((m, idx) => {
+        const msgAny = m as any;
+        const textContent = typeof m.content === 'string' 
+          ? m.content 
+          : m.content.find(c => c.type === 'text')?.text || '';
+        return {
+          id: `msg-${idx}-${m.role}`,
+          text: textContent,
+          isBot: m.role === 'assistant',
+          timestamp: new Date(),
+          attachments: msgAny._attachments,
+        };
+      });
   }, [messages]);
 
   return useMemo(() => ({
