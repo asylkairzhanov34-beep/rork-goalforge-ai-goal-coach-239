@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import type { ActiveChallengeForStreak } from '@/utils/streak';
 import { usePathname, router, useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +24,7 @@ import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
 
 
 import { useChallengeStore } from '@/hooks/use-challenge-store';
+import { useProgress } from '@/hooks/use-progress';
 import SubscriptionOfferModal from '@/src/components/SubscriptionOfferModal';
 
 
@@ -34,6 +34,7 @@ export default function TodayScreen() {
   const { profile: setupProfile } = useFirstTimeSetup();
 
   const challengeStore = useChallengeStore();
+  const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking } = useSubscriptionStatus();
   const [refreshing, setRefreshing] = useState(false);
   const [, setCurrentQuoteIndex] = useState(() => 
@@ -238,23 +239,16 @@ export default function TodayScreen() {
     return () => shimmerLoop.stop();
   }, [shimmerAnim]);
 
-  // Use real data from store
+  // Use real data from store and unified progress
   const profile = store?.profile || { name: 'User', currentStreak: 0 };
+  const currentStreak = progress?.currentStreak ?? profile?.currentStreak ?? 0;
   const displayName = setupProfile?.nickname || user?.name || profile?.name || 'User';
   const currentGoal = store?.currentGoal;
   
   // Get active challenge tasks for today
   const activeChallenge = challengeStore?.getActiveChallenge?.();
 
-  // Sync active challenges for unified streak calculation
-  useEffect(() => {
-    if (store?.updateActiveChallenges && challengeStore?.activeChallenges) {
-      const challengesForStreak: ActiveChallengeForStreak[] = challengeStore.activeChallenges
-        .filter(c => c.status === 'active')
-        .map(c => ({ days: c.days }));
-      store.updateActiveChallenges(challengesForStreak);
-    }
-  }, [challengeStore?.activeChallenges, store]);
+  
 
   const challengeTodayTasks = React.useMemo(() => {
     if (!activeChallenge || !challengeStore) return [];
@@ -290,13 +284,7 @@ export default function TodayScreen() {
   const completedToday = todayTasks.filter(t => t.completed).length;
   const greeting = getGreeting();
 
-  const pomodoroStats = store?.getPomodoroStats?.() || { totalWorkTime: 0, todayWorkTime: 0 };
-  const totalFocusMinutes = Math.floor((pomodoroStats.totalWorkTime || 0) / 60);
-  const totalFocusHours = Math.floor(totalFocusMinutes / 60);
-  const remainingMinutes = totalFocusMinutes % 60;
-  const focusTimeDisplay = totalFocusHours > 0 
-    ? `${totalFocusHours}h ${remainingMinutes}m` 
-    : `${totalFocusMinutes}m`;
+  const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
 
   const activeOrbColor = useMemo(() => {
     return rewards[activeRewardIndex]?.color || theme.colors.primary;
@@ -307,7 +295,7 @@ export default function TodayScreen() {
     outputRange: [-200, 400],
   });
 
-  const completedTasksCount = store?.dailyTasks?.filter(t => t.completed).length || 0;
+  const completedTasksCount = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
 
   // Show loading state only if store is not available at all
   if (!store) {
@@ -457,7 +445,7 @@ export default function TodayScreen() {
               <View style={styles.orbStatDivider} />
               <View style={styles.orbStatItem}>
                 <Text style={styles.orbStatLabel}>DAYS STREAK</Text>
-                <Text style={styles.orbStatValue}>{profile.currentStreak}</Text>
+                <Text style={styles.orbStatValue}>{currentStreak}</Text>
               </View>
             </View>
             

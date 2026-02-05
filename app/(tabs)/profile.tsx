@@ -12,12 +12,14 @@ import { useGoalStore } from '@/hooks/use-goal-store';
 import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useSubscription } from '@/hooks/use-subscription-store';
+import { useProgress } from '@/hooks/use-progress';
 
 export default function ProfileScreen() {
   const store = useGoalStore();
   const { user, logout, deleteAccount } = useAuth();
   const { profile: setupProfile, updateProfile: updateSetupProfile } = useFirstTimeSetup();
   const { isPremium } = useSubscription();
+  const progress = useProgress();
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const insets = useSafeAreaInsets();
@@ -49,15 +51,9 @@ export default function ProfileScreen() {
   
   const { profile, currentGoal, resetGoal } = store;
 
-  const pomodoroStats = store?.getPomodoroStats?.() || { totalWorkTime: 0, todayWorkTime: 0 };
-  const totalFocusMinutes = Math.floor((pomodoroStats.totalWorkTime || 0) / 60);
-  const totalFocusHours = Math.floor(totalFocusMinutes / 60);
-  const remainingMinutes = totalFocusMinutes % 60;
-  const focusTimeDisplay = totalFocusHours > 0 
-    ? `${totalFocusHours}h ${remainingMinutes}m` 
-    : `${totalFocusMinutes}m`;
-
-  const completedTasksCount = store?.dailyTasks?.filter(t => t.completed).length || 0;
+  const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
+  const completedTasksCount = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
+  const currentStreak = progress?.currentStreak ?? profile.currentStreak;
 
   const handleResetGoal = () => {
     Alert.alert(
@@ -294,7 +290,7 @@ export default function ProfileScreen() {
               <View style={[styles.statIconWrapper, { backgroundColor: 'rgba(249, 115, 22, 0.1)' }]}>
                 <Flame size={16} color="#F97316" />
               </View>
-              <Text style={styles.statValue}>{profile.currentStreak}</Text>
+              <Text style={styles.statValue}>{currentStreak}</Text>
               <Text style={styles.statLabel}>Day Streak</Text>
             </View>
           </View>

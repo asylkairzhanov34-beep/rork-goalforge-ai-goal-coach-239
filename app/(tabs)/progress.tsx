@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useRef, useEffect } from 'react';
+import React, { memo, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -26,7 +26,7 @@ import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { useJournal } from '@/hooks/use-journal-store';
 import type { DailyTask } from '@/types/goal';
 import { getTaskLocalDateKey, type LocalDateKey } from '@/utils/date';
-import type { ActiveChallengeForStreak } from '@/utils/streak';
+import { useProgress } from '@/hooks/use-progress';
 
 const EMPTY_TASKS: DailyTask[] = [];
 
@@ -35,6 +35,7 @@ type TimePeriod = 'day' | 'week' | 'month';
 export default function ProgressScreen() {
   const store = useGoalStore();
   const challengeStore = useChallengeStore();
+  const progress = useProgress();
   const { entries: journalEntries } = useJournal();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('day');
   const insets = useSafeAreaInsets();
@@ -44,16 +45,6 @@ export default function ProgressScreen() {
   const currentGoal = store?.currentGoal;
   const dailyTasks = store?.dailyTasks ?? EMPTY_TASKS;
   const activeChallenge = challengeStore?.getActiveChallenge?.();
-
-  // Sync active challenges for unified streak calculation
-  useEffect(() => {
-    if (store?.updateActiveChallenges && challengeStore?.activeChallenges) {
-      const challengesForStreak: ActiveChallengeForStreak[] = challengeStore.activeChallenges
-        .filter(c => c.status === 'active')
-        .map(c => ({ days: c.days }));
-      store.updateActiveChallenges(challengesForStreak);
-    }
-  }, [challengeStore?.activeChallenges, store]);
 
   const goalTasks = useMemo(() => {
     if (!currentGoal?.id) return [];
@@ -188,10 +179,10 @@ export default function ProgressScreen() {
 
   const streakData = useMemo(() => {
     return {
-      currentStreak: profile?.currentStreak ?? 0,
-      bestStreak: profile?.bestStreak ?? 0,
+      currentStreak: progress?.currentStreak ?? profile?.currentStreak ?? 0,
+      bestStreak: progress?.bestStreak ?? profile?.bestStreak ?? 0,
     };
-  }, [profile?.currentStreak, profile?.bestStreak]);
+  }, [progress?.currentStreak, progress?.bestStreak, profile?.currentStreak, profile?.bestStreak]);
 
   const progressChartData = useMemo(() => {
     const dataPoints: { date: Date; value: number }[] = [];

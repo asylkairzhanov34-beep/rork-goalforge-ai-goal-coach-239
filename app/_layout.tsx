@@ -15,6 +15,7 @@ import { SubscriptionProvider } from '@/hooks/use-subscription-store';
 import { ChallengeProvider } from '@/hooks/use-challenge-store';
 import { JournalProvider } from '@/hooks/use-journal-store';
 import { FocusShieldProvider } from '@/hooks/use-focus-shield-store';
+import { ProgressProvider } from '@/hooks/use-progress';
 import { trpc, trpcReactClient } from '@/lib/trpc';
 
 import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
@@ -342,7 +343,8 @@ export default function RootLayout() {
                   <GoalProvider>
                     <ChallengeProvider>
                       <TimerProvider>
-                        <ChatProvider>
+                        <ProgressProvider>
+                          <ChatProvider>
                           <ManifestationProvider>
                               <JournalProvider>
                                 <FocusShieldProvider>
@@ -354,6 +356,7 @@ export default function RootLayout() {
                               </JournalProvider>
                             </ManifestationProvider>
                         </ChatProvider>
+                          </ProgressProvider>
                       </TimerProvider>
                     </ChallengeProvider>
                   </GoalProvider>

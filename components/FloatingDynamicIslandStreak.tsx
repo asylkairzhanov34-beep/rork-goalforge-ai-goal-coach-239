@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { Flame, Trophy, X, Sun, Moon } from 'lucide-react-native';
-import { useGoalStore } from '@/hooks/use-goal-store';
+import { useProgress } from '@/hooks/use-progress';
 import * as Haptics from 'expo-haptics';
 import { useTimer } from '@/hooks/use-timer-store';
 
@@ -28,7 +28,7 @@ interface FloatingDynamicIslandStreakProps {
 export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismiss }: FloatingDynamicIslandStreakProps) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const { profile } = useGoalStore();
+  const progress = useProgress();
   const timerStore = useTimer();
   const isTimerRunning = timerStore?.isRunning ?? false;
   
@@ -45,8 +45,8 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const celebrationAnim = useRef(new Animated.Value(0)).current;
 
-  const currentStreak = profile?.currentStreak ?? 0;
-  const bestStreak = profile?.bestStreak ?? 0;
+  const currentStreak = progress?.currentStreak ?? 0;
+  const bestStreak = progress?.bestStreak ?? 0;
 
   const isControlledExternally = externalVisible !== undefined;
   const shouldShow = isControlledExternally ? externalVisible : internalVisible;
