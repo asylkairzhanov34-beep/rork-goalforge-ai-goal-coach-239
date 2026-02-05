@@ -13,7 +13,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
     videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256925/1_dtxbqj.mp4',
     title: 'Find Your Center',
     subtitle: 'Let the mountains ground you',
-    duration: 12,
+    duration: 8,
     color: '#4A90A4',
   },
   {
@@ -21,7 +21,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
     videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256921/2_wqb08l.mp4',
     title: 'Flow Like Water',
     subtitle: 'Release all tension',
-    duration: 12,
+    duration: 10,
     color: '#2E7D9A',
   },
   {
@@ -29,7 +29,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
     videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256925/3_wabwnn.mp4',
     title: 'Embrace Stillness',
     subtitle: 'The forest whispers peace',
-    duration: 12,
+    duration: 9,
     color: '#3D6B4F',
   },
   {
@@ -37,7 +37,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
     videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256929/4_bfxu2r.mp4',
     title: 'Infinite Calm',
     subtitle: 'Waves of tranquility',
-    duration: 12,
+    duration: 11,
     color: '#5BA3C6',
   },
   {
@@ -45,7 +45,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
     videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256924/5_tg2gxq.mp4',
     title: 'Ready to Focus',
     subtitle: 'Your mind is clear',
-    duration: 12,
+    duration: 10,
     color: '#E8A87C',
   },
 ];

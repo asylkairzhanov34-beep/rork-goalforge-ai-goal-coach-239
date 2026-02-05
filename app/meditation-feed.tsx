@@ -162,10 +162,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
             setIsComplete(true);
             onSlideReady(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            
-            if (soundRef.current) {
-              soundRef.current.stopAsync();
-            }
             return 0;
           }
           return prev - 1;
@@ -221,6 +217,14 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    if (soundRef.current) {
+      soundRef.current.stopAsync();
+    }
+    if (videoRef.current) {
+      videoRef.current.pauseAsync();
+    }
+    
     onComplete();
   };
 
@@ -236,8 +240,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         source={{ uri: item.videoUrl }}
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
-        isLooping
-        isMuted={false}
+        isLooping={true}
+        isMuted={true}
         shouldPlay={isActive && !isPaused}
       />
       
