@@ -1,5 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useGoalStore } from '@/hooks/use-goal-store';
+import { useProgress } from '@/hooks/use-progress';
 import { ChatMessage } from '@/types/chat';
 
 import { useMemo, useCallback, useState, useRef } from 'react';
@@ -43,6 +44,7 @@ interface TaskCreationState {
 
 export const [ChatProvider, useChat] = createContextHook(() => {
   const goalStore = useGoalStore();
+  const progress = useProgress();
   const [messages, setMessages] = useState<OpenAIMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -142,13 +144,16 @@ Respond in the same language as user's request.`;
 
   const buildSystemPrompt = useCallback(() => {
     const tasks = goalStore.dailyTasks || [];
-    const profile = goalStore.profile;
     const currentGoal = goalStore.currentGoal;
     const today = new Date().toISOString().split('T')[0];
     
     const todayTasks = tasks.filter(t => t.date?.startsWith(today));
     const completedToday = todayTasks.filter(t => t.completed).length;
-    const totalCompleted = tasks.filter(t => t.completed).length;
+    
+    const currentStreak = progress?.currentStreak ?? 0;
+    const bestStreak = progress?.bestStreak ?? 0;
+    const totalCompletedTasks = progress?.totalCompletedTasks ?? tasks.filter(t => t.completed).length;
+    const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
     
     let prompt = `You are GoalForge AI - a friendly productivity coach with FULL task management access. Today: ${today}.\n\n`;
     prompt += `CAPABILITIES:\n`;
@@ -166,9 +171,7 @@ Respond in the same language as user's request.`;
       }
     }
     
-    prompt += `\nStats: ${tasks.length} total tasks, ${totalCompleted} completed`;
-    const currentStreak = profile?.currentStreak ?? 0;
-    const bestStreak = profile?.bestStreak ?? 0;
+    prompt += `\nStats: ${totalCompletedTasks} tasks completed, Focus time: ${focusTimeDisplay}`;
     if (currentStreak > 0) {
       prompt += `, ${currentStreak} day streak (best: ${bestStreak})`;
     }
@@ -187,7 +190,7 @@ Respond in the same language as user's request.`;
     }
     
     return prompt;
-  }, [goalStore.dailyTasks, goalStore.profile, goalStore.currentGoal]);
+  }, [goalStore.dailyTasks, goalStore.currentGoal, progress?.currentStreak, progress?.bestStreak, progress?.totalCompletedTasks, progress?.focusTimeDisplay]);
 
   const processTaskCreationConversation = useCallback(async (userText: string): Promise<string | null> => {
     const state = taskCreationState.current;
@@ -686,6 +689,8 @@ Respond in Russian.`;
     userContext: {
       profile: goalStore.profile,
       currentGoal: goalStore.currentGoal,
+      currentStreak: progress?.currentStreak ?? 0,
+      focusTimeDisplay: progress?.focusTimeDisplay ?? '0m',
     }
-  }), [uiMessages, isProcessing, chatError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, goalStore.profile, goalStore.currentGoal]);
+  }), [uiMessages, isProcessing, chatError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, goalStore.profile, goalStore.currentGoal, progress?.currentStreak, progress?.focusTimeDisplay]);
 });

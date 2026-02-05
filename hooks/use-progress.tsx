@@ -1,5 +1,5 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import { useGoalStore } from './use-goal-store';
 import { useTimer } from './use-timer-store';
 import { useChallengeStore } from './use-challenge-store';
@@ -23,6 +23,12 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
   const challengeStore = useChallengeStore();
   
   const lastSyncRef = useRef<string>('');
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const lastSessionCountRef = useRef(0);
+
+  const triggerUpdate = useCallback(() => {
+    setForceUpdate(prev => prev + 1);
+  }, []);
 
   const syncChallengesForStreak = useCallback(() => {
     if (!goalStore?.updateActiveChallenges || !challengeStore?.activeChallenges) {
@@ -76,6 +82,19 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
   useEffect(() => {
     syncTimerSessionsToGoalStore();
   }, [syncTimerSessionsToGoalStore]);
+
+  useEffect(() => {
+    const sessionCount = timerStore?.sessions?.length ?? 0;
+    if (sessionCount > lastSessionCountRef.current) {
+      console.log('[Progress] New timer session detected, triggering update');
+      lastSessionCountRef.current = sessionCount;
+      triggerUpdate();
+      
+      setTimeout(() => {
+        goalStore?.recalculateStreak?.();
+      }, 100);
+    }
+  }, [timerStore?.sessions?.length, triggerUpdate, goalStore]);
 
   const totalFocusMinutes = useMemo(() => {
     const pomodoroStats = goalStore?.getPomodoroStats?.() || { totalWorkTime: 0 };
@@ -158,17 +177,20 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     goalStore?.recalculateStreak?.();
   }, [syncChallengesForStreak, goalStore]);
 
-  const progressData: ProgressData = useMemo(() => ({
-    currentStreak,
-    bestStreak,
-    totalCompletedTasks,
-    todayCompletedTasks,
-    focusTimeMinutes: totalFocusMinutes,
-    focusTimeDisplay,
-    todayFocusMinutes,
-    weekProgress,
-    lastActivityDate,
-  }), [
+  const progressData: ProgressData = useMemo(() => {
+    console.log('[Progress] Building progress data, forceUpdate:', forceUpdate);
+    return {
+      currentStreak,
+      bestStreak,
+      totalCompletedTasks,
+      todayCompletedTasks,
+      focusTimeMinutes: totalFocusMinutes,
+      focusTimeDisplay,
+      todayFocusMinutes,
+      weekProgress,
+      lastActivityDate,
+    };
+  }, [
     currentStreak,
     bestStreak,
     totalCompletedTasks,
@@ -178,6 +200,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     todayFocusMinutes,
     weekProgress,
     lastActivityDate,
+    forceUpdate,
   ]);
 
   console.log('[Progress] Current data:', {
@@ -191,6 +214,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     ...progressData,
     recalculateStreak,
     syncChallengesForStreak,
+    triggerUpdate,
     isLoading: goalStore?.isLoading ?? true,
     isReady: goalStore?.isReady ?? false,
   };

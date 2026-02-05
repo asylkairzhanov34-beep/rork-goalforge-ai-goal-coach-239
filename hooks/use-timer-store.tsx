@@ -633,27 +633,35 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     
     await playSound(state.notificationSound);
     
+    const completedMode = state.mode;
+    const completedDuration = state.totalTime;
+    
     setState(prev => {
       const session: TimerSession = {
         id: Date.now().toString(),
         goalId: prev.currentGoalId,
-        duration: prev.totalTime,
+        duration: completedDuration,
         completedAt: new Date(),
-        type: prev.mode === 'focus' ? 'focus' : 'break',
+        type: completedMode === 'focus' ? 'focus' : 'break',
       };
 
-      const sessionsCompleted = prev.mode === 'focus' 
+      const sessionsCompleted = completedMode === 'focus' 
         ? prev.sessionsCompleted + 1 
         : prev.sessionsCompleted;
       
       let nextMode: 'focus' | 'shortBreak' | 'longBreak' = 'focus';
-      if (prev.mode === 'focus') {
+      if (completedMode === 'focus') {
         nextMode = sessionsCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
       }
 
       const nextDuration = TIMER_DURATIONS[nextMode];
 
-      console.log('[TimerStore] Auto-switching to:', nextMode, 'after', sessionsCompleted, 'focus sessions');
+      console.log('[TimerStore] Session completed:', {
+        mode: completedMode,
+        duration: completedDuration,
+        sessionsCompleted,
+        nextMode,
+      });
 
       return {
         ...prev,
@@ -671,7 +679,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     await endLiveActivity(true);
     await clearBackgroundState();
     await cancelLiveTimerNotification();
-  }, [state.notificationId, state.notificationSound, cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
+  }, [state.notificationId, state.notificationSound, state.mode, state.totalTime, cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
 
   useEffect(() => {
     const initializeStore = async () => {
