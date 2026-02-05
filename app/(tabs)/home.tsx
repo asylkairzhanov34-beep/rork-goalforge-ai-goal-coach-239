@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import type { ActiveChallengeForStreak } from '@/utils/streak';
 import { usePathname, router, useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -244,6 +245,17 @@ export default function TodayScreen() {
   
   // Get active challenge tasks for today
   const activeChallenge = challengeStore?.getActiveChallenge?.();
+
+  // Sync active challenges for unified streak calculation
+  useEffect(() => {
+    if (store?.updateActiveChallenges && challengeStore?.activeChallenges) {
+      const challengesForStreak: ActiveChallengeForStreak[] = challengeStore.activeChallenges
+        .filter(c => c.status === 'active')
+        .map(c => ({ days: c.days }));
+      store.updateActiveChallenges(challengesForStreak);
+    }
+  }, [challengeStore?.activeChallenges, store]);
+
   const challengeTodayTasks = React.useMemo(() => {
     if (!activeChallenge || !challengeStore) return [];
     const tasks = challengeStore.getTodayTasks(activeChallenge.id);

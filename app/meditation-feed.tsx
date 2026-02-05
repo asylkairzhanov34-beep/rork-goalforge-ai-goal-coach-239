@@ -117,9 +117,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
             if (timerRef.current) {
               clearInterval(timerRef.current);
             }
-            setIsComplete(true);
-            onSlideReady(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return 0;
           }
           return prev - 1;
@@ -134,7 +131,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         clearInterval(timerRef.current);
       }
     };
-  }, [isActive, isPaused, timeLeft, isComplete, onSlideReady]);
+  }, [isActive, isPaused, timeLeft, isComplete]);
 
   const handleVideoPlaybackStatus = useCallback((status: any) => {
     if (!status.isLoaded) return;
@@ -159,7 +156,17 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         progressAnimRef.current.start();
       }
     }
-  }, [isActive, actualDuration, progressAnim]);
+    
+    if (status.didJustFinish && isActive && !isComplete) {
+      console.log('[MeditationFeed] Video finished playing');
+      setIsComplete(true);
+      onSlideReady(true);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setTimeLeft(0);
+    }
+  }, [isActive, actualDuration, progressAnim, isComplete, onSlideReady]);
 
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -212,7 +219,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         source={{ uri: item.videoUrl }}
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
-        isLooping={true}
+        isLooping={false}
         isMuted={false}
         shouldPlay={isActive && !isPaused}
         onPlaybackStatusUpdate={handleVideoPlaybackStatus}

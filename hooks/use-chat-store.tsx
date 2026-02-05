@@ -167,8 +167,10 @@ Respond in the same language as user's request.`;
     }
     
     prompt += `\nStats: ${tasks.length} total tasks, ${totalCompleted} completed`;
-    if (profile?.currentStreak) {
-      prompt += `, ${profile.currentStreak} day streak`;
+    const currentStreak = profile?.currentStreak ?? 0;
+    const bestStreak = profile?.bestStreak ?? 0;
+    if (currentStreak > 0) {
+      prompt += `, ${currentStreak} day streak (best: ${bestStreak})`;
     }
     prompt += `\n`;
     

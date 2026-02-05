@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useRef } from 'react';
+import React, { memo, useMemo, useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -25,7 +25,8 @@ import { useGoalStore } from '@/hooks/use-goal-store';
 import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { useJournal } from '@/hooks/use-journal-store';
 import type { DailyTask } from '@/types/goal';
-import { getTaskLocalDateKey, getLocalDateKey, type LocalDateKey } from '@/utils/date';
+import { getTaskLocalDateKey, type LocalDateKey } from '@/utils/date';
+import type { ActiveChallengeForStreak } from '@/utils/streak';
 
 const EMPTY_TASKS: DailyTask[] = [];
 
@@ -43,6 +44,16 @@ export default function ProgressScreen() {
   const currentGoal = store?.currentGoal;
   const dailyTasks = store?.dailyTasks ?? EMPTY_TASKS;
   const activeChallenge = challengeStore?.getActiveChallenge?.();
+
+  // Sync active challenges for unified streak calculation
+  useEffect(() => {
+    if (store?.updateActiveChallenges && challengeStore?.activeChallenges) {
+      const challengesForStreak: ActiveChallengeForStreak[] = challengeStore.activeChallenges
+        .filter(c => c.status === 'active')
+        .map(c => ({ days: c.days }));
+      store.updateActiveChallenges(challengesForStreak);
+    }
+  }, [challengeStore?.activeChallenges, store]);
 
   const goalTasks = useMemo(() => {
     if (!currentGoal?.id) return [];
@@ -175,74 +186,12 @@ export default function ProgressScreen() {
   
   const totalCompletedAllTasks = completedTasks + challengeCompletedTasks;
 
-  const calculateStreak = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const completedDateSet = new Set<string>();
-    
-    if (currentGoal?.id) {
-      dailyTasks.forEach(task => {
-        if (task.goalId === currentGoal.id && task.completed) {
-          const dateKey = getTaskLocalDateKey(task.date);
-          if (dateKey) completedDateSet.add(dateKey);
-        }
-      });
-    }
-    
-    if (activeChallenge) {
-      activeChallenge.days.forEach(day => {
-        const hasCompletedTask = day.tasks.some(t => t.completed);
-        if (hasCompletedTask) {
-          const dateKey = getLocalDateKey(new Date(day.date));
-          completedDateSet.add(dateKey);
-        }
-      });
-    }
-    
-    let currentStreak = 0;
-    let bestStreak = 0;
-    let tempStreak = 0;
-    
-    const checkDate = new Date(today);
-    const todayKey = getLocalDateKey(checkDate);
-    const hasTodayActivity = completedDateSet.has(todayKey);
-    
-    if (!hasTodayActivity) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-    
-    while (true) {
-      const dateKey = getLocalDateKey(checkDate);
-      if (completedDateSet.has(dateKey)) {
-        currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-      if (currentStreak > 365) break;
-    }
-    
-    const allDates = Array.from(completedDateSet).sort();
-    for (let i = 0; i < allDates.length; i++) {
-      if (i === 0) {
-        tempStreak = 1;
-      } else {
-        const prevDate = new Date(allDates[i - 1]);
-        const currDate = new Date(allDates[i]);
-        const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays === 1) {
-          tempStreak++;
-        } else {
-          tempStreak = 1;
-        }
-      }
-      bestStreak = Math.max(bestStreak, tempStreak);
-    }
-    
-    return { currentStreak, bestStreak: Math.max(bestStreak, currentStreak) };
-  }, [currentGoal?.id, dailyTasks, activeChallenge]);
+  const streakData = useMemo(() => {
+    return {
+      currentStreak: profile?.currentStreak ?? 0,
+      bestStreak: profile?.bestStreak ?? 0,
+    };
+  }, [profile?.currentStreak, profile?.bestStreak]);
 
   const progressChartData = useMemo(() => {
     const dataPoints: { date: Date; value: number }[] = [];
@@ -301,14 +250,14 @@ export default function ProgressScreen() {
     {
       icon: Zap,
       label: 'Current Streak',
-      value: calculateStreak.currentStreak,
+      value: streakData.currentStreak,
       unit: 'days',
       color: theme.colors.warning,
     },
     {
       icon: Award,
       label: 'Best Streak',
-      value: calculateStreak.bestStreak,
+      value: streakData.bestStreak,
       unit: 'days',
       color: theme.colors.primary,
     },
@@ -440,7 +389,7 @@ export default function ProgressScreen() {
                     .filter((t) => t.goalId === currentGoal?.id && t.completed)
                     .map((t) => getTaskLocalDateKey(t.date))
                     .filter((k): k is LocalDateKey => k != null)}
-                  currentStreak={calculateStreak.currentStreak}
+                  currentStreak={streakData.currentStreak}
                   tasks={dailyTasks.filter((t) => t.goalId === currentGoal?.id)}
                   journalEntries={journalEntries}
                 />
@@ -491,7 +440,7 @@ export default function ProgressScreen() {
               )}
 
               <AchievementsSection
-                currentStreak={calculateStreak.currentStreak}
+                currentStreak={streakData.currentStreak}
                 todayCompleted={todayStats.completed}
                 todayTotal={todayStats.total}
                 monthCompleted={monthStats.completed}

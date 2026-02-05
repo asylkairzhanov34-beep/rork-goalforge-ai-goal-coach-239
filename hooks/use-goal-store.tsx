@@ -10,9 +10,9 @@ import {
   getTaskLocalDateKey as getTaskLocalDateKeyUtil,
   getWeekRangeLocal,
   isDateInRangeLocal,
-  parseLocalDateKey,
   safeDateFromAny,
 } from '@/utils/date';
+import { calculateUnifiedStreak, getWeekProgress, type ActiveChallengeForStreak } from '@/utils/streak';
 import { useAuth } from '@/hooks/use-auth-store';
 import { 
   getUserGoals, 
@@ -52,6 +52,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [pomodoroSessions, setPomodoroSessions] = useState<PomodoroSession[]>([]);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [activeChallengesForStreak, setActiveChallengesForStreak] = useState<ActiveChallengeForStreak[]>([]);
 
   const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
 
@@ -166,86 +167,15 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   );
 
   const calculateStreakFromHistory = useCallback(
-    (tasks: DailyTask[], goalId: string | undefined): { currentStreak: number; lastStreakDate: string | undefined } => {
-      if (!goalId) return { currentStreak: 0, lastStreakDate: undefined };
-
-      const goalTasks = tasks.filter((t) => t.goalId === goalId);
-
-      const tasksByDate = new Map<string, DailyTask[]>();
-      goalTasks.forEach((task) => {
-        const dateKey = getTaskLocalDateKey(task);
-        const existing = tasksByDate.get(dateKey) || [];
-        existing.push(task);
-        tasksByDate.set(dateKey, existing);
-      });
-
-      const completedDates: string[] = [];
-      tasksByDate.forEach((dateTasks, dateKey) => {
-        if (dateTasks.length > 0 && dateTasks.every((t) => t.completed)) {
-          completedDates.push(dateKey);
-        }
-      });
-
-      completedDates.sort((a, b) => parseLocalDateKey(b).getTime() - parseLocalDateKey(a).getTime());
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = getLocalDateKey(today);
-
-      if (completedDates.length === 0) {
-        const hasAnyTasks = goalTasks.length > 0;
-        const earliestTaskDate = hasAnyTasks
-          ? goalTasks
-              .map((t) => parseLocalDateKey(getTaskLocalDateKey(t)))
-              .sort((a, b) => a.getTime() - b.getTime())[0]
-          : undefined;
-
-        const isStarted = !!earliestTaskDate && earliestTaskDate.getTime() <= today.getTime();
-
-        console.log('[Streak] No completed dates found', {
-          hasAnyTasks,
-          earliestTaskDate: earliestTaskDate?.toISOString(),
-          today: todayStr,
-          isStarted,
-        });
-
-        return { currentStreak: hasAnyTasks && isStarted ? 1 : 0, lastStreakDate: undefined };
-      }
-
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = getLocalDateKey(yesterday);
-
-      const lastCompletedDate = completedDates[0];
-      if (lastCompletedDate !== todayStr && lastCompletedDate !== yesterdayStr) {
-        console.log('[Streak] No recent activity, streak broken', {
-          lastCompletedDate,
-          today: todayStr,
-          yesterday: yesterdayStr,
-        });
-        return { currentStreak: 0, lastStreakDate: undefined };
-      }
-
-      let streak = 0;
-      const completedSet = new Set(completedDates);
-      let checkDate = parseLocalDateKey(lastCompletedDate);
-
-      while (completedSet.has(getLocalDateKey(checkDate))) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      }
-
-      console.log('[Streak] Calculated from history:', {
-        streak,
-        lastCompletedDate,
-        totalCompletedDates: completedDates.length,
-        allCompletedDates: Array.from(completedDates),
-      });
-
-      return { currentStreak: streak, lastStreakDate: lastCompletedDate };
+    (tasks: DailyTask[], goalId: string | undefined, challenges: ActiveChallengeForStreak[] = []) => {
+      return calculateUnifiedStreak(tasks, goalId, challenges, profile.bestStreak || 0);
     },
-    [getTaskLocalDateKey],
+    [profile.bestStreak],
   );
+
+  const updateActiveChallenges = useCallback((challenges: ActiveChallengeForStreak[]) => {
+    setActiveChallengesForStreak(challenges);
+  }, []);
 
   useEffect(() => {
     if (goalsQuery.data && Array.isArray(goalsQuery.data) && goalsQuery.data.length > 0) {
@@ -327,35 +257,43 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
 
   const { mutate: saveProfile } = saveProfileMutation;
 
-  // Recalculate streak when tasks or goal changes
-  useEffect(() => {
-    if (!currentGoal?.id || dailyTasks.length === 0) return;
+  const recalculateStreak = useCallback(() => {
+    if (!currentGoal?.id) return;
     
-    const checkKey = `${currentGoal.id}_${dailyTasks.map((t) => `${t.id}:${t.date}:${t.completed}`).join(',')}`;
+    const calculated = calculateStreakFromHistory(dailyTasks, currentGoal.id, activeChallengesForStreak);
+    
+    console.log('[GoalStore] Recalculating streak:', {
+      currentStreak: calculated.currentStreak,
+      bestStreak: calculated.bestStreak,
+      storedStreak: profile.currentStreak,
+    });
+    
+    if (calculated.currentStreak !== profile.currentStreak || 
+        calculated.bestStreak !== profile.bestStreak ||
+        calculated.lastActivityDate !== profile.lastStreakDate) {
+      
+      const newProfile = { 
+        ...profile,
+        currentStreak: calculated.currentStreak,
+        bestStreak: calculated.bestStreak,
+        lastStreakDate: calculated.lastActivityDate,
+      };
+      
+      setProfile(newProfile);
+      saveProfile(newProfile);
+    }
+  }, [currentGoal?.id, dailyTasks, activeChallengesForStreak, profile, calculateStreakFromHistory, saveProfile]);
+
+  // Recalculate streak when tasks, goal, or challenges change
+  useEffect(() => {
+    if (!currentGoal?.id) return;
+    
+    const checkKey = `${currentGoal.id}_${dailyTasks.map((t) => `${t.id}:${t.completed}`).join(',')}_${JSON.stringify(activeChallengesForStreak.map(c => c.days?.map(d => d.tasks?.filter(t => t.completed).length)))}`;
     if (streakCheckedRef.current === checkKey) return;
     
     streakCheckedRef.current = checkKey;
-    
-    const calculated = calculateStreakFromHistory(dailyTasks, currentGoal.id);
-    
-    setProfile(prev => {
-      if (calculated.currentStreak === prev.currentStreak && 
-          calculated.lastStreakDate === prev.lastStreakDate) {
-        return prev;
-      }
-      
-      const bestStreak = Math.max(calculated.currentStreak, prev.bestStreak || 0);
-      const newProfile = { 
-        ...prev,
-        currentStreak: calculated.currentStreak,
-        bestStreak,
-        lastStreakDate: calculated.lastStreakDate,
-      };
-      
-      saveProfile(newProfile);
-      return newProfile;
-    });
-  }, [dailyTasks, currentGoal?.id, saveProfile, calculateStreakFromHistory]);
+    recalculateStreak();
+  }, [dailyTasks, currentGoal?.id, activeChallengesForStreak, recalculateStreak]);
 
   const saveTasksMutation = useMutation({
     mutationFn: async (tasks: DailyTask[]) => {
@@ -513,11 +451,10 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     updateStreak(updatedTasks);
   };
 
-  const updateStreak = (tasksOverride?: DailyTask[]) => {
+  const updateStreak = useCallback((tasksOverride?: DailyTask[]) => {
     const tasksForCalc = tasksOverride ?? dailyTasks;
 
-    // Recalculate streak from actual task history
-    const calculated = calculateStreakFromHistory(tasksForCalc, currentGoal?.id);
+    const calculated = calculateStreakFromHistory(tasksForCalc, currentGoal?.id, activeChallengesForStreak);
     
     console.log('[Streak] Update after task change:', {
       calculated: calculated.currentStreak,
@@ -525,16 +462,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     });
     
     if (calculated.currentStreak !== profile.currentStreak || 
-        calculated.lastStreakDate !== profile.lastStreakDate) {
-      const bestStreak = Math.max(calculated.currentStreak, profile.bestStreak || 0);
+        calculated.bestStreak !== profile.bestStreak ||
+        calculated.lastActivityDate !== profile.lastStreakDate) {
       
-      updateProfile({ 
+      const newProfile = {
+        ...profile,
         currentStreak: calculated.currentStreak, 
-        bestStreak,
-        lastStreakDate: calculated.lastStreakDate
-      });
+        bestStreak: calculated.bestStreak,
+        lastStreakDate: calculated.lastActivityDate
+      };
+      setProfile(newProfile);
+      saveProfile(newProfile);
     }
-  };
+  }, [dailyTasks, currentGoal?.id, activeChallengesForStreak, profile, calculateStreakFromHistory, saveProfile]);
 
   const getTodayTasks = () => {
     const today = new Date();
@@ -761,6 +701,10 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     }
   };
 
+  const getCurrentWeekProgress = useCallback(() => {
+    return getWeekProgress(dailyTasks, currentGoal?.id, activeChallengesForStreak);
+  }, [dailyTasks, currentGoal?.id, activeChallengesForStreak]);
+
   return {
     profile,
     currentGoal,
@@ -782,5 +726,8 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     updateTask,
     deleteTask,
     saveTaskFeedback,
+    updateActiveChallenges,
+    getCurrentWeekProgress,
+    recalculateStreak,
   };
 });
