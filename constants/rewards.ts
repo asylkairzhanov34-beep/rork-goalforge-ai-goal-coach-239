@@ -23,6 +23,8 @@ export const REWARDS: Reward[] = [
   { id: '9', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970766/0126_18_i9c43s.mp4', label: '30 Day Streak', unlocked: true, color: '#F472B6', achievement: '30 consecutive days', rarity: 'Legendary', ownedBy: '2%' },
   { id: '10', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970927/0126_20_bdhdiu.mp4', label: 'Elite', unlocked: true, color: '#10B981', achievement: '100 tasks completed', rarity: 'Mythic', ownedBy: '1.5%' },
   { id: '11', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769971061/0126_21_eigchr.mp4', label: 'Legend', unlocked: true, color: '#FBBF24', achievement: '60 day streak', rarity: 'Legendary', ownedBy: '1%' },
+  { id: '12', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770309414/1018236627_yt9vjm.mp4', label: 'Transcendent', unlocked: true, color: '#06B6D4', achievement: '90 day streak', rarity: 'Mythic', ownedBy: '0.8%' },
+  { id: '13', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770309416/1018379202_i4fsqu.mp4', label: 'Immortal', unlocked: true, color: '#D946EF', achievement: '100 hours focused', rarity: 'Mythic', ownedBy: '0.5%' },
 ];
 
 export function getLastUnlockedReward(): Reward {
