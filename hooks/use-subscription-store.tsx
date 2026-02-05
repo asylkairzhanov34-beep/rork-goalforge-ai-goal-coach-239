@@ -45,6 +45,15 @@ interface FirebaseSubscriptionData {
   platform?: string;
 }
 
+const INIT_TIMEOUT = 5000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+  ]);
+};
+
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus>('loading');
@@ -56,6 +65,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const lastSyncedStatus = useRef<SubscriptionStatus | null>(null);
   const firebaseUserId = useRef<string | null>(null);
   const revenueCatInitialized = useRef(false);
+  const initStarted = useRef(false);
 
   const syncSubscriptionToFirebase = useCallback(async (
     newStatus: SubscriptionStatus,
@@ -143,29 +153,47 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [syncSubscriptionToFirebase]);
 
   useEffect(() => {
+    if (initStarted.current) return;
+    initStarted.current = true;
+    
     const init = async () => {
       console.log('[Subscription] 🚀 Initializing...');
       console.log('[Subscription] Platform:', Platform.OS);
-      console.log('[Subscription] __DEV__:', __DEV__);
+
+      const timeoutId = setTimeout(() => {
+        if (!isInitialized) {
+          console.warn('[Subscription] Init timeout reached, forcing completion');
+          setStatus('free');
+          setIsInitialized(true);
+        }
+      }, INIT_TIMEOUT);
 
       try {
-        const firebaseData = await loadSubscriptionFromFirebase();
+        const firebaseData = await withTimeout(
+          loadSubscriptionFromFirebase(),
+          2000,
+          null
+        );
         
         if (firebaseData?.isPremium) {
-          console.log('[Subscription] 📥 Found premium status in Firebase (fallback)');
+          console.log('[Subscription] 📥 Found premium status in Firebase');
           setStatus('premium');
           lastSyncedStatus.current = 'premium';
         }
 
-        const rcInitialized = await initializeRevenueCat();
+        const rcInitialized = await withTimeout(
+          initializeRevenueCat(),
+          3000,
+          false
+        );
         revenueCatInitialized.current = rcInitialized;
         
         if (!rcInitialized) {
-          console.error('[Subscription] RevenueCat init failed');
-          setError('Failed to initialize purchases');
+          console.warn('[Subscription] RevenueCat init failed or timed out');
           if (!firebaseData?.isPremium) {
             setStatus('free');
           }
+          clearTimeout(timeoutId);
           setIsInitialized(true);
           return;
         }
@@ -174,15 +202,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         if (firebaseUser) {
           console.log('[Subscription] Identifying user in RevenueCat:', firebaseUser.uid);
           try {
-            await identifyUser(firebaseUser.uid);
+            await withTimeout(identifyUser(firebaseUser.uid), 2000, undefined);
           } catch (identifyErr) {
             console.warn('[Subscription] RevenueCat identify failed:', identifyErr);
           }
         }
 
         const [info, offerings] = await Promise.all([
-          getCustomerInfo(),
-          getOfferings(),
+          withTimeout(getCustomerInfo(), 3000, null),
+          withTimeout(getOfferings(), 3000, null),
         ]);
 
         if (info) {
@@ -193,7 +221,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           setStatus(newStatus);
           console.log('[Subscription] Status from RevenueCat:', hasPremium ? 'PREMIUM' : 'FREE');
           
-          await syncSubscriptionToFirebase(newStatus, info, true);
+          syncSubscriptionToFirebase(newStatus, info, true).catch(() => {});
         } else if (!firebaseData?.isPremium) {
           setStatus('free');
         }
@@ -212,23 +240,21 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           }));
           setPackages(formatted);
           console.log('[Subscription] Loaded', formatted.length, 'packages');
-        } else {
-          console.warn('[Subscription] No packages available');
-          setError('No subscription plans found. Please check your RevenueCat dashboard.');
         }
 
+        clearTimeout(timeoutId);
         setIsInitialized(true);
         console.log('[Subscription] ✅ Initialization complete');
       } catch (err) {
         console.error('[Subscription] Init error:', err);
-        setError('Initialization error');
+        clearTimeout(timeoutId);
         setStatus('free');
         setIsInitialized(true);
       }
     };
 
     init();
-  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase]);
+  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;

@@ -18,6 +18,7 @@ const AUTH_STORAGE_KEY = 'auth_user_firebase';
 const AUTH_LOGIN_GATE_KEY = 'auth_login_gate_v1';
 const FIRST_LAUNCH_KEY = 'app_first_launch_v1';
 const WELCOME_ONBOARDING_KEY = 'welcome_onboarding_completed_v1';
+const AUTH_INIT_TIMEOUT = 4000;
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [authState, setAuthState] = useState<AuthState>({
@@ -90,13 +91,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (!firebaseInitialized) return;
 
     console.log('[Auth] Setting up auth state listener...');
+    let authReceived = false;
+
+    const timeoutId = setTimeout(() => {
+      if (!authReceived) {
+        console.warn('[Auth] Auth state timeout, proceeding without auth');
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+        }));
+      }
+    }, AUTH_INIT_TIMEOUT);
 
     const unsubscribe = subscribeToAuthState(async (firebaseUser) => {
+      authReceived = true;
+      clearTimeout(timeoutId);
       console.log('[Auth] Auth state changed:', firebaseUser ? firebaseUser.uid : 'null');
 
       if (firebaseUser) {
         const user = normalizeUser(firebaseUserToUser(firebaseUser));
-        await safeStorageSet(AUTH_STORAGE_KEY, user);
+        safeStorageSet(AUTH_STORAGE_KEY, user).catch(() => {});
 
         const gateSeen = await safeStorageGet<boolean>(AUTH_LOGIN_GATE_KEY, false);
         setNeedsLoginGate(!gateSeen);
@@ -110,7 +124,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       setNeedsLoginGate(false);
-      await safeStorageSet(AUTH_STORAGE_KEY, null);
+      safeStorageSet(AUTH_STORAGE_KEY, null).catch(() => {});
 
       setAuthState({
         user: null,
@@ -120,6 +134,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     });
 
     return () => {
+      clearTimeout(timeoutId);
       console.log('[Auth] Cleaning up auth listener');
       unsubscribe();
     };

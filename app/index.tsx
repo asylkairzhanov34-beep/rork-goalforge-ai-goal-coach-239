@@ -1,25 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Redirect } from 'expo-router';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
-import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
+
+const MAX_LOADING_TIMEOUT = 8000;
 
 export default function Index() {
   const [isReady, setIsReady] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [forceReady, setForceReady] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
   const { isAuthenticated, isLoading: authLoading, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted } = useAuth();
   const { isInitialized: subInitialized } = useSubscription();
-  const { 
-    checking: subscriptionStatusChecking
-  } = useSubscriptionStatus();
 
   useEffect(() => {
     setIsClient(true);
+    
+    timeoutRef.current = setTimeout(() => {
+      console.warn('[Index] Loading timeout reached, forcing app to proceed');
+      setForceReady(true);
+    }, MAX_LOADING_TIMEOUT);
+    
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -31,26 +41,22 @@ export default function Index() {
         await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
         setIsReady(true);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        console.error('[Index] Init error:', err);
         setIsReady(true);
       }
     };
     initializeApp();
   }, [isClient]);
 
-  if (error) {
-    console.warn('[Index] Error occurred but continuing:', error);
-  }
-
-  if (
-    !isClient ||
-    !isReady ||
-    authLoading ||
-    setupLoading ||
-    !subInitialized ||
-    subscriptionStatusChecking
-  ) {
+  const isStillLoading = !isClient || !isReady || authLoading || setupLoading || !subInitialized;
+  
+  if (isStillLoading && !forceReady) {
     return <AppLoadingScreen testID="app-loading" />;
+  }
+  
+  if (timeoutRef.current) {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
   }
 
   if (!welcomeOnboardingCompleted) {
