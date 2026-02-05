@@ -1,5 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
+import { useEffect, useMemo, useCallback, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { useGoalStore } from './use-goal-store';
 import { useTimer } from './use-timer-store';
 import { useChallengeStore } from './use-challenge-store';
@@ -23,30 +24,39 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
   const challengeStore = useChallengeStore();
   
   const lastSyncRef = useRef<string>('');
-  const [forceUpdate, setForceUpdate] = useState(0);
   const lastSessionCountRef = useRef(0);
-
-  const triggerUpdate = useCallback(() => {
-    setForceUpdate(prev => prev + 1);
-  }, []);
 
   const syncChallengesForStreak = useCallback(() => {
     if (!goalStore?.updateActiveChallenges || !challengeStore?.activeChallenges) {
       return;
     }
     
-    const challengesForStreak: ActiveChallengeForStreak[] = challengeStore.activeChallenges
-      .filter(c => c.status === 'active')
-      .map(c => ({ days: c.days }));
+    const activeChallenges = challengeStore.activeChallenges.filter(c => c.status === 'active');
+    if (activeChallenges.length === 0) {
+      if (lastSyncRef.current !== 'empty') {
+        lastSyncRef.current = 'empty';
+        goalStore.updateActiveChallenges([]);
+      }
+      return;
+    }
     
-    const syncKey = JSON.stringify(challengesForStreak.map(c => 
-      c.days?.map(d => `${d.date}:${d.tasks?.filter(t => t.completed).length}`).join(',')
-    ));
+    const challengesForStreak: ActiveChallengeForStreak[] = activeChallenges.map(c => ({ days: c.days }));
+    
+    let syncKey = '';
+    for (const c of challengesForStreak) {
+      if (c.days) {
+        for (const d of c.days) {
+          const completedCount = d.tasks?.filter(t => t.completed).length || 0;
+          syncKey += `${d.date}:${completedCount},`;
+        }
+      }
+    }
     
     if (syncKey !== lastSyncRef.current) {
-      console.log('[Progress] Syncing challenges for streak calculation');
       lastSyncRef.current = syncKey;
-      goalStore.updateActiveChallenges(challengesForStreak);
+      InteractionManager.runAfterInteractions(() => {
+        goalStore.updateActiveChallenges(challengesForStreak);
+      });
     }
   }, [goalStore, challengeStore?.activeChallenges]);
 
@@ -62,11 +72,15 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     const timerSessions = timerStore.sessions || [];
     const existingSessions = goalStore.pomodoroSessions || [];
     
-    const existingIds = new Set(existingSessions.map(s => s.id));
+    if (timerSessions.length === 0) return;
     
-    timerSessions.forEach(session => {
-      if (!existingIds.has(session.id) && session.type === 'focus') {
-        console.log('[Progress] Syncing timer session to goal store:', session.id);
+    const existingIds = new Set(existingSessions.map(s => s.id));
+    const newSessions = timerSessions.filter(s => !existingIds.has(s.id) && s.type === 'focus');
+    
+    if (newSessions.length === 0) return;
+    
+    InteractionManager.runAfterInteractions(() => {
+      newSessions.forEach(session => {
         goalStore.addPomodoroSession({
           goalId: session.goalId || 'default',
           duration: session.duration,
@@ -75,7 +89,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
           endTime: session.completedAt.toISOString(),
           type: 'work',
         });
-      }
+      });
     });
   }, [timerStore?.sessions, goalStore]);
 
@@ -86,15 +100,13 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
   useEffect(() => {
     const sessionCount = timerStore?.sessions?.length ?? 0;
     if (sessionCount > lastSessionCountRef.current) {
-      console.log('[Progress] New timer session detected, triggering update');
       lastSessionCountRef.current = sessionCount;
-      triggerUpdate();
       
-      setTimeout(() => {
+      InteractionManager.runAfterInteractions(() => {
         goalStore?.recalculateStreak?.();
-      }, 100);
+      });
     }
-  }, [timerStore?.sessions?.length, triggerUpdate, goalStore]);
+  }, [timerStore?.sessions?.length, goalStore]);
 
   const totalFocusMinutes = useMemo(() => {
     const pomodoroStats = goalStore?.getPomodoroStats?.() || { totalWorkTime: 0 };
@@ -177,20 +189,17 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     goalStore?.recalculateStreak?.();
   }, [syncChallengesForStreak, goalStore]);
 
-  const progressData: ProgressData = useMemo(() => {
-    console.log('[Progress] Building progress data, forceUpdate:', forceUpdate);
-    return {
-      currentStreak,
-      bestStreak,
-      totalCompletedTasks,
-      todayCompletedTasks,
-      focusTimeMinutes: totalFocusMinutes,
-      focusTimeDisplay,
-      todayFocusMinutes,
-      weekProgress,
-      lastActivityDate,
-    };
-  }, [
+  const progressData: ProgressData = useMemo(() => ({
+    currentStreak,
+    bestStreak,
+    totalCompletedTasks,
+    todayCompletedTasks,
+    focusTimeMinutes: totalFocusMinutes,
+    focusTimeDisplay,
+    todayFocusMinutes,
+    weekProgress,
+    lastActivityDate,
+  }), [
     currentStreak,
     bestStreak,
     totalCompletedTasks,
@@ -200,21 +209,12 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     todayFocusMinutes,
     weekProgress,
     lastActivityDate,
-    forceUpdate,
   ]);
-
-  console.log('[Progress] Current data:', {
-    currentStreak: progressData.currentStreak,
-    bestStreak: progressData.bestStreak,
-    totalCompletedTasks: progressData.totalCompletedTasks,
-    focusTimeMinutes: progressData.focusTimeMinutes,
-  });
 
   return {
     ...progressData,
     recalculateStreak,
     syncChallengesForStreak,
-    triggerUpdate,
     isLoading: goalStore?.isLoading ?? true,
     isReady: goalStore?.isReady ?? false,
   };

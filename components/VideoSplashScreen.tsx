@@ -9,6 +9,7 @@ import {
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -18,12 +19,33 @@ interface VideoSplashScreenProps {
   onFinish: () => void;
 }
 
+const SPLASH_SHOWN_KEY = 'video_splash_shown_session';
+
 export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [shouldShow, setShouldShow] = useState<boolean | null>(null);
   const videoRef = useRef<VideoType>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1.05)).current;
   const hasFinished = useRef(false);
+
+  useEffect(() => {
+    const checkIfShouldShow = async () => {
+      try {
+        const shown = await AsyncStorage.getItem(SPLASH_SHOWN_KEY);
+        if (shown) {
+          setShouldShow(false);
+          setTimeout(onFinish, 100);
+        } else {
+          await AsyncStorage.setItem(SPLASH_SHOWN_KEY, 'true');
+          setShouldShow(true);
+        }
+      } catch {
+        setShouldShow(true);
+      }
+    };
+    checkIfShouldShow();
+  }, [onFinish]);
 
   useEffect(() => {
     Animated.timing(scaleAnim, {
@@ -75,6 +97,14 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
       return () => clearTimeout(timer);
     }
   }, [handleFinish]);
+
+  if (shouldShow === null) {
+    return <View style={styles.container} />;
+  }
+
+  if (!shouldShow) {
+    return null;
+  }
 
   if (Platform.OS === 'web') {
     return (

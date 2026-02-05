@@ -1,9 +1,11 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { InteractionManager } from 'react-native';
 import { Goal, DailyTask, UserProfile, PomodoroSession, PomodoroStats, TaskFeedback } from '@/types/goal';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
+import { debounce } from '@/utils/performance';
 import {
   getLocalDateKey,
   getMonthRangeLocal,
@@ -61,20 +63,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return DEFAULT_PROFILE;
       
-      console.log('[GoalStore] Loading profile for user:', user.id);
-      const firebaseProfile = await getUserFullProfile(user.id);
+      const localProfile = await safeStorageGet(STORAGE_KEYS.PROFILE, null);
+      if (localProfile) {
+        InteractionManager.runAfterInteractions(async () => {
+          const firebaseProfile = await getUserFullProfile(user.id).catch(() => null);
+          if (firebaseProfile) {
+            await safeStorageSet(STORAGE_KEYS.PROFILE, firebaseProfile);
+          }
+        });
+        return localProfile;
+      }
       
+      const firebaseProfile = await getUserFullProfile(user.id).catch(() => null);
       if (firebaseProfile) {
-        console.log('[GoalStore] Profile loaded from Firebase');
         await safeStorageSet(STORAGE_KEYS.PROFILE, firebaseProfile);
         return firebaseProfile;
       }
       
-      console.log('[GoalStore] No Firebase profile, checking local storage');
-      return await safeStorageGet(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE);
+      return DEFAULT_PROFILE;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     enabled: !!user?.id,
   });
 
@@ -83,20 +92,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      console.log('[GoalStore] Loading goals for user:', user.id);
-      const firebaseGoals = await getUserGoals(user.id);
+      const localGoals = await safeStorageGet<Goal[] | null>(STORAGE_KEYS.GOALS, null);
+      if (localGoals && localGoals.length > 0) {
+        InteractionManager.runAfterInteractions(async () => {
+          const firebaseGoals = await getUserGoals(user.id).catch(() => null);
+          if (firebaseGoals && firebaseGoals.length > 0) {
+            await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
+          }
+        });
+        return localGoals;
+      }
       
+      const firebaseGoals = await getUserGoals(user.id).catch(() => null);
       if (firebaseGoals && firebaseGoals.length > 0) {
-        console.log('[GoalStore] Goals loaded from Firebase:', firebaseGoals.length);
         await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
         return firebaseGoals;
       }
       
-      console.log('[GoalStore] No Firebase goals, checking local storage');
-      return await safeStorageGet(STORAGE_KEYS.GOALS, []);
+      return [];
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     enabled: !!user?.id,
   });
 
@@ -105,20 +121,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      console.log('[GoalStore] Loading tasks for user:', user.id);
-      const firebaseTasks = await getUserTasks(user.id);
+      const localTasks = await safeStorageGet<DailyTask[] | null>(STORAGE_KEYS.TASKS, null);
+      if (localTasks && localTasks.length > 0) {
+        InteractionManager.runAfterInteractions(async () => {
+          const firebaseTasks = await getUserTasks(user.id).catch(() => null);
+          if (firebaseTasks && firebaseTasks.length > 0) {
+            await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
+          }
+        });
+        return localTasks;
+      }
       
+      const firebaseTasks = await getUserTasks(user.id).catch(() => null);
       if (firebaseTasks && firebaseTasks.length > 0) {
-        console.log('[GoalStore] Tasks loaded from Firebase:', firebaseTasks.length);
         await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
         return firebaseTasks;
       }
       
-      console.log('[GoalStore] No Firebase tasks, checking local storage');
-      return await safeStorageGet(STORAGE_KEYS.TASKS, []);
+      return [];
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     enabled: !!user?.id,
   });
 
@@ -127,28 +150,33 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      console.log('[GoalStore] Loading pomodoro sessions for user:', user.id);
-      const firebaseSessions = await getUserPomodoroSessions(user.id);
+      const parseSessions = (sessions: any[]) => sessions.map((session: any) => ({
+        ...session,
+        completedAt: session.completedAt ? new Date(session.completedAt) : undefined
+      }));
       
+      const localSessions = await safeStorageGet<PomodoroSession[] | null>(STORAGE_KEYS.POMODORO_SESSIONS, null);
+      if (localSessions && localSessions.length > 0) {
+        InteractionManager.runAfterInteractions(async () => {
+          const firebaseSessions = await getUserPomodoroSessions(user.id).catch(() => null);
+          if (firebaseSessions && firebaseSessions.length > 0) {
+            await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, parseSessions(firebaseSessions));
+          }
+        });
+        return parseSessions(localSessions);
+      }
+      
+      const firebaseSessions = await getUserPomodoroSessions(user.id).catch(() => null);
       if (firebaseSessions && firebaseSessions.length > 0) {
-        console.log('[GoalStore] Pomodoro sessions loaded from Firebase:', firebaseSessions.length);
-        const sessions = firebaseSessions.map((session: any) => ({
-          ...session,
-          completedAt: session.completedAt ? new Date(session.completedAt) : undefined
-        }));
+        const sessions = parseSessions(firebaseSessions);
         await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, sessions);
         return sessions;
       }
       
-      console.log('[GoalStore] No Firebase sessions, checking local storage');
-      const sessions = await safeStorageGet(STORAGE_KEYS.POMODORO_SESSIONS, []);
-      return sessions.map((session: any) => ({
-        ...session,
-        completedAt: session.completedAt ? new Date(session.completedAt) : undefined
-      }));
+      return [];
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     enabled: !!user?.id,
   });
 
@@ -284,16 +312,31 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     }
   }, [currentGoal?.id, dailyTasks, activeChallengesForStreak, profile, calculateStreakFromHistory, saveProfile]);
 
-  // Recalculate streak when tasks, goal, or challenges change
+  const debouncedRecalculateStreak = useMemo(
+    () => debounce(() => recalculateStreak(), 500),
+    [recalculateStreak]
+  );
+
   useEffect(() => {
     if (!currentGoal?.id) return;
     
-    const checkKey = `${currentGoal.id}_${dailyTasks.map((t) => `${t.id}:${t.completed}`).join(',')}_${JSON.stringify(activeChallengesForStreak.map(c => c.days?.map(d => d.tasks?.filter(t => t.completed).length)))}`;
+    let checkKey = `${currentGoal.id}_`;
+    for (const t of dailyTasks) {
+      checkKey += `${t.id}:${t.completed ? 1 : 0},`;
+    }
+    for (const c of activeChallengesForStreak) {
+      if (c.days) {
+        for (const d of c.days) {
+          checkKey += `${d.tasks?.filter(t => t.completed).length || 0},`;
+        }
+      }
+    }
+    
     if (streakCheckedRef.current === checkKey) return;
     
     streakCheckedRef.current = checkKey;
-    recalculateStreak();
-  }, [dailyTasks, currentGoal?.id, activeChallengesForStreak, recalculateStreak]);
+    debouncedRecalculateStreak();
+  }, [dailyTasks, currentGoal?.id, activeChallengesForStreak, debouncedRecalculateStreak]);
 
   const saveTasksMutation = useMutation({
     mutationFn: async (tasks: DailyTask[]) => {
