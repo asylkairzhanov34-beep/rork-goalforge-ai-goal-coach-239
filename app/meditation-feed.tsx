@@ -64,18 +64,11 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         const soundUrl = AFFIRMATION_SOUNDS[index % AFFIRMATION_SOUNDS.length];
         const { sound } = await Audio.Sound.createAsync(
           { uri: soundUrl },
-          { isLooping: true, volume: 0.7 }
+          { isLooping: true, volume: 1.0, shouldPlay: true }
         );
         soundRef.current = sound;
         
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish && !status.isLooping) {
-            sound.setPositionAsync(0);
-            sound.playAsync();
-          }
-        });
-        
-        console.log('[MeditationFeed] Sound loaded for slide:', index);
+        console.log('[MeditationFeed] Sound loaded and playing for slide:', index);
       } catch (error) {
         console.error('[MeditationFeed] Error loading sound:', error);
       }
@@ -127,11 +120,6 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       if (videoRef.current) {
         videoRef.current.setPositionAsync(0);
         videoRef.current.playAsync();
-      }
-      
-      if (soundRef.current) {
-        soundRef.current.setPositionAsync(0);
-        soundRef.current.playAsync();
       }
     } else {
       fadeAnim.setValue(0);
@@ -213,15 +201,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         progressAnimRef.current.start();
       }
     }
-    
-    if (status.didJustFinish && isActive && !isPaused) {
-      console.log('[MeditationFeed] Video finished, restarting loop');
-      if (videoRef.current) {
-        videoRef.current.setPositionAsync(0);
-        videoRef.current.playAsync();
-      }
-    }
-  }, [isActive, isPaused, actualDuration, progressAnim]);
+  }, [isActive, actualDuration, progressAnim]);
 
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -285,7 +265,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         source={{ uri: item.videoUrl }}
         style={styles.slideVideo}
         resizeMode={ResizeMode.COVER}
-        isLooping={false}
+        isLooping={true}
         isMuted={true}
         shouldPlay={isActive && !isPaused}
         onPlaybackStatusUpdate={handleVideoPlaybackStatus}
