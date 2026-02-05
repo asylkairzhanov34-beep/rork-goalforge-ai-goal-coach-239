@@ -1,6 +1,6 @@
 export interface MeditationSlide {
   id: string;
-  imageUrl: string;
+  videoUrl: string;
   title: string;
   subtitle: string;
   duration: number; // seconds
@@ -10,7 +10,7 @@ export interface MeditationSlide {
 export const MEDITATION_SLIDES: MeditationSlide[] = [
   {
     id: '1',
-    imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1080&q=80',
+    videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256925/1_dtxbqj.mp4',
     title: 'Find Your Center',
     subtitle: 'Let the mountains ground you',
     duration: 8,
@@ -18,7 +18,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
   },
   {
     id: '2',
-    imageUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1080&q=80',
+    videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256921/2_wqb08l.mp4',
     title: 'Flow Like Water',
     subtitle: 'Release all tension',
     duration: 8,
@@ -26,7 +26,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
   },
   {
     id: '3',
-    imageUrl: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1080&q=80',
+    videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256925/3_wabwnn.mp4',
     title: 'Embrace Stillness',
     subtitle: 'The forest whispers peace',
     duration: 8,
@@ -34,7 +34,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
   },
   {
     id: '4',
-    imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&q=80',
+    videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256929/4_bfxu2r.mp4',
     title: 'Infinite Calm',
     subtitle: 'Waves of tranquility',
     duration: 8,
@@ -42,7 +42,7 @@ export const MEDITATION_SLIDES: MeditationSlide[] = [
   },
   {
     id: '5',
-    imageUrl: 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=1080&q=80',
+    videoUrl: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770256924/5_tg2gxq.mp4',
     title: 'Ready to Focus',
     subtitle: 'Your mind is clear',
     duration: 6,

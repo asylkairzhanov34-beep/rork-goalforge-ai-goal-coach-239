@@ -10,7 +10,8 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { Video, ResizeMode } from 'expo-av';
+import type { Video as VideoType } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -37,6 +38,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRef = useRef<VideoType>(null);
 
   useEffect(() => {
     if (isActive) {
@@ -64,11 +66,19 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
         duration: item.duration * 1000,
         useNativeDriver: false,
       }).start();
+
+      if (videoRef.current) {
+        videoRef.current.playAsync();
+      }
     } else {
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.95);
       if (timerRef.current) {
         clearInterval(timerRef.current);
+      }
+      if (videoRef.current) {
+        videoRef.current.pauseAsync();
+        videoRef.current.setPositionAsync(0);
       }
     }
 
@@ -108,6 +118,13 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsPaused(!isPaused);
+    if (videoRef.current) {
+      if (isPaused) {
+        videoRef.current.playAsync();
+      } else {
+        videoRef.current.pauseAsync();
+      }
+    }
   };
 
   const handleContinue = () => {
@@ -122,11 +139,14 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide }: SlideItem
 
   return (
     <View style={styles.slideContainer}>
-      <Image
-        source={{ uri: item.imageUrl }}
-        style={styles.slideImage}
-        contentFit="cover"
-        transition={300}
+      <Video
+        ref={videoRef}
+        source={{ uri: item.videoUrl }}
+        style={styles.slideVideo}
+        resizeMode={ResizeMode.COVER}
+        isLooping
+        isMuted
+        shouldPlay={isActive && !isPaused}
       />
       
       <LinearGradient
@@ -324,7 +344,7 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT,
     position: 'relative',
   },
-  slideImage: {
+  slideVideo: {
     ...StyleSheet.absoluteFillObject,
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
