@@ -243,6 +243,39 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
   }
 };
 
+export const identifyUser = async (userId: string): Promise<CustomerInfo | null> => {
+  if (!isConfigured) {
+    const success = await initializeRevenueCat();
+    if (!success) return null;
+  }
+
+  try {
+    console.log('[RevenueCat] 🔗 Identifying user:', userId);
+    const { customerInfo } = await Purchases.logIn(userId);
+    console.log('[RevenueCat] ✅ User identified');
+    console.log('[RevenueCat] App User ID:', customerInfo.originalAppUserId);
+    console.log('[RevenueCat] Active entitlements:', Object.keys(customerInfo.entitlements.active));
+    return customerInfo;
+  } catch (error) {
+    console.error('[RevenueCat] Identify user error:', error);
+    return null;
+  }
+};
+
+export const logoutUser = async (): Promise<CustomerInfo | null> => {
+  if (!isConfigured) return null;
+
+  try {
+    console.log('[RevenueCat] 👋 Logging out user...');
+    const customerInfo = await Purchases.logOut();
+    console.log('[RevenueCat] ✅ User logged out, now anonymous');
+    return customerInfo;
+  } catch (error) {
+    console.error('[RevenueCat] Logout error:', error);
+    return null;
+  }
+};
+
 export const getCachedOfferings = () => cachedOfferings;
 
 export const findPackageByIdentifier = (identifier: string): PurchasesPackage | null => {
