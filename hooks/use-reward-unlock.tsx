@@ -2,6 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProgress } from '@/hooks/use-progress';
+import { useAuth } from '@/hooks/use-auth-store';
 import { getUnlockedRewards, type Reward } from '@/constants/rewards';
 
 const SEEN_REWARDS_KEY = '@seen_unlocked_rewards';
@@ -9,6 +10,8 @@ const OFFER_SEEN_KEY = '@subscription_offer_seen';
 
 export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const progress = useProgress();
+  const { user } = useAuth();
+  const isDeveloper = user?.email === 'developer@test.local';
   const [pendingReward, setPendingReward] = useState<Reward | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [offerSeen, setOfferSeen] = useState(false);
@@ -57,7 +60,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     const tasks = progress.totalCompletedTasks ?? 0;
     const focus = progress.focusTimeMinutes ?? 0;
 
-    const rewards = getUnlockedRewards(streak, tasks, focus);
+    const rewards = getUnlockedRewards(streak, tasks, focus, isDeveloper);
     const newlyUnlocked = rewards.filter(r => r.unlocked && !seenIdsRef.current.has(r.id));
 
     if (newlyUnlocked.length > 0) {
@@ -75,7 +78,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         queueRef.current = [...queueRef.current, ...newlyUnlocked];
       }
     }
-  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, offerSeen]);
+  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, offerSeen, isDeveloper]);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);

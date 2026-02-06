@@ -61,12 +61,14 @@ export default function TodayScreen() {
   const videoRefs = useRef<{ [key: string]: Video | null }>({});
   const [isScreenFocused, setIsScreenFocused] = useState(true);
 
+  const isDeveloper = user?.email === 'developer@test.local';
+
   const rewards = useMemo(() => {
     const streak = progress?.currentStreak ?? 0;
     const tasks = progress?.totalCompletedTasks ?? 0;
     const focusMin = progress?.focusTimeMinutes ?? 0;
-    return getUnlockedRewards(streak, tasks, focusMin);
-  }, [progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
+    return getUnlockedRewards(streak, tasks, focusMin, isDeveloper);
+  }, [progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, isDeveloper]);
 
 
   

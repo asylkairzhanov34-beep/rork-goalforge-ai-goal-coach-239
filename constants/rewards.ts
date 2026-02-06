@@ -30,9 +30,9 @@ export const REWARDS: Reward[] = [
     rarity: 'Common', 
     ownedBy: '95%', 
     category: 'streak', 
-    requirement: 0, 
-    requirementLabel: 'Day 1',
-    unlockHint: 'Start your journey'
+    requirement: 1, 
+    requirementLabel: 'First Task',
+    unlockHint: 'Complete your first task'
   },
   { 
     id: 's2', 
@@ -236,12 +236,24 @@ export const REWARDS: Reward[] = [
   },
 ];
 
-export function getUnlockedRewards(streak: number, tasks: number, focusMinutes: number): Reward[] {
+export function getUnlockedRewards(streak: number, tasks: number, focusMinutes: number, isDeveloper: boolean = false): Reward[] {
   return REWARDS.map(r => {
+    if (isDeveloper) {
+      return { ...r, unlocked: true };
+    }
+    
     let unlocked = false;
-    if (r.category === 'streak') unlocked = streak >= r.requirement;
-    else if (r.category === 'tasks') unlocked = tasks >= r.requirement;
-    else if (r.category === 'focus') unlocked = focusMinutes >= r.requirement;
+    if (r.category === 'streak') {
+      if (r.id === 's1') {
+        unlocked = tasks >= 1;
+      } else {
+        unlocked = streak >= r.requirement;
+      }
+    } else if (r.category === 'tasks') {
+      unlocked = tasks >= r.requirement;
+    } else if (r.category === 'focus') {
+      unlocked = focusMinutes >= r.requirement;
+    }
     return { ...r, unlocked };
   });
 }

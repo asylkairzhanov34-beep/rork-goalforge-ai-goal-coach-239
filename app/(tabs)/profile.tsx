@@ -35,9 +35,11 @@ export default function ProfileScreen() {
   const tasksVal = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
   const focusVal = progress?.focusTimeMinutes ?? 0;
 
+  const isDeveloper = user?.email === 'developer@test.local';
+
   const allRewards = useMemo(() => {
-    return getUnlockedRewards(streakVal, tasksVal, focusVal);
-  }, [streakVal, tasksVal, focusVal]);
+    return getUnlockedRewards(streakVal, tasksVal, focusVal, isDeveloper);
+  }, [streakVal, tasksVal, focusVal, isDeveloper]);
 
   const unlockedCount = allRewards.filter(r => r.unlocked).length;
   const totalCount = allRewards.length;
