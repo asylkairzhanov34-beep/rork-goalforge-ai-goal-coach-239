@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, Dimensions, LayoutAnimation } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -29,6 +29,7 @@ export default function ProfileScreen() {
 
   const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
   const [activeCategory, setActiveCategory] = useState<RewardCategory>('streak');
+  const [milestonesExpanded, setMilestonesExpanded] = useState(false);
 
   const streakVal = progress?.currentStreak ?? store?.profile?.currentStreak ?? 0;
   const tasksVal = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
@@ -308,66 +309,112 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.milestonesSection}>
+          <TouchableOpacity
+            style={styles.milestonesSection}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setMilestonesExpanded(!milestonesExpanded);
+            }}
+            activeOpacity={0.8}
+          >
             <View style={styles.milestonesHeader}>
               <View style={styles.milestonesHeaderLeft}>
-                <Trophy size={18} color={theme.colors.primary} />
-                <Text style={styles.milestonesTitle}>MileStones</Text>
+                <Trophy size={16} color={theme.colors.primary} />
+                <Text style={styles.milestonesTitle}>Milestones</Text>
               </View>
-              <Text style={styles.milestonesCount}>{unlockedCount}/{totalCount} collected</Text>
+              <View style={styles.milestonesHeaderRight}>
+                <Text style={styles.milestonesCount}>{unlockedCount}/{totalCount}</Text>
+                <View style={[styles.expandArrow, milestonesExpanded && styles.expandArrowUp]}>
+                  <Text style={styles.expandArrowText}>›</Text>
+                </View>
+              </View>
             </View>
 
             <View style={styles.milestoneProgressBar}>
               <View style={[styles.milestoneProgressFill, { width: `${(unlockedCount / totalCount) * 100}%` }]} />
             </View>
 
-            <View style={styles.categoryTabs}>
-              {([['streak', Flame, 'Streak'], ['tasks', Target, 'Tasks'], ['focus', Zap, 'Focus']] as const).map(([cat, Icon, label]) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
-                  onPress={() => setActiveCategory(cat)}
-                  activeOpacity={0.7}
-                >
-                  <Icon size={14} color={activeCategory === cat ? theme.colors.primary : 'rgba(255,255,255,0.4)'} />
-                  <Text style={[styles.categoryTabText, activeCategory === cat && styles.categoryTabTextActive]}>{label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.orbsGrid}>
-              {currentCategoryRewards.map((reward) => (
-                <View key={reward.id} style={styles.orbGridItem}>
-                  <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50` }]}>
-                    <Video
-                      source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
-                      style={styles.orbGridVideo}
-                      resizeMode={ResizeMode.COVER}
-                      shouldPlay
-                      isLooping
-                      isMuted
-                    />
-                    {!reward.unlocked && (
-                      <View style={styles.orbGridLockedOverlay}>
-                        <Lock size={14} color="rgba(255,255,255,0.5)" />
-                      </View>
-                    )}
-                    {reward.unlocked && (
-                      <View style={[styles.orbGridCheckmark, { backgroundColor: reward.color }]}>
-                        <Text style={styles.orbGridCheckText}>✓</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.orbGridLabel, reward.unlocked && { color: '#fff' }]} numberOfLines={1}>
-                    {reward.label}
-                  </Text>
-                  <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]}>
-                    {reward.requirementLabel}
-                  </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.compactOrbsScroll} contentContainerStyle={styles.compactOrbsRow}>
+              {allRewards.filter(r => r.unlocked).map((reward) => (
+                <View key={reward.id} style={[styles.compactOrbWrap, { borderColor: `${reward.color}50` }]}>
+                  <Video
+                    source={{ uri: reward.video }}
+                    style={styles.compactOrbVideo}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isLooping
+                    isMuted
+                  />
                 </View>
               ))}
+              {allRewards.filter(r => r.unlocked).length === 0 && (
+                <View style={styles.compactOrbWrap}>
+                  <Video
+                    source={{ uri: LOCKED_ORB_VIDEO }}
+                    style={styles.compactOrbVideo}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isLooping
+                    isMuted
+                  />
+                  <View style={styles.compactLockedOverlay}>
+                    <Lock size={10} color="rgba(255,255,255,0.5)" />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+
+          {milestonesExpanded && (
+            <View style={styles.milestonesExpandedSection}>
+              <View style={styles.categoryTabs}>
+                {([['streak', Flame, 'Streak'], ['tasks', Target, 'Tasks'], ['focus', Zap, 'Focus']] as const).map(([cat, Icon, label]) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
+                    onPress={() => setActiveCategory(cat)}
+                    activeOpacity={0.7}
+                  >
+                    <Icon size={14} color={activeCategory === cat ? theme.colors.primary : 'rgba(255,255,255,0.4)'} />
+                    <Text style={[styles.categoryTabText, activeCategory === cat && styles.categoryTabTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.orbsGrid}>
+                {currentCategoryRewards.map((reward) => (
+                  <View key={reward.id} style={styles.orbGridItem}>
+                    <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50` }]}>
+                      <Video
+                        source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
+                        style={styles.orbGridVideo}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay
+                        isLooping
+                        isMuted
+                      />
+                      {!reward.unlocked && (
+                        <View style={styles.orbGridLockedOverlay}>
+                          <Lock size={14} color="rgba(255,255,255,0.5)" />
+                        </View>
+                      )}
+                      {reward.unlocked && (
+                        <View style={[styles.orbGridCheckmark, { backgroundColor: reward.color }]}>
+                          <Text style={styles.orbGridCheckText}>✓</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.orbGridLabel, reward.unlocked && { color: '#fff' }]} numberOfLines={1}>
+                      {reward.label}
+                    </Text>
+                    <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]}>
+                      {reward.requirementLabel}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.menuSection}>
             {menuItems.map((item, index) => (
@@ -597,12 +644,69 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   milestonesSection: {
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  milestonesExpandedSection: {
     marginBottom: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  milestonesHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  expandArrow: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '90deg' }],
+  },
+  expandArrowUp: {
+    transform: [{ rotate: '-90deg' }],
+  },
+  expandArrowText: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: -2,
+  },
+  compactOrbsScroll: {
+    marginTop: 8,
+    marginHorizontal: -4,
+  },
+  compactOrbsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  compactOrbWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  compactOrbVideo: {
+    width: 37,
+    height: 37,
+  },
+  compactLockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   milestonesHeader: {
     flexDirection: 'row',
@@ -623,6 +727,7 @@ const styles = StyleSheet.create({
   milestonesCount: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '500' as const,
   },
   milestoneProgressBar: {
     height: 3,

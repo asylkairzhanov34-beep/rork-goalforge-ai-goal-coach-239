@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -637,19 +637,19 @@ export default function TodayScreen() {
               styles.floatingPlanButton,
               { 
                 shadowColor: activeOrbColor,
-                borderColor: activeOrbColor,
+                borderColor: `${activeOrbColor}60`,
               }
             ]}
             onPress={() => router.push('/plan')}
             activeOpacity={0.85}
           >
-            <ImageBackground
-              source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/86n0mt56lenqd87k01b36' }}
+            <LinearGradient
+              colors={[`${activeOrbColor}30`, `${activeOrbColor}08`, `${activeOrbColor}20`]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.floatingButtonGradient}
-              imageStyle={styles.floatingButtonImage}
-              resizeMode="cover"
             />
-            <View style={[styles.floatingButtonBorder, { borderColor: `${activeOrbColor}50` }]} />
+            <View style={[styles.floatingButtonBorder, { borderColor: `${activeOrbColor}40` }]} />
             <View style={styles.floatingButtonInner}>
               <Calendar size={20} color={activeOrbColor} style={styles.planButtonIcon} />
               <Text style={[styles.floatingPlanButtonText, { color: activeOrbColor }]}>Go to Plan</Text>
@@ -1251,9 +1251,6 @@ const styles = StyleSheet.create({
   },
   floatingButtonGradient: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
-  },
-  floatingButtonImage: {
     borderRadius: 999,
   },
   floatingButtonBorder: {
