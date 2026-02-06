@@ -14,8 +14,9 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { useProgress } from '@/hooks/use-progress';
-import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, getRewardProgress } from '@/constants/rewards';
 import type { Reward } from '@/constants/rewards';
+import { RewardDetailModal } from '@/components/RewardDetailModal';
 
 export default function ProfileScreen() {
   const store = useGoalStore();
@@ -30,6 +31,8 @@ export default function ProfileScreen() {
   const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
   
   const [milestonesExpanded, setMilestonesExpanded] = useState(false);
+  const [selectedRewardIndex, setSelectedRewardIndex] = useState<number | null>(null);
+  const [showRewardDetail, setShowRewardDetail] = useState(false);
 
   const streakVal = progress?.currentStreak ?? store?.profile?.currentStreak ?? 0;
   const tasksVal = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
@@ -43,6 +46,15 @@ export default function ProfileScreen() {
 
   const unlockedCount = allRewards.filter(r => r.unlocked).length;
   const totalCount = allRewards.length;
+
+  const handleRewardPress = (index: number) => {
+    setSelectedRewardIndex(index);
+    setShowRewardDetail(true);
+  };
+
+  const getProgressForReward = (reward: Reward) => {
+    return getRewardProgress(reward, streakVal, tasksVal, focusVal);
+  };
 
   
 
@@ -379,8 +391,13 @@ export default function ProfileScreen() {
           {milestonesExpanded && (
             <View style={styles.milestonesExpandedSection}>
               <View style={styles.orbsGrid}>
-                {allRewards.map((reward: Reward) => (
-                  <View key={reward.id} style={styles.orbGridItem}>
+                {allRewards.map((reward: Reward, index: number) => (
+                  <TouchableOpacity 
+                    key={reward.id} 
+                    style={styles.orbGridItem}
+                    onPress={() => handleRewardPress(index)}
+                    activeOpacity={0.8}
+                  >
                     <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50`, shadowColor: reward.color, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }]}>
                       <Video
                         source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
@@ -407,7 +424,7 @@ export default function ProfileScreen() {
                     <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]} numberOfLines={2}>
                       {reward.unlocked ? reward.achievement : getProgressText(reward, streakVal, tasksVal, focusVal)}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -508,7 +525,22 @@ export default function ProfileScreen() {
           </View>
         </Modal>
       </View>
-    </GradientBackground>
+    <RewardDetailModal
+          visible={showRewardDetail}
+          reward={selectedRewardIndex !== null ? allRewards[selectedRewardIndex] : null}
+          progress={selectedRewardIndex !== null ? getProgressForReward(allRewards[selectedRewardIndex]) : null}
+          currentStreak={streakVal}
+          completedTasks={tasksVal}
+          focusMinutes={focusVal}
+          onClose={() => {
+            setShowRewardDetail(false);
+            setSelectedRewardIndex(null);
+          }}
+          allRewards={allRewards}
+          initialIndex={selectedRewardIndex ?? 0}
+          getProgressForReward={getProgressForReward}
+        />
+      </GradientBackground>
   );
 }
 
