@@ -409,17 +409,11 @@ export default function TodayScreen() {
               </View>
             )}
             <Text style={styles.firstStepText}>{rewards[activeRewardIndex]?.label}</Text>
-            <View style={styles.rewardDots}>
-              {rewards.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.rewardDot,
-                    activeRewardIndex === index && styles.rewardDotActive,
-                  ]}
-                />
-              ))}
-            </View>
+            <Text style={styles.requirementText}>
+              {rewards[activeRewardIndex]?.unlocked 
+                ? rewards[activeRewardIndex]?.achievement 
+                : `Unlock: ${rewards[activeRewardIndex]?.requirementLabel} ${rewards[activeRewardIndex]?.category === 'streak' ? 'streak' : rewards[activeRewardIndex]?.category === 'tasks' ? 'completed' : 'focus time'}`}
+            </Text>
             
             <View style={styles.orbStatsContainer}>
               <View style={styles.orbStatItem}>
@@ -772,20 +766,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: ORB_SIZE / 2,
   },
-  rewardDots: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
-  },
-  rewardDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  rewardDotActive: {
-    backgroundColor: '#fff',
-    width: 18,
+  requirementText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   rarityBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
