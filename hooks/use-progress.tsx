@@ -64,38 +64,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     syncChallengesForStreak();
   }, [syncChallengesForStreak]);
 
-  const syncTimerSessionsToGoalStore = useCallback(() => {
-    if (!timerStore?.sessions || !goalStore?.addPomodoroSession) {
-      return;
-    }
-    
-    const timerSessions = timerStore.sessions || [];
-    const existingSessions = goalStore.pomodoroSessions || [];
-    
-    if (timerSessions.length === 0) return;
-    
-    const existingIds = new Set(existingSessions.map(s => s.id));
-    const newSessions = timerSessions.filter(s => !existingIds.has(s.id) && s.type === 'focus');
-    
-    if (newSessions.length === 0) return;
-    
-    InteractionManager.runAfterInteractions(() => {
-      newSessions.forEach(session => {
-        goalStore.addPomodoroSession({
-          goalId: session.goalId || 'default',
-          duration: session.duration,
-          completed: true,
-          startTime: session.completedAt.toISOString(),
-          endTime: session.completedAt.toISOString(),
-          type: 'work',
-        });
-      });
-    });
-  }, [timerStore?.sessions, goalStore]);
 
-  useEffect(() => {
-    syncTimerSessionsToGoalStore();
-  }, [syncTimerSessionsToGoalStore]);
 
   useEffect(() => {
     const sessionCount = timerStore?.sessions?.length ?? 0;
@@ -109,16 +78,11 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
   }, [timerStore?.sessions?.length, goalStore]);
 
   const totalFocusMinutes = useMemo(() => {
-    const pomodoroStats = goalStore?.getPomodoroStats?.() || { totalWorkTime: 0 };
-    const pomodoroMinutes = Math.floor((pomodoroStats.totalWorkTime || 0) / 60);
-    
     const timerSessions = timerStore?.sessions || [];
-    const timerMinutes = timerSessions
+    return timerSessions
       .filter(s => s.type === 'focus')
       .reduce((acc, s) => acc + Math.floor(s.duration / 60), 0);
-    
-    return Math.max(pomodoroMinutes, timerMinutes);
-  }, [goalStore, timerStore?.sessions]);
+  }, [timerStore?.sessions]);
 
   const todayFocusMinutes = useMemo(() => {
     const today = new Date();

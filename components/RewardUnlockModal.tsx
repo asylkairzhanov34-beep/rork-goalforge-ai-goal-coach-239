@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,6 +36,7 @@ interface Particle {
 }
 
 const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, reward, onClose }) => {
+  const [videoReady, setVideoReady] = useState(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const orbScale = useRef(new Animated.Value(0)).current;
   const orbOpacity = useRef(new Animated.Value(0)).current;
@@ -75,6 +77,7 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
+    setVideoReady(false);
     backdropOpacity.setValue(0);
     orbScale.setValue(0);
     orbOpacity.setValue(0);
@@ -248,97 +251,107 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
           <X size={24} color="rgba(255,255,255,0.6)" />
         </TouchableOpacity>
 
-        <View style={styles.content}>
-          <Animated.View style={[styles.topLabels, { opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] }]}>
-            <Text style={styles.unlockLabel}>Reward Unlocked</Text>
-            <Text style={[styles.rewardName, { textShadowColor: glowColor }]}>{reward.label.toUpperCase()}</Text>
-          </Animated.View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.content}>
+            <Animated.View style={[styles.topLabels, { opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] }]}>
+              <Text style={styles.unlockLabel}>Reward Unlocked</Text>
+              <Text style={[styles.rewardName, { textShadowColor: glowColor }]}>{reward.label.toUpperCase()}</Text>
+            </Animated.View>
 
-          <Animated.View style={[styles.descriptionWrap, { opacity: subtitleOpacity }]}>
-            <Text style={styles.description}>{reward.achievement}</Text>
-          </Animated.View>
+            <Animated.View style={[styles.descriptionWrap, { opacity: subtitleOpacity }]}>
+              <Text style={styles.description}>{reward.achievement}</Text>
+            </Animated.View>
 
-          <View style={styles.orbArea}>
-            <Animated.View style={[styles.glowRing, {
-              opacity: ringOpacity,
-              borderColor: glowColor,
-              transform: [{ scale: ringScale }],
-            }]} />
-            <Animated.View style={[styles.glowRing, {
-              opacity: ring2Opacity,
-              borderColor: glowColor,
-              transform: [{ scale: ring2Scale }],
-            }]} />
+            <View style={styles.orbArea}>
+              <Animated.View style={[styles.glowRing, {
+                opacity: ringOpacity,
+                borderColor: glowColor,
+                transform: [{ scale: ringScale }],
+              }]} />
+              <Animated.View style={[styles.glowRing, {
+                opacity: ring2Opacity,
+                borderColor: glowColor,
+                transform: [{ scale: ring2Scale }],
+              }]} />
 
-            <Animated.View style={[styles.orbGlow, {
-              opacity: glowPulse,
-              backgroundColor: glowColor,
-            }]} />
+              <Animated.View style={[styles.orbGlow, {
+                opacity: glowPulse,
+                backgroundColor: glowColor,
+              }]} />
 
-            {particles.map((p, i) => (
-              <Animated.View
-                key={i}
-                style={[
-                  styles.particle,
-                  {
-                    backgroundColor: p.color,
-                    opacity: p.opacity,
-                    transform: [
-                      { translateX: p.x },
-                      { translateY: p.y },
-                      { scale: p.scale },
-                    ],
-                  },
-                ]}
-              />
-            ))}
+              {particles.map((p, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.particle,
+                    {
+                      backgroundColor: p.color,
+                      opacity: p.opacity,
+                      transform: [
+                        { translateX: p.x },
+                        { translateY: p.y },
+                        { scale: p.scale },
+                      ],
+                    },
+                  ]}
+                />
+              ))}
 
-            <Animated.View style={[styles.orbWrapper, {
-              opacity: orbOpacity,
-              transform: [
-                { scale: orbScale },
-                { translateY: orbFloat },
-              ],
+              <Animated.View style={[styles.orbWrapper, {
+                opacity: orbOpacity,
+                transform: [
+                  { scale: orbScale },
+                  { translateY: orbFloat },
+                ],
+              }]}>
+                <View style={[styles.orbFallback, { backgroundColor: `${glowColor}30` }]}>
+                  {!videoReady && <Trophy size={48} color={glowColor} />}
+                </View>
+                <Video
+                  source={{ uri: reward.video }}
+                  style={[styles.orbVideo, !videoReady && styles.orbVideoHidden]}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay
+                  isLooping
+                  isMuted
+                  onReadyForDisplay={() => setVideoReady(true)}
+                />
+              </Animated.View>
+            </View>
+
+            <Animated.View style={[styles.rarityBadge, {
+              borderColor: `${glowColor}40`,
+              transform: [{ scale: badgeScale }],
             }]}>
-              <Video
-                source={{ uri: reward.video }}
-                style={styles.orbVideo}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay
-                isLooping
-                isMuted
-              />
+              <Trophy size={14} color={glowColor} />
+              <Text style={[styles.rarityText, { color: glowColor }]}>{reward.rarity}</Text>
+              <View style={[styles.rarityDot, { backgroundColor: glowColor }]} />
+              <Text style={styles.ownedByText}>Owned by {reward.ownedBy}</Text>
+            </Animated.View>
+
+            <Animated.View style={[styles.buttonsArea, {
+              opacity: buttonOpacity,
+              transform: [{ translateY: buttonTranslateY }],
+            }]}>
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: glowColor }]}
+                onPress={handleClose}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryButtonText}>Awesome!</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.replayButton} onPress={handleReplay} activeOpacity={0.7}>
+                <RefreshCw size={16} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.replayText}>Replay</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
-
-          <Animated.View style={[styles.rarityBadge, {
-            borderColor: `${glowColor}40`,
-            transform: [{ scale: badgeScale }],
-          }]}>
-            <Trophy size={14} color={glowColor} />
-            <Text style={[styles.rarityText, { color: glowColor }]}>{reward.rarity}</Text>
-            <View style={[styles.rarityDot, { backgroundColor: glowColor }]} />
-            <Text style={styles.ownedByText}>Owned by {reward.ownedBy}</Text>
-          </Animated.View>
-
-          <Animated.View style={[styles.buttonsArea, {
-            opacity: buttonOpacity,
-            transform: [{ translateY: buttonTranslateY }],
-          }]}>
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: glowColor }]}
-              onPress={handleClose}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.primaryButtonText}>Awesome!</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.replayButton} onPress={handleReplay} activeOpacity={0.7}>
-              <RefreshCw size={16} color="rgba(255,255,255,0.5)" />
-              <Text style={styles.replayText}>Replay</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
+        </ScrollView>
       </Animated.View>
     </Modal>
   );
@@ -364,11 +377,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   content: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingVertical: 80,
   },
   topLabels: {
     alignItems: 'center',
@@ -431,9 +448,19 @@ const styles = StyleSheet.create({
     borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
   },
+  orbFallback: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: ORB_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   orbVideo: {
     width: ORB_SIZE,
     height: ORB_SIZE,
+  },
+  orbVideoHidden: {
+    position: 'absolute',
+    opacity: 0,
   },
   rarityBadge: {
     flexDirection: 'row',

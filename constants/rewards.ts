@@ -19,7 +19,7 @@ export interface Reward {
 
 export const REWARDS: Reward[] = [
   // STREAK REWARDS
-  { id: 's1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956832/0126_9_xmrb6b.mp4', label: 'Ignited', unlocked: false, color: '#FF6B6B', achievement: '1 day streak', rarity: 'Common', ownedBy: '95%', category: 'streak', requirement: 1, requirementLabel: '1 day' },
+  { id: 's1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956832/0126_9_xmrb6b.mp4', label: 'Ignited', unlocked: false, color: '#FF6B6B', achievement: 'First step taken', rarity: 'Common', ownedBy: '95%', category: 'streak', requirement: 0, requirementLabel: 'Day 1' },
   { id: 's2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769957827/0126_10_ckdbct.mp4', label: 'Invested', unlocked: false, color: '#60A5FA', achievement: '3 day streak', rarity: 'Common', ownedBy: '78%', category: 'streak', requirement: 3, requirementLabel: '3 days' },
   { id: 's3', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951742/0126_4_l4xx78.mp4', label: 'Steadfast', unlocked: false, color: '#A78BFA', achievement: '7 day streak', rarity: 'Rare', ownedBy: '45%', category: 'streak', requirement: 7, requirementLabel: '7 days' },
   { id: 's4', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769951786/0126_5_u9xcey.mp4', label: 'Radiant', unlocked: false, color: '#34D399', achievement: '14 day streak', rarity: 'Rare', ownedBy: '32%', category: 'streak', requirement: 14, requirementLabel: '14 days' },
