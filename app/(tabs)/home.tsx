@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { usePathname, router, useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -152,42 +152,16 @@ export default function TodayScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Home] Screen focused - resuming videos');
       setIsScreenFocused(true);
-      
-      Object.values(videoRefs.current).forEach(async (videoRef) => {
-        if (videoRef) {
-          try {
-            await videoRef.playAsync();
-          } catch (e) {
-            console.log('[Home] Video play error:', e);
-          }
-        }
-      });
-      
       return () => {
-        console.log('[Home] Screen unfocused - pausing videos');
         setIsScreenFocused(false);
-        
-        Object.values(videoRefs.current).forEach(async (videoRef) => {
-          if (videoRef) {
-            try {
-              await videoRef.pauseAsync();
-            } catch (e) {
-              console.log('[Home] Video pause error:', e);
-            }
-          }
-        });
       };
     }, [])
   );
 
   const setVideoRef = useCallback((id: string) => (ref: Video | null) => {
     videoRefs.current[id] = ref;
-    if (ref && isScreenFocused) {
-      ref.playAsync().catch(() => {});
-    }
-  }, [isScreenFocused]);
+  }, []);
 
   useEffect(() => {
     if (isHomeActive) {
@@ -402,11 +376,7 @@ export default function TodayScreen() {
                         shouldPlay={isScreenFocused}
                         isLooping
                         isMuted
-                        onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-                          if (status.isLoaded && !status.isPlaying && isScreenFocused && (isActive || isNext || isPrev)) {
-                            videoRefs.current[item.id]?.playAsync().catch(() => {});
-                          }
-                        }}
+                        onPlaybackStatusUpdate={undefined}
                       />
                     </View>
                     {!item.unlocked && (

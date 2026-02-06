@@ -23,6 +23,8 @@ import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
 
 import { FloatingDynamicIslandStreak } from '@/components/FloatingDynamicIslandStreak';
 import { StreakCelebrationProvider, useStreakCelebration } from '@/hooks/use-streak-celebration';
+import { RewardUnlockProvider, useRewardUnlock } from '@/hooks/use-reward-unlock';
+import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
 import { VideoSplashScreen } from '@/components/VideoSplashScreen';
 
@@ -100,6 +102,11 @@ const queryClient = new QueryClient({
 function StreakCelebrationOverlay() {
   const { isVisible, hideCelebration } = useStreakCelebration();
   return <FloatingDynamicIslandStreak visible={isVisible} onDismiss={hideCelebration} />;
+}
+
+function RewardUnlockOverlay() {
+  const { modalVisible, pendingReward, closeModal } = useRewardUnlock();
+  return <RewardUnlockModal visible={modalVisible} reward={pendingReward} onClose={closeModal} />;
 }
 
 function RootLayoutNav() {
@@ -352,8 +359,11 @@ export default function RootLayout() {
                               <JournalProvider>
                                 <FocusShieldProvider>
                                   <StreakCelebrationProvider>
-                                    <MemoizedRootLayoutNav />
-                                    {providersReady && <StreakCelebrationOverlay />}
+                                    <RewardUnlockProvider>
+                                      <MemoizedRootLayoutNav />
+                                      {providersReady && <StreakCelebrationOverlay />}
+                                      {providersReady && <RewardUnlockOverlay />}
+                                    </RewardUnlockProvider>
                                   </StreakCelebrationProvider>
                                 </FocusShieldProvider>
                               </JournalProvider>
