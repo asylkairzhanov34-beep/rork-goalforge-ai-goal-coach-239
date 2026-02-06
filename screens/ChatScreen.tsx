@@ -480,9 +480,32 @@ const ChatScreenContent: React.FC = () => {
         });
         
         console.log('[ChatScreen] Creating recording...');
-        const { recording: newRecording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
+        const recordingOptions = {
+          android: {
+            extension: '.m4a',
+            outputFormat: 2, // MPEG_4
+            audioEncoder: 3, // AAC
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 128000,
+          },
+          ios: {
+            extension: '.wav',
+            outputFormat: 'lpcm',
+            audioQuality: 127, // MAX
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 128000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {
+            mimeType: 'audio/webm',
+            bitsPerSecond: 128000,
+          },
+        };
+        const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
         
         setRecording(newRecording);
         setIsRecording(true);

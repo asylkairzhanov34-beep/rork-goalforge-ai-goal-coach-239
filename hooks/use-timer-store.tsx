@@ -624,41 +624,46 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
   }, []);
 
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const isCompletingRef = useRef(false);
+
   const handleTimerComplete = useCallback(async () => {
-    console.log('[TimerStore] Timer completed!');
-    
-    if (state.notificationId) {
-      await cancelNotification(state.notificationId);
+    if (isCompletingRef.current) {
+      console.log('[TimerStore] Already completing, skipping');
+      return;
     }
-    
-    await playSound(state.notificationSound);
-    
-    const completedMode = state.mode;
-    const completedDuration = state.totalTime;
-    
+    isCompletingRef.current = true;
+    console.log('[TimerStore] Timer completed!');
+
+    const snap = stateRef.current;
+
     setState(prev => {
       const session: TimerSession = {
         id: Date.now().toString(),
         goalId: prev.currentGoalId,
-        duration: completedDuration,
+        duration: prev.totalTime,
         completedAt: new Date(),
-        type: completedMode === 'focus' ? 'focus' : 'break',
+        type: prev.mode === 'focus' ? 'focus' : 'break',
       };
 
-      const sessionsCompleted = completedMode === 'focus' 
-        ? prev.sessionsCompleted + 1 
+      const sessionsCompleted = prev.mode === 'focus'
+        ? prev.sessionsCompleted + 1
         : prev.sessionsCompleted;
-      
+
       let nextMode: 'focus' | 'shortBreak' | 'longBreak' = 'focus';
-      if (completedMode === 'focus') {
+      if (prev.mode === 'focus') {
         nextMode = sessionsCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
       }
 
       const nextDuration = TIMER_DURATIONS[nextMode];
 
       console.log('[TimerStore] Session completed:', {
-        mode: completedMode,
-        duration: completedDuration,
+        mode: prev.mode,
+        duration: prev.totalTime,
         sessionsCompleted,
         nextMode,
       });
@@ -675,11 +680,22 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
         notificationId: undefined,
       };
     });
-    
-    await endLiveActivity(true);
-    await clearBackgroundState();
-    await cancelLiveTimerNotification();
-  }, [state.notificationId, state.notificationSound, state.mode, state.totalTime, cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
+
+    try {
+      if (snap.notificationId) {
+        cancelNotification(snap.notificationId).catch(e => console.log('[TimerStore] cancel notif err:', e));
+      }
+      endLiveActivity(true).catch(e => console.log('[TimerStore] end live activity err:', e));
+      clearBackgroundState().catch(e => console.log('[TimerStore] clear bg err:', e));
+      cancelLiveTimerNotification().catch(e => console.log('[TimerStore] cancel live notif err:', e));
+
+      playSound(snap.notificationSound).catch(e => console.log('[TimerStore] play sound err:', e));
+    } catch (e) {
+      console.error('[TimerStore] handleTimerComplete cleanup error:', e);
+    } finally {
+      isCompletingRef.current = false;
+    }
+  }, [cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
 
   useEffect(() => {
     const initializeStore = async () => {
