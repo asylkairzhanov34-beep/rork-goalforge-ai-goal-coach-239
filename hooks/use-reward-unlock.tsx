@@ -5,17 +5,22 @@ import { useProgress } from '@/hooks/use-progress';
 import { getUnlockedRewards, type Reward } from '@/constants/rewards';
 
 const SEEN_REWARDS_KEY = '@seen_unlocked_rewards';
+const OFFER_SEEN_KEY = '@subscription_offer_seen';
 
 export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const progress = useProgress();
   const [pendingReward, setPendingReward] = useState<Reward | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [offerSeen, setOfferSeen] = useState(false);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const queueRef = useRef<Reward[]>([]);
 
   useEffect(() => {
-    AsyncStorage.getItem(SEEN_REWARDS_KEY).then(raw => {
+    Promise.all([
+      AsyncStorage.getItem(SEEN_REWARDS_KEY),
+      AsyncStorage.getItem(OFFER_SEEN_KEY),
+    ]).then(([raw, offerFlag]) => {
       if (raw) {
         try {
           const ids: string[] = JSON.parse(raw);
@@ -24,15 +29,29 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
           seenIdsRef.current = new Set();
         }
       }
+      if (offerFlag === 'true') {
+        setOfferSeen(true);
+      }
       initializedRef.current = true;
+      console.log('[RewardUnlock] Initialized, offerSeen:', offerFlag === 'true');
     }).catch(() => {
       initializedRef.current = true;
     });
   }, []);
 
+  const markOfferSeen = useCallback(() => {
+    console.log('[RewardUnlock] Marking offer as seen');
+    setOfferSeen(true);
+    AsyncStorage.setItem(OFFER_SEEN_KEY, 'true').catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!initializedRef.current) return;
     if (!progress?.isReady) return;
+    if (!offerSeen) {
+      console.log('[RewardUnlock] Waiting for subscription offer to be seen first');
+      return;
+    }
 
     const streak = progress.currentStreak ?? 0;
     const tasks = progress.totalCompletedTasks ?? 0;
@@ -56,7 +75,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         queueRef.current = [...queueRef.current, ...newlyUnlocked];
       }
     }
-  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward]);
+  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, offerSeen]);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
@@ -75,5 +94,6 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     pendingReward,
     modalVisible,
     closeModal,
+    markOfferSeen,
   };
 });

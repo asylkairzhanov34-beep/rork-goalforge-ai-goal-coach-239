@@ -25,6 +25,7 @@ import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
 
 import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { useProgress } from '@/hooks/use-progress';
+import { useRewardUnlock } from '@/hooks/use-reward-unlock';
 import SubscriptionOfferModal from '@/src/components/SubscriptionOfferModal';
 
 
@@ -35,7 +36,14 @@ export default function TodayScreen() {
 
   const challengeStore = useChallengeStore();
   const progress = useProgress();
-  const { shouldShowOffer, checking: subscriptionChecking } = useSubscriptionStatus();
+  const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
+  const { markOfferSeen } = useRewardUnlock();
+
+  useEffect(() => {
+    if (isPremium && !subscriptionChecking) {
+      markOfferSeen();
+    }
+  }, [isPremium, subscriptionChecking, markOfferSeen]);
   const [refreshing, setRefreshing] = useState(false);
   const [, setCurrentQuoteIndex] = useState(() => 
     Math.floor(Math.random() * getQuotes().length)
@@ -320,8 +328,14 @@ export default function TodayScreen() {
       <SubscriptionOfferModal
         visible={shouldShowOffer}
         loading={subscriptionChecking}
-        onPrimary={() => router.push('/subscription')}
-        onSkip={() => router.push('/subscription')}
+        onPrimary={() => {
+          markOfferSeen();
+          router.push('/subscription');
+        }}
+        onSkip={() => {
+          markOfferSeen();
+          router.push('/subscription');
+        }}
         testID="subscription-offer"
       />
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -637,19 +651,20 @@ export default function TodayScreen() {
               styles.floatingPlanButton,
               { 
                 shadowColor: activeOrbColor,
-                borderColor: `${activeOrbColor}60`,
+                borderColor: `${activeOrbColor}50`,
               }
             ]}
             onPress={() => router.push('/plan')}
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[`${activeOrbColor}30`, `${activeOrbColor}08`, `${activeOrbColor}20`]}
+              colors={[`${activeOrbColor}35`, `${activeOrbColor}10`, `${activeOrbColor}05`, `${activeOrbColor}25`]}
+              locations={[0, 0.3, 0.7, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.floatingButtonGradient}
             />
-            <View style={[styles.floatingButtonBorder, { borderColor: `${activeOrbColor}40` }]} />
+            <View style={[styles.floatingButtonBorder, { borderColor: `${activeOrbColor}30` }]} />
             <View style={styles.floatingButtonInner}>
               <Calendar size={20} color={activeOrbColor} style={styles.planButtonIcon} />
               <Text style={[styles.floatingPlanButtonText, { color: activeOrbColor }]}>Go to Plan</Text>

@@ -336,7 +336,7 @@ export default function ProfileScreen() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.compactOrbsScroll} contentContainerStyle={styles.compactOrbsRow}>
               {allRewards.filter(r => r.unlocked).map((reward) => (
-                <View key={reward.id} style={[styles.compactOrbWrap, { borderColor: `${reward.color}50` }]}>
+                <View key={reward.id} style={[styles.compactOrbWrap, { borderColor: `${reward.color}60`, shadowColor: reward.color }]}>
                   <Video
                     source={{ uri: reward.video }}
                     style={styles.compactOrbVideo}
@@ -347,7 +347,22 @@ export default function ProfileScreen() {
                   />
                 </View>
               ))}
-              {allRewards.filter(r => r.unlocked).length === 0 && (
+              {allRewards.filter(r => !r.unlocked).slice(0, 3).map((reward) => (
+                <View key={reward.id} style={styles.compactOrbWrap}>
+                  <Video
+                    source={{ uri: LOCKED_ORB_VIDEO }}
+                    style={styles.compactOrbVideo}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isLooping
+                    isMuted
+                  />
+                  <View style={styles.compactLockedOverlay}>
+                    <Lock size={10} color="rgba(255,255,255,0.5)" />
+                  </View>
+                </View>
+              ))}
+              {allRewards.filter(r => r.unlocked).length === 0 && allRewards.filter(r => !r.unlocked).length === 0 && (
                 <View style={styles.compactOrbWrap}>
                   <Video
                     source={{ uri: LOCKED_ORB_VIDEO }}
@@ -384,7 +399,7 @@ export default function ProfileScreen() {
               <View style={styles.orbsGrid}>
                 {currentCategoryRewards.map((reward) => (
                   <View key={reward.id} style={styles.orbGridItem}>
-                    <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50` }]}>
+                    <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50`, shadowColor: reward.color, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }]}>
                       <Video
                         source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
                         style={styles.orbGridVideo}
@@ -645,11 +660,11 @@ const styles = StyleSheet.create({
   },
   milestonesSection: {
     marginBottom: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 215, 0, 0.08)',
   },
   milestonesExpandedSection: {
     marginBottom: 24,
@@ -687,20 +702,23 @@ const styles = StyleSheet.create({
   },
   compactOrbsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 4,
   },
   compactOrbWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.08)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   compactOrbVideo: {
-    width: 37,
-    height: 37,
+    width: 33,
+    height: 33,
   },
   compactLockedOverlay: {
     ...StyleSheet.absoluteFillObject,
