@@ -142,7 +142,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r10', 
-    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956832/0126_9_xmrb6b.mp4', 
+    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770309414/1018236627_yt9vjm.mp4', 
     label: 'Transcendent', 
     unlocked: false, 
     color: '#8B5CF6', 
@@ -155,7 +155,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r11', 
-    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769957827/0126_10_ckdbct.mp4', 
+    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770309416/1018379202_i4fsqu.mp4', 
     label: 'Eternal', 
     unlocked: false, 
     color: '#14B8A6', 
