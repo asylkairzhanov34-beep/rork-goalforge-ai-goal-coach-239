@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput,
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy, Zap } from 'lucide-react-native';
+import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy } from 'lucide-react-native';
 
 import Constants from 'expo-constants';
 import { theme } from '@/constants/theme';
@@ -14,8 +14,8 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { useProgress } from '@/hooks/use-progress';
-import { LOCKED_ORB_VIDEO, getUnlockedRewards, getRewardsByCategory } from '@/constants/rewards';
-import type { RewardCategory } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText } from '@/constants/rewards';
+import type { Reward } from '@/constants/rewards';
 
 export default function ProfileScreen() {
   const store = useGoalStore();
@@ -28,7 +28,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
-  const [activeCategory, setActiveCategory] = useState<RewardCategory>('streak');
+  
   const [milestonesExpanded, setMilestonesExpanded] = useState(false);
 
   const streakVal = progress?.currentStreak ?? store?.profile?.currentStreak ?? 0;
@@ -44,13 +44,7 @@ export default function ProfileScreen() {
   const unlockedCount = allRewards.filter(r => r.unlocked).length;
   const totalCount = allRewards.length;
 
-  const categoryRewards = useMemo(() => ({
-    streak: getRewardsByCategory(allRewards, 'streak'),
-    tasks: getRewardsByCategory(allRewards, 'tasks'),
-    focus: getRewardsByCategory(allRewards, 'focus'),
-  }), [allRewards]);
-
-  const currentCategoryRewards = categoryRewards[activeCategory];
+  
 
   
   if (!store || !store.isReady) {
@@ -384,22 +378,8 @@ export default function ProfileScreen() {
 
           {milestonesExpanded && (
             <View style={styles.milestonesExpandedSection}>
-              <View style={styles.categoryTabs}>
-                {([['streak', Flame, 'Streak'], ['tasks', Target, 'Tasks'], ['focus', Zap, 'Focus']] as const).map(([cat, Icon, label]) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
-                    onPress={() => setActiveCategory(cat)}
-                    activeOpacity={0.7}
-                  >
-                    <Icon size={14} color={activeCategory === cat ? theme.colors.primary : 'rgba(255,255,255,0.4)'} />
-                    <Text style={[styles.categoryTabText, activeCategory === cat && styles.categoryTabTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <View style={styles.orbsGrid}>
-                {currentCategoryRewards.map((reward) => (
+                {allRewards.map((reward: Reward) => (
                   <View key={reward.id} style={styles.orbGridItem}>
                     <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50`, shadowColor: reward.color, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }]}>
                       <Video
@@ -424,8 +404,8 @@ export default function ProfileScreen() {
                     <Text style={[styles.orbGridLabel, reward.unlocked && { color: '#fff' }]} numberOfLines={1}>
                       {reward.label}
                     </Text>
-                    <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]}>
-                      {reward.unlocked ? reward.achievement : reward.unlockHint}
+                    <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]} numberOfLines={2}>
+                      {reward.unlocked ? reward.achievement : getProgressText(reward, streakVal, tasksVal, focusVal)}
                     </Text>
                   </View>
                 ))}

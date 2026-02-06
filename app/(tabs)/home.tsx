@@ -11,7 +11,9 @@ import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
-import { LOCKED_ORB_VIDEO, getUnlockedRewards } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getRewardProgress, getProgressText } from '@/constants/rewards';
+import type { Reward } from '@/constants/rewards';
+import { RewardDetailModal } from '@/components/RewardDetailModal';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
 
 
@@ -38,6 +40,9 @@ export default function TodayScreen() {
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
   const { markOfferSeen } = useRewardUnlock();
+  
+  const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
+  const [showRewardDetail, setShowRewardDetail] = useState(false);
 
   useEffect(() => {
     if (isPremium && !subscriptionChecking) {
@@ -340,6 +345,24 @@ export default function TodayScreen() {
         }}
         testID="subscription-offer"
       />
+      <RewardDetailModal
+        visible={showRewardDetail}
+        reward={selectedReward}
+        progress={selectedReward ? getRewardProgress(
+          selectedReward,
+          currentStreak,
+          completedTasksCount,
+          progress?.focusTimeMinutes ?? 0
+        ) : null}
+        currentStreak={currentStreak}
+        completedTasks={completedTasksCount}
+        focusMinutes={progress?.focusTimeMinutes ?? 0}
+        onClose={() => {
+          setShowRewardDetail(false);
+          setSelectedReward(null);
+        }}
+        isCurrentReward={selectedReward?.id === rewards[activeRewardIndex]?.id && selectedReward?.unlocked}
+      />
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -360,7 +383,18 @@ export default function TodayScreen() {
           
 
           <View style={styles.orbContainer}>
-            <View style={styles.orbTouchable} {...panResponder.panHandlers}>
+            <TouchableOpacity 
+              style={styles.orbTouchable} 
+              {...panResponder.panHandlers}
+              onPress={() => {
+                const currentReward = rewards[activeRewardIndex];
+                if (currentReward) {
+                  setSelectedReward(currentReward);
+                  setShowRewardDetail(true);
+                }
+              }}
+              activeOpacity={0.9}
+            >
               {rewards.map((item, index) => {
                 const isActive = activeRewardIndex === index;
                 const isNext = activeRewardIndex + 1 === index;
@@ -403,7 +437,7 @@ export default function TodayScreen() {
                   </Animated.View>
                 );
               })}
-            </View>
+            </TouchableOpacity>
             {rewards[activeRewardIndex]?.unlocked && (
               <View style={styles.rarityBadge}>
                 <Text style={styles.rarityText}>{rewards[activeRewardIndex]?.rarity}</Text>
@@ -414,7 +448,12 @@ export default function TodayScreen() {
             <Text style={styles.requirementText}>
               {rewards[activeRewardIndex]?.unlocked 
                 ? rewards[activeRewardIndex]?.achievement 
-                : rewards[activeRewardIndex]?.unlockHint}
+                : getProgressText(
+                    rewards[activeRewardIndex],
+                    currentStreak,
+                    completedTasksCount,
+                    progress?.focusTimeMinutes ?? 0
+                  )}
             </Text>
             
             <View style={styles.orbStatsContainer}>
