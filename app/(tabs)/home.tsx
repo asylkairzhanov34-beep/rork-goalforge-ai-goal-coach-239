@@ -11,7 +11,7 @@ import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
-import { LOCKED_ORB_VIDEO, getUnlockedRewards, getRewardProgress, getProgressText } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getRewardProgress, getProgressText, REWARDS } from '@/constants/rewards';
 import type { Reward } from '@/constants/rewards';
 import { RewardDetailModal } from '@/components/RewardDetailModal';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
@@ -77,12 +77,13 @@ export default function TodayScreen() {
 
 
   
-  const rewardsCount = rewards.length;
-  const rewardsCountRef = useRef(rewardsCount);
-  useEffect(() => { rewardsCountRef.current = rewardsCount; }, [rewardsCount]);
+  const rewardsRef = useRef(rewards);
+  useEffect(() => { rewardsRef.current = rewards; }, [rewards]);
+  
+  const TOTAL_REWARDS = REWARDS.length;
   
   const orbAnimations = useRef(
-    Array.from({ length: rewards.length }, (_, i) => ({
+    Array.from({ length: TOTAL_REWARDS }, (_, i) => ({
       translateX: new Animated.Value(i === 0 ? 0 : SCREEN_WIDTH * 0.45),
       scale: new Animated.Value(i === 0 ? 1 : 0.5),
       opacity: new Animated.Value(i === 0 ? 1 : (i === 1 ? 0.25 : 0)),
@@ -149,7 +150,8 @@ export default function TodayScreen() {
       onPanResponderGrant: () => {},
       onPanResponderMove: (_, gestureState) => {
         const { dx } = gestureState;
-        rewards.forEach((_, index) => {
+        const currentRewards = rewardsRef.current;
+        currentRewards.forEach((_, index) => {
           const isActive = activeIndexRef.current === index;
           const isNext = activeIndexRef.current + 1 === index;
           const isPrev = activeIndexRef.current - 1 === index;
@@ -166,7 +168,8 @@ export default function TodayScreen() {
       },
       onPanResponderRelease: (_, gestureState) => {
         const currentIdx = activeIndexRef.current;
-        const total = rewardsCountRef.current;
+        const currentRewards = rewardsRef.current;
+        const total = currentRewards.length;
         const { dx, vx } = gestureState;
         
         const swipeThreshold = 30;
@@ -180,8 +183,7 @@ export default function TodayScreen() {
         } else if (isSwipeRight && currentIdx > 0) {
           setActiveRewardIndex(currentIdx - 1);
         } else {
-          rewards.forEach((_, index) => {
-            const isActive = currentIdx === index;
+          currentRewards.forEach((_, index) => {
             const isNext = currentIdx + 1 === index;
             const isPrev = currentIdx - 1 === index;
             
