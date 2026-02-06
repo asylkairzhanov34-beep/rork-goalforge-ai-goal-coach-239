@@ -142,23 +142,60 @@ export default function TodayScreen() {
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         const { dx, dy } = gestureState;
-        return Math.abs(dx) > 3 || (Math.abs(dx) > Math.abs(dy) * 0.5 && Math.abs(dx) > 2);
+        return Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5;
       },
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
-      onPanResponderMove: () => {},
+      onPanResponderGrant: () => {},
+      onPanResponderMove: (_, gestureState) => {
+        const { dx } = gestureState;
+        rewards.forEach((_, index) => {
+          const isActive = activeIndexRef.current === index;
+          const isNext = activeIndexRef.current + 1 === index;
+          const isPrev = activeIndexRef.current - 1 === index;
+          
+          if (isActive || isNext || isPrev) {
+            let baseX = 0;
+            if (isNext) baseX = SCREEN_WIDTH * 0.45;
+            if (isPrev) baseX = -SCREEN_WIDTH * 0.45;
+            
+            const clampedDx = Math.max(-80, Math.min(80, dx * 0.3));
+            orbAnimations[index].translateX.setValue(baseX + clampedDx);
+          }
+        });
+      },
       onPanResponderRelease: (_, gestureState) => {
         const currentIdx = activeIndexRef.current;
         const total = rewardsCountRef.current;
         const { dx, vx } = gestureState;
         
-        const isSwipeRight = dx > 10 || (dx > 5 && vx > 0.1);
-        const isSwipeLeft = dx < -10 || (dx < -5 && vx < -0.1);
+        const swipeThreshold = 30;
+        const velocityThreshold = 0.3;
+        
+        const isSwipeLeft = dx < -swipeThreshold || vx < -velocityThreshold;
+        const isSwipeRight = dx > swipeThreshold || vx > velocityThreshold;
         
         if (isSwipeLeft && currentIdx < total - 1) {
           setActiveRewardIndex(currentIdx + 1);
         } else if (isSwipeRight && currentIdx > 0) {
           setActiveRewardIndex(currentIdx - 1);
+        } else {
+          rewards.forEach((_, index) => {
+            const isActive = currentIdx === index;
+            const isNext = currentIdx + 1 === index;
+            const isPrev = currentIdx - 1 === index;
+            
+            let targetX = 0;
+            if (isNext) targetX = SCREEN_WIDTH * 0.45;
+            if (isPrev) targetX = -SCREEN_WIDTH * 0.45;
+            
+            Animated.spring(orbAnimations[index].translateX, {
+              toValue: targetX,
+              friction: 8,
+              tension: 50,
+              useNativeDriver: true,
+            }).start();
+          });
         }
       },
     })
