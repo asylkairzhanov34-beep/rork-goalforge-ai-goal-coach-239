@@ -412,7 +412,7 @@ export default function TodayScreen() {
             <Text style={styles.requirementText}>
               {rewards[activeRewardIndex]?.unlocked 
                 ? rewards[activeRewardIndex]?.achievement 
-                : `Unlock: ${rewards[activeRewardIndex]?.requirementLabel} ${rewards[activeRewardIndex]?.category === 'streak' ? 'streak' : rewards[activeRewardIndex]?.category === 'tasks' ? 'completed' : 'focus time'}`}
+                : rewards[activeRewardIndex]?.unlockHint}
             </Text>
             
             <View style={styles.orbStatsContainer}>

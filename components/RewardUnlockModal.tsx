@@ -11,13 +11,13 @@ import {
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Sparkles, Star } from 'lucide-react-native';
+import { X, Sparkles, Crown, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import type { Reward } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.55;
+const ORB_SIZE = SCREEN_WIDTH * 0.52;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -25,66 +25,63 @@ interface RewardUnlockModalProps {
   onClose: () => void;
 }
 
-interface Particle {
+interface FloatingParticle {
   x: Animated.Value;
   y: Animated.Value;
   opacity: Animated.Value;
   scale: Animated.Value;
-  rotation: Animated.Value;
   startX: number;
   startY: number;
-  color: string;
   size: number;
 }
 
 const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, reward, onClose }) => {
   const [videoReady, setVideoReady] = useState(false);
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const contentScale = useRef(new Animated.Value(0.8)).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
-  const orbScale = useRef(new Animated.Value(0)).current;
-  const orbOpacity = useRef(new Animated.Value(0)).current;
-  const titleOpacity = useRef(new Animated.Value(0)).current;
-  const titleTranslateY = useRef(new Animated.Value(40)).current;
-  const subtitleOpacity = useRef(new Animated.Value(0)).current;
-  const badgeScale = useRef(new Animated.Value(0)).current;
-  const buttonOpacity = useRef(new Animated.Value(0)).current;
-  const buttonTranslateY = useRef(new Animated.Value(30)).current;
-  const glowPulse = useRef(new Animated.Value(0.3)).current;
-  const orbFloat = useRef(new Animated.Value(0)).current;
-  const shimmerPosition = useRef(new Animated.Value(-1)).current;
   
-  const ringScale1 = useRef(new Animated.Value(0.8)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslateY = useRef(new Animated.Value(50)).current;
+  
+  const orbScale = useRef(new Animated.Value(0.3)).current;
+  const orbOpacity = useRef(new Animated.Value(0)).current;
+  const orbGlowPulse = useRef(new Animated.Value(0.4)).current;
+  const orbFloat = useRef(new Animated.Value(0)).current;
+  
+  const ringScale1 = useRef(new Animated.Value(0.5)).current;
   const ringOpacity1 = useRef(new Animated.Value(0)).current;
-  const ringScale2 = useRef(new Animated.Value(0.8)).current;
+  const ringScale2 = useRef(new Animated.Value(0.5)).current;
   const ringOpacity2 = useRef(new Animated.Value(0)).current;
-  const ringScale3 = useRef(new Animated.Value(0.8)).current;
+  const ringScale3 = useRef(new Animated.Value(0.5)).current;
   const ringOpacity3 = useRef(new Animated.Value(0)).current;
+  
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleTranslateY = useRef(new Animated.Value(30)).current;
+  const badgeScale = useRef(new Animated.Value(0)).current;
+  const descOpacity = useRef(new Animated.Value(0)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
+  const buttonTranslateY = useRef(new Animated.Value(20)).current;
+  
+  const shimmerPosition = useRef(new Animated.Value(-1)).current;
+  const crownRotate = useRef(new Animated.Value(0)).current;
 
-  const starsOpacity = useRef(new Animated.Value(0)).current;
-
-  const particles = useRef<Particle[]>(
-    Array.from({ length: 20 }, (_, i) => {
-      const angle = (i / 20) * Math.PI * 2;
-      const distance = ORB_SIZE * 0.6 + Math.random() * 40;
-      const colors = ['#FFD700', '#FFF', '#FF6B6B', '#60A5FA', '#A78BFA', '#34D399', '#EC4899'];
-      return {
-        x: new Animated.Value(0),
-        y: new Animated.Value(0),
-        opacity: new Animated.Value(0),
-        scale: new Animated.Value(0),
-        rotation: new Animated.Value(0),
-        startX: Math.cos(angle) * distance,
-        startY: Math.sin(angle) * distance,
-        color: colors[i % colors.length],
-        size: 4 + Math.random() * 6,
-      };
-    })
+  const floatingParticles = useRef<FloatingParticle[]>(
+    Array.from({ length: 16 }, () => ({
+      x: new Animated.Value(0),
+      y: new Animated.Value(0),
+      opacity: new Animated.Value(0),
+      scale: new Animated.Value(0),
+      startX: (Math.random() - 0.5) * SCREEN_WIDTH * 0.8,
+      startY: (Math.random() - 0.5) * 300,
+      size: 3 + Math.random() * 5,
+    }))
   ).current;
 
-  const glowLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const floatLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const shimmerLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const loopRefs = useRef<Animated.CompositeAnimation[]>([]);
+
+  const stopAllLoops = useCallback(() => {
+    loopRefs.current.forEach(loop => loop?.stop());
+    loopRefs.current = [];
+  }, []);
 
   const playEntrance = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -92,47 +89,48 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
     }
 
     setVideoReady(false);
+    
     backdropOpacity.setValue(0);
-    contentScale.setValue(0.8);
     contentOpacity.setValue(0);
-    orbScale.setValue(0);
+    contentTranslateY.setValue(50);
+    orbScale.setValue(0.3);
     orbOpacity.setValue(0);
-    titleOpacity.setValue(0);
-    titleTranslateY.setValue(40);
-    subtitleOpacity.setValue(0);
-    badgeScale.setValue(0);
-    buttonOpacity.setValue(0);
-    buttonTranslateY.setValue(30);
-    ringScale1.setValue(0.8);
+    ringScale1.setValue(0.5);
     ringOpacity1.setValue(0);
-    ringScale2.setValue(0.8);
+    ringScale2.setValue(0.5);
     ringOpacity2.setValue(0);
-    ringScale3.setValue(0.8);
+    ringScale3.setValue(0.5);
     ringOpacity3.setValue(0);
-    starsOpacity.setValue(0);
-    particles.forEach(p => {
+    titleOpacity.setValue(0);
+    titleTranslateY.setValue(30);
+    badgeScale.setValue(0);
+    descOpacity.setValue(0);
+    buttonOpacity.setValue(0);
+    buttonTranslateY.setValue(20);
+    shimmerPosition.setValue(-1);
+    crownRotate.setValue(0);
+    floatingParticles.forEach(p => {
       p.x.setValue(0);
       p.y.setValue(0);
       p.opacity.setValue(0);
       p.scale.setValue(0);
-      p.rotation.setValue(0);
     });
 
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(contentScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 8,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.timing(contentOpacity, {
         toValue: 1,
-        duration: 400,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(contentTranslateY, {
+        toValue: 0,
+        tension: 40,
+        friction: 8,
         useNativeDriver: true,
       }),
     ]).start();
@@ -141,180 +139,189 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
       Animated.parallel([
         Animated.spring(orbScale, {
           toValue: 1,
-          tension: 35,
+          tension: 30,
           friction: 5,
           useNativeDriver: true,
         }),
         Animated.timing(orbOpacity, {
           toValue: 1,
-          duration: 600,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]).start();
 
-      // Ring explosions
-      const playRing = (scale: Animated.Value, opacity: Animated.Value, delay: number) => {
+      const playRingExplosion = (scale: Animated.Value, opacity: Animated.Value, delay: number) => {
         Animated.sequence([
           Animated.delay(delay),
           Animated.parallel([
-            Animated.timing(scale, { toValue: 2.5, duration: 1000, useNativeDriver: true }),
+            Animated.timing(scale, { toValue: 2.8, duration: 1200, useNativeDriver: true }),
             Animated.sequence([
-              Animated.timing(opacity, { toValue: 0.6, duration: 200, useNativeDriver: true }),
-              Animated.timing(opacity, { toValue: 0, duration: 800, useNativeDriver: true }),
+              Animated.timing(opacity, { toValue: 0.7, duration: 150, useNativeDriver: true }),
+              Animated.timing(opacity, { toValue: 0, duration: 1050, useNativeDriver: true }),
             ]),
           ]),
         ]).start();
       };
 
-      playRing(ringScale1, ringOpacity1, 0);
-      playRing(ringScale2, ringOpacity2, 200);
-      playRing(ringScale3, ringOpacity3, 400);
+      playRingExplosion(ringScale1, ringOpacity1, 0);
+      playRingExplosion(ringScale2, ringOpacity2, 150);
+      playRingExplosion(ringScale3, ringOpacity3, 300);
 
       if (Platform.OS !== 'web') {
-        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 100);
+        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 80);
       }
     }, 200);
 
     setTimeout(() => {
-      particles.forEach((p, i) => {
+      floatingParticles.forEach((p, i) => {
         Animated.sequence([
-          Animated.delay(i * 30),
+          Animated.delay(i * 50),
           Animated.parallel([
-            Animated.timing(p.x, { toValue: p.startX, duration: 800, useNativeDriver: true }),
-            Animated.timing(p.y, { toValue: p.startY, duration: 800, useNativeDriver: true }),
-            Animated.timing(p.rotation, { toValue: 360, duration: 800, useNativeDriver: true }),
+            Animated.timing(p.x, { toValue: p.startX, duration: 2000, useNativeDriver: true }),
+            Animated.timing(p.y, { toValue: p.startY - 100, duration: 2000, useNativeDriver: true }),
             Animated.sequence([
-              Animated.timing(p.opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-              Animated.delay(400),
-              Animated.timing(p.opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+              Animated.timing(p.opacity, { toValue: 0.8, duration: 400, useNativeDriver: true }),
+              Animated.delay(1200),
+              Animated.timing(p.opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
             ]),
             Animated.sequence([
-              Animated.timing(p.scale, { toValue: 1.5, duration: 400, useNativeDriver: true }),
-              Animated.timing(p.scale, { toValue: 0, duration: 400, useNativeDriver: true }),
+              Animated.timing(p.scale, { toValue: 1.2, duration: 600, useNativeDriver: true }),
+              Animated.timing(p.scale, { toValue: 0.5, duration: 1400, useNativeDriver: true }),
             ]),
           ]),
         ]).start();
       });
-
-      Animated.timing(starsOpacity, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-    }, 400);
+    }, 300);
 
     setTimeout(() => {
       Animated.parallel([
-        Animated.timing(titleOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.spring(titleTranslateY, { toValue: 0, tension: 40, friction: 7, useNativeDriver: true }),
+        Animated.timing(titleOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(titleTranslateY, { toValue: 0, tension: 50, friction: 8, useNativeDriver: true }),
       ]).start();
-    }, 600);
+    }, 500);
 
     setTimeout(() => {
-      Animated.timing(subtitleOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    }, 900);
-
-    setTimeout(() => {
-      Animated.spring(badgeScale, { toValue: 1, tension: 50, friction: 6, useNativeDriver: true }).start();
+      Animated.spring(badgeScale, { toValue: 1, tension: 60, friction: 6, useNativeDriver: true }).start();
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    }, 1100);
+    }, 700);
+
+    setTimeout(() => {
+      Animated.timing(descOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    }, 900);
 
     setTimeout(() => {
       Animated.parallel([
-        Animated.timing(buttonOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.spring(buttonTranslateY, { toValue: 0, tension: 40, friction: 7, useNativeDriver: true }),
+        Animated.timing(buttonOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(buttonTranslateY, { toValue: 0, tension: 50, friction: 8, useNativeDriver: true }),
       ]).start();
-    }, 1300);
+    }, 1100);
 
-    glowLoopRef.current = Animated.loop(
+    const glowLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowPulse, { toValue: 0.7, duration: 2000, useNativeDriver: true }),
-        Animated.timing(glowPulse, { toValue: 0.3, duration: 2000, useNativeDriver: true }),
+        Animated.timing(orbGlowPulse, { toValue: 0.8, duration: 1800, useNativeDriver: true }),
+        Animated.timing(orbGlowPulse, { toValue: 0.4, duration: 1800, useNativeDriver: true }),
       ])
     );
-    glowLoopRef.current.start();
+    glowLoop.start();
+    loopRefs.current.push(glowLoop);
 
-    floatLoopRef.current = Animated.loop(
+    const floatLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(orbFloat, { toValue: -10, duration: 2500, useNativeDriver: true }),
-        Animated.timing(orbFloat, { toValue: 10, duration: 2500, useNativeDriver: true }),
+        Animated.timing(orbFloat, { toValue: -8, duration: 2000, useNativeDriver: true }),
+        Animated.timing(orbFloat, { toValue: 8, duration: 2000, useNativeDriver: true }),
       ])
     );
-    floatLoopRef.current.start();
+    floatLoop.start();
+    loopRefs.current.push(floatLoop);
 
-    shimmerLoopRef.current = Animated.loop(
+    const shimmerLoop = Animated.loop(
       Animated.timing(shimmerPosition, {
         toValue: 1,
         duration: 2500,
         useNativeDriver: true,
       })
     );
-    shimmerLoopRef.current.start();
-  }, [backdropOpacity, contentScale, contentOpacity, orbScale, orbOpacity, titleOpacity, titleTranslateY, subtitleOpacity, badgeScale, buttonOpacity, buttonTranslateY, glowPulse, orbFloat, shimmerPosition, ringScale1, ringOpacity1, ringScale2, ringOpacity2, ringScale3, ringOpacity3, starsOpacity, particles]);
+    shimmerLoop.start();
+    loopRefs.current.push(shimmerLoop);
+
+    const crownLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(crownRotate, { toValue: 1, duration: 3000, useNativeDriver: true }),
+        Animated.timing(crownRotate, { toValue: -1, duration: 3000, useNativeDriver: true }),
+        Animated.timing(crownRotate, { toValue: 0, duration: 3000, useNativeDriver: true }),
+      ])
+    );
+    crownLoop.start();
+    loopRefs.current.push(crownLoop);
+  }, [backdropOpacity, contentOpacity, contentTranslateY, orbScale, orbOpacity, orbGlowPulse, orbFloat, ringScale1, ringOpacity1, ringScale2, ringOpacity2, ringScale3, ringOpacity3, titleOpacity, titleTranslateY, badgeScale, descOpacity, buttonOpacity, buttonTranslateY, shimmerPosition, crownRotate, floatingParticles]);
 
   useEffect(() => {
     if (visible && reward) {
       playEntrance();
     } else {
-      glowLoopRef.current?.stop();
-      floatLoopRef.current?.stop();
-      shimmerLoopRef.current?.stop();
+      stopAllLoops();
     }
-    return () => {
-      glowLoopRef.current?.stop();
-      floatLoopRef.current?.stop();
-      shimmerLoopRef.current?.stop();
-    };
-  }, [visible, reward, playEntrance]);
+    return () => stopAllLoops();
+  }, [visible, reward, playEntrance, stopAllLoops]);
 
   const handleClose = useCallback(() => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    stopAllLoops();
     Animated.parallel([
       Animated.timing(backdropOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(contentScale, { toValue: 0.9, duration: 250, useNativeDriver: true }),
       Animated.timing(contentOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(contentTranslateY, { toValue: 30, duration: 250, useNativeDriver: true }),
     ]).start(() => onClose());
-  }, [backdropOpacity, contentScale, contentOpacity, onClose]);
+  }, [backdropOpacity, contentOpacity, contentTranslateY, onClose, stopAllLoops]);
 
   if (!reward) return null;
 
   const glowColor = reward.color || '#FFD700';
-
+  
   const shimmerTranslateX = shimmerPosition.interpolate({
     inputRange: [-1, 1],
     outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH],
+  });
+
+  const crownRotation = crownRotate.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-8deg', '0deg', '8deg'],
   });
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
         <LinearGradient
-          colors={['#000', `${glowColor}08`, '#000']}
+          colors={['#000', `${glowColor}06`, '#000']}
           locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFillObject}
         />
         
-        <Animated.View style={[styles.starsContainer, { opacity: starsOpacity }]}>
-          {[...Array(12)].map((_, i) => (
+        <View style={styles.starsField}>
+          {[...Array(20)].map((_, i) => (
             <View
               key={i}
               style={[
                 styles.starDot,
                 {
-                  left: `${10 + (i % 4) * 25}%`,
-                  top: `${15 + Math.floor(i / 4) * 30}%`,
-                  opacity: 0.3 + Math.random() * 0.4,
-                  width: 2 + Math.random() * 2,
-                  height: 2 + Math.random() * 2,
+                  left: `${5 + (i % 5) * 20 + Math.random() * 10}%`,
+                  top: `${10 + Math.floor(i / 5) * 20 + Math.random() * 10}%`,
+                  opacity: 0.2 + Math.random() * 0.3,
+                  width: 1 + Math.random() * 2,
+                  height: 1 + Math.random() * 2,
                 },
               ]}
             />
           ))}
-        </Animated.View>
+        </View>
 
         <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.7}>
-          <BlurView intensity={40} tint="dark" style={styles.closeButtonBlur}>
-            <X size={20} color="rgba(255,255,255,0.8)" />
+          <BlurView intensity={30} tint="dark" style={styles.closeButtonBlur}>
+            <X size={18} color="rgba(255,255,255,0.7)" />
           </BlurView>
         </TouchableOpacity>
 
@@ -322,17 +329,47 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
           styles.content,
           {
             opacity: contentOpacity,
-            transform: [{ scale: contentScale }],
+            transform: [{ translateY: contentTranslateY }],
           }
         ]}>
-          <View style={styles.topSection}>
-            <Animated.View style={[styles.unlockBadge, { opacity: titleOpacity }]}>
-              <Sparkles size={14} color={glowColor} />
-              <Text style={styles.unlockBadgeText}>REWARD UNLOCKED</Text>
+          <View style={styles.headerSection}>
+            <Animated.View style={[styles.crownBadge, { transform: [{ rotate: crownRotation }] }]}>
+              <LinearGradient
+                colors={[`${glowColor}40`, `${glowColor}15`]}
+                style={styles.crownBadgeGradient}
+              />
+              <Crown size={18} color={glowColor} fill={`${glowColor}40`} />
+            </Animated.View>
+            
+            <Animated.View style={[styles.unlockLabel, { opacity: titleOpacity }]}>
+              <Sparkles size={12} color={glowColor} />
+              <Text style={[styles.unlockLabelText, { color: glowColor }]}>REWARD UNLOCKED</Text>
+              <Sparkles size={12} color={glowColor} />
             </Animated.View>
           </View>
 
           <View style={styles.orbSection}>
+            {floatingParticles.map((p, i) => (
+              <Animated.View
+                key={i}
+                style={[
+                  styles.floatingParticle,
+                  {
+                    width: p.size,
+                    height: p.size,
+                    borderRadius: p.size / 2,
+                    backgroundColor: glowColor,
+                    opacity: p.opacity,
+                    transform: [
+                      { translateX: p.x },
+                      { translateY: p.y },
+                      { scale: p.scale },
+                    ],
+                  },
+                ]}
+              />
+            ))}
+
             <Animated.View style={[styles.glowRing, {
               opacity: ringOpacity1,
               borderColor: glowColor,
@@ -350,45 +387,20 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
             }]} />
 
             <Animated.View style={[styles.orbGlow, {
-              opacity: glowPulse,
+              opacity: orbGlowPulse,
               backgroundColor: glowColor,
             }]} />
 
-            {particles.map((p, i) => (
-              <Animated.View
-                key={i}
-                style={[
-                  styles.particle,
-                  {
-                    width: p.size,
-                    height: p.size,
-                    borderRadius: p.size / 2,
-                    backgroundColor: p.color,
-                    opacity: p.opacity,
-                    transform: [
-                      { translateX: p.x },
-                      { translateY: p.y },
-                      { scale: p.scale },
-                      { rotate: p.rotation.interpolate({
-                        inputRange: [0, 360],
-                        outputRange: ['0deg', '360deg'],
-                      })},
-                    ],
-                  },
-                ]}
-              />
-            ))}
-
-            <Animated.View style={[styles.orbWrapper, {
+            <Animated.View style={[styles.orbContainer, {
               opacity: orbOpacity,
               transform: [
                 { scale: orbScale },
                 { translateY: orbFloat },
               ],
             }]}>
-              <View style={[styles.orbBorder, { borderColor: `${glowColor}40` }]}>
-                <View style={[styles.orbFallback, { backgroundColor: `${glowColor}20` }]}>
-                  <Star size={48} color={glowColor} fill={glowColor} />
+              <View style={[styles.orbBorder, { borderColor: `${glowColor}50` }]}>
+                <View style={[styles.orbFallback, { backgroundColor: `${glowColor}15` }]}>
+                  <Star size={40} color={glowColor} fill={`${glowColor}60`} />
                 </View>
                 <Video
                   source={{ uri: reward.video }}
@@ -400,32 +412,37 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
                   onReadyForDisplay={() => setVideoReady(true)}
                 />
               </View>
+              
+              <View style={[styles.orbInnerGlow, { shadowColor: glowColor }]} />
             </Animated.View>
           </View>
 
           <View style={styles.infoSection}>
-            <Animated.View style={{ opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] }}>
-              <Text style={[styles.rewardName, { color: glowColor }]}>{reward.label}</Text>
-            </Animated.View>
+            <Animated.Text style={[
+              styles.rewardName,
+              { color: glowColor, opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] }
+            ]}>
+              {reward.label}
+            </Animated.Text>
 
-            <Animated.View style={[styles.rarityContainer, { transform: [{ scale: badgeScale }] }]}>
+            <Animated.View style={[styles.rarityBadge, { transform: [{ scale: badgeScale }] }]}>
               <LinearGradient
-                colors={[`${glowColor}20`, `${glowColor}08`]}
+                colors={[`${glowColor}25`, `${glowColor}08`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.rarityGradient}
               />
-              <View style={styles.rarityContent}>
+              <View style={styles.rarityInner}>
                 <View style={[styles.rarityDot, { backgroundColor: glowColor }]} />
                 <Text style={[styles.rarityText, { color: glowColor }]}>{reward.rarity}</Text>
-                <View style={styles.raritySeparator} />
-                <Text style={styles.ownedByText}>Owned by {reward.ownedBy}</Text>
+                <View style={styles.rarityDivider} />
+                <Text style={styles.ownedText}>Owned by {reward.ownedBy}</Text>
               </View>
             </Animated.View>
 
-            <Animated.View style={{ opacity: subtitleOpacity }}>
-              <Text style={styles.achievementText}>{reward.achievement}</Text>
-            </Animated.View>
+            <Animated.Text style={[styles.achievementText, { opacity: descOpacity }]}>
+              {reward.achievement}
+            </Animated.Text>
           </View>
 
           <Animated.View style={[styles.buttonSection, {
@@ -433,19 +450,21 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
             transform: [{ translateY: buttonTranslateY }],
           }]}>
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={styles.continueButton}
               onPress={handleClose}
               activeOpacity={0.9}
             >
               <LinearGradient
-                colors={[glowColor, `${glowColor}CC`]}
+                colors={[glowColor, `${glowColor}DD`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.primaryButtonGradient}
+                style={styles.continueButtonGradient}
               />
               <Animated.View style={[styles.buttonShimmer, { transform: [{ translateX: shimmerTranslateX }] }]} />
-              <Text style={styles.primaryButtonText}>Continue</Text>
+              <Text style={styles.continueButtonText}>Continue</Text>
             </TouchableOpacity>
+            
+            <Text style={styles.tapHint}>Tap to continue your journey</Text>
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -461,7 +480,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.97)',
   },
-  starsContainer: {
+  starsField: {
     ...StyleSheet.absoluteFillObject,
   },
   starDot: {
@@ -471,58 +490,69 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: 60,
+    top: 56,
     right: 20,
     zIndex: 10,
   },
   closeButtonBlur: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
   },
-  topSection: {
+  headerSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  unlockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  unlockBadgeText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 2,
-  },
-  orbSection: {
-    width: ORB_SIZE + 100,
-    height: ORB_SIZE + 100,
+  crownBadge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  crownBadgeGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 25,
+  },
+  unlockLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  unlockLabelText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    letterSpacing: 3,
+  },
+  orbSection: {
+    width: ORB_SIZE + 120,
+    height: ORB_SIZE + 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  floatingParticle: {
+    position: 'absolute',
   },
   orbGlow: {
     position: 'absolute',
-    width: ORB_SIZE + 80,
-    height: ORB_SIZE + 80,
-    borderRadius: (ORB_SIZE + 80) / 2,
+    width: ORB_SIZE + 70,
+    height: ORB_SIZE + 70,
+    borderRadius: (ORB_SIZE + 70) / 2,
   },
   glowRing: {
     position: 'absolute',
@@ -531,10 +561,7 @@ const styles = StyleSheet.create({
     borderRadius: ORB_SIZE / 2,
     borderWidth: 2,
   },
-  particle: {
-    position: 'absolute',
-  },
-  orbWrapper: {
+  orbContainer: {
     width: ORB_SIZE,
     height: ORB_SIZE,
     alignItems: 'center',
@@ -564,29 +591,38 @@ const styles = StyleSheet.create({
     position: 'absolute',
     opacity: 0,
   },
+  orbInnerGlow: {
+    position: 'absolute',
+    width: ORB_SIZE - 20,
+    height: ORB_SIZE - 20,
+    borderRadius: (ORB_SIZE - 20) / 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+  },
   infoSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 36,
   },
   rewardName: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '800' as const,
     letterSpacing: 1,
-    marginBottom: 16,
+    marginBottom: 14,
     textAlign: 'center',
   },
-  rarityContainer: {
-    borderRadius: 16,
+  rarityBadge: {
+    borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   rarityGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  rarityContent: {
+  rarityInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     gap: 8,
   },
@@ -600,55 +636,62 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     letterSpacing: 0.5,
   },
-  raritySeparator: {
+  rarityDivider: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
-  ownedByText: {
+  ownedText: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.45)',
     fontWeight: '500' as const,
   },
   achievementText: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     letterSpacing: 0.3,
+    lineHeight: 22,
   },
   buttonSection: {
     width: '100%',
-    paddingHorizontal: 20,
+    alignItems: 'center',
   },
-  primaryButton: {
+  continueButton: {
     width: '100%',
-    height: 60,
-    borderRadius: 30,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  primaryButtonGradient: {
+  continueButtonGradient: {
     ...StyleSheet.absoluteFillObject,
   },
   buttonShimmer: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 100,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 120,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     transform: [{ skewX: '-20deg' }],
   },
-  primaryButtonText: {
-    fontSize: 18,
+  continueButtonText: {
+    fontSize: 17,
     fontWeight: '700' as const,
     color: '#000',
     letterSpacing: 0.5,
+  },
+  tapHint: {
+    marginTop: 14,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.3)',
+    fontWeight: '400' as const,
   },
 });

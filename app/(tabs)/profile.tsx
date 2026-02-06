@@ -423,7 +423,7 @@ export default function ProfileScreen() {
                       {reward.label}
                     </Text>
                     <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]}>
-                      {reward.requirementLabel}
+                      {reward.unlocked ? reward.achievement : reward.unlockHint}
                     </Text>
                   </View>
                 ))}
