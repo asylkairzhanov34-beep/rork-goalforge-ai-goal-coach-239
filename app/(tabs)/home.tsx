@@ -11,7 +11,7 @@ import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
-import { REWARDS } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards } from '@/constants/rewards';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
 
 
@@ -53,7 +53,12 @@ export default function TodayScreen() {
   const videoRefs = useRef<{ [key: string]: Video | null }>({});
   const [isScreenFocused, setIsScreenFocused] = useState(true);
 
-  const rewards = REWARDS;
+  const rewards = useMemo(() => {
+    const streak = progress?.currentStreak ?? 0;
+    const tasks = progress?.totalCompletedTasks ?? 0;
+    const focusMin = progress?.focusTimeMinutes ?? 0;
+    return getUnlockedRewards(streak, tasks, focusMin);
+  }, [progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
 
 
   
@@ -391,7 +396,7 @@ export default function TodayScreen() {
                     <View style={styles.orbVideoWrapper}>
                       <Video
                         ref={setVideoRef(item.id)}
-                        source={{ uri: item.video }}
+                        source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
                         style={styles.orbVideo}
                         resizeMode={ResizeMode.COVER}
                         shouldPlay={isScreenFocused}

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, Dimensions } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy } from 'lucide-react-native';
+import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy, Zap } from 'lucide-react-native';
+
 import Constants from 'expo-constants';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
@@ -13,6 +14,8 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { useProgress } from '@/hooks/use-progress';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getRewardsByCategory } from '@/constants/rewards';
+import type { RewardCategory } from '@/constants/rewards';
 
 export default function ProfileScreen() {
   const store = useGoalStore();
@@ -25,16 +28,26 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
-  const GRAY_ORB_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769449334/0125_1__5_xxgjfb.mp4';
-  
-  const earnedOrbs = [
-    { id: '1', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4', label: 'First Step', unlocked: true },
-    { id: '2', video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956418/0126_8_xka62k.mp4', label: 'Day 3', unlocked: true },
-    { id: '3', video: GRAY_ORB_VIDEO, label: 'Week', unlocked: false },
-    { id: '4', video: GRAY_ORB_VIDEO, label: '7 Days', unlocked: false },
-    { id: '5', video: GRAY_ORB_VIDEO, label: 'Focus', unlocked: false },
-    { id: '6', video: GRAY_ORB_VIDEO, label: '14 Days', unlocked: false },
-  ];
+  const [activeCategory, setActiveCategory] = useState<RewardCategory>('streak');
+
+  const streakVal = progress?.currentStreak ?? store?.profile?.currentStreak ?? 0;
+  const tasksVal = progress?.totalCompletedTasks ?? (store?.dailyTasks?.filter(t => t.completed).length || 0);
+  const focusVal = progress?.focusTimeMinutes ?? 0;
+
+  const allRewards = useMemo(() => {
+    return getUnlockedRewards(streakVal, tasksVal, focusVal);
+  }, [streakVal, tasksVal, focusVal]);
+
+  const unlockedCount = allRewards.filter(r => r.unlocked).length;
+  const totalCount = allRewards.length;
+
+  const categoryRewards = useMemo(() => ({
+    streak: getRewardsByCategory(allRewards, 'streak'),
+    tasks: getRewardsByCategory(allRewards, 'tasks'),
+    focus: getRewardsByCategory(allRewards, 'focus'),
+  }), [allRewards]);
+
+  const currentCategoryRewards = categoryRewards[activeCategory];
 
   
   if (!store || !store.isReady) {
@@ -295,39 +308,65 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.achievementsSection}>
-            <View style={styles.sectionHeader}>
-              <Trophy size={16} color={theme.colors.primary} />
-              <Text style={styles.sectionTitle}>Achievements</Text>
+          <View style={styles.milestonesSection}>
+            <View style={styles.milestonesHeader}>
+              <View style={styles.milestonesHeaderLeft}>
+                <Trophy size={18} color={theme.colors.primary} />
+                <Text style={styles.milestonesTitle}>MileStones</Text>
+              </View>
+              <Text style={styles.milestonesCount}>{unlockedCount}/{totalCount} collected</Text>
             </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.orbsRow}
-            >
-              {earnedOrbs.map((orb) => (
-                <View key={orb.id} style={styles.miniOrbContainer}>
-                  <View style={[styles.miniOrbWrapper, !orb.unlocked && styles.miniOrbLocked]}>
+
+            <View style={styles.milestoneProgressBar}>
+              <View style={[styles.milestoneProgressFill, { width: `${(unlockedCount / totalCount) * 100}%` }]} />
+            </View>
+
+            <View style={styles.categoryTabs}>
+              {([['streak', Flame, 'Streak'], ['tasks', Target, 'Tasks'], ['focus', Zap, 'Focus']] as const).map(([cat, Icon, label]) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryTab, activeCategory === cat && styles.categoryTabActive]}
+                  onPress={() => setActiveCategory(cat)}
+                  activeOpacity={0.7}
+                >
+                  <Icon size={14} color={activeCategory === cat ? theme.colors.primary : 'rgba(255,255,255,0.4)'} />
+                  <Text style={[styles.categoryTabText, activeCategory === cat && styles.categoryTabTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.orbsGrid}>
+              {currentCategoryRewards.map((reward) => (
+                <View key={reward.id} style={styles.orbGridItem}>
+                  <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50` }]}>
                     <Video
-                      source={{ uri: orb.video }}
-                      style={styles.miniOrbVideo}
+                      source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
+                      style={styles.orbGridVideo}
                       resizeMode={ResizeMode.COVER}
                       shouldPlay
                       isLooping
                       isMuted
                     />
-                    {!orb.unlocked && (
-                      <View style={styles.miniOrbLockedOverlay}>
-                        <Lock size={12} color="rgba(255,255,255,0.5)" />
+                    {!reward.unlocked && (
+                      <View style={styles.orbGridLockedOverlay}>
+                        <Lock size={14} color="rgba(255,255,255,0.5)" />
+                      </View>
+                    )}
+                    {reward.unlocked && (
+                      <View style={[styles.orbGridCheckmark, { backgroundColor: reward.color }]}>
+                        <Text style={styles.orbGridCheckText}>✓</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={[styles.miniOrbLabel, !orb.unlocked && styles.miniOrbLabelLocked]}>
-                    {orb.label}
+                  <Text style={[styles.orbGridLabel, reward.unlocked && { color: '#fff' }]} numberOfLines={1}>
+                    {reward.label}
+                  </Text>
+                  <Text style={[styles.orbGridReq, reward.unlocked && { color: reward.color }]}>
+                    {reward.requirementLabel}
                   </Text>
                 </View>
               ))}
-            </ScrollView>
+            </View>
           </View>
 
           <View style={styles.menuSection}>
@@ -557,58 +596,132 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  achievementsSection: {
+  milestonesSection: {
     marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  sectionHeader: {
+  milestonesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  milestonesHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
+  milestonesTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
     color: '#fff',
   },
-  orbsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingRight: 20,
+  milestonesCount: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.4)',
   },
-  miniOrbContainer: {
+  milestoneProgressBar: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 2,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  milestoneProgressFill: {
+    height: '100%',
+    backgroundColor: theme.colors.primary,
+    borderRadius: 2,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  categoryTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  categoryTabActive: {
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    borderColor: 'rgba(255, 215, 0, 0.2)',
+  },
+  categoryTabText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: 'rgba(255, 255, 255, 0.4)',
+  },
+  categoryTabTextActive: {
+    color: theme.colors.primary,
+  },
+  orbsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'flex-start',
+  },
+  orbGridItem: {
+    width: (Dimensions.get('window').width - 40 - 32 - 24) / 3,
     alignItems: 'center',
   },
-  miniOrbWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  orbGridWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 215, 0, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 6,
   },
-  miniOrbLocked: {
-    borderColor: 'rgba(255,255,255,0.08)',
-    opacity: 0.5,
+  orbGridVideo: {
+    width: 69,
+    height: 69,
   },
-  miniOrbVideo: {
-    width: 45,
-    height: 45,
-  },
-  miniOrbLockedOverlay: {
+  orbGridLockedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  miniOrbLabel: {
+  orbGridCheckmark: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#121212',
+  },
+  orbGridCheckText: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginTop: 6,
+    fontWeight: '700' as const,
+    color: '#000',
+  },
+  orbGridLabel: {
+    fontSize: 11,
+    fontWeight: '500' as const,
+    color: 'rgba(255, 255, 255, 0.4)',
     textAlign: 'center',
   },
-  miniOrbLabelLocked: {
-    color: 'rgba(255, 255, 255, 0.3)',
+  orbGridReq: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.25)',
+    marginTop: 2,
+    textAlign: 'center',
   },
   menuSection: {
     gap: 8,
