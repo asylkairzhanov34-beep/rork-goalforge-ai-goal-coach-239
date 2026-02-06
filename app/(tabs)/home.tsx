@@ -78,6 +78,8 @@ export default function TodayScreen() {
 
   
   const rewardsCount = rewards.length;
+  const rewardsCountRef = useRef(rewardsCount);
+  useEffect(() => { rewardsCountRef.current = rewardsCount; }, [rewardsCount]);
   
   const orbAnimations = useRef(
     Array.from({ length: rewards.length }, (_, i) => ({
@@ -147,12 +149,13 @@ export default function TodayScreen() {
       onPanResponderMove: () => {},
       onPanResponderRelease: (_, gestureState) => {
         const currentIdx = activeIndexRef.current;
+        const total = rewardsCountRef.current;
         const { dx, vx } = gestureState;
         
         const isSwipeRight = dx > 10 || (dx > 5 && vx > 0.1);
         const isSwipeLeft = dx < -10 || (dx < -5 && vx < -0.1);
         
-        if (isSwipeLeft && currentIdx < rewardsCount - 1) {
+        if (isSwipeLeft && currentIdx < total - 1) {
           setActiveRewardIndex(currentIdx + 1);
         } else if (isSwipeRight && currentIdx > 0) {
           setActiveRewardIndex(currentIdx - 1);
