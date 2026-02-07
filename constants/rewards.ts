@@ -129,7 +129,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r9', 
-    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4', 
+    video: GRAY_ORB_VIDEO, 
     label: 'Mythic', 
     unlocked: false, 
     color: '#F472B6', 

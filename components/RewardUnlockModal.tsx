@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { X, RotateCcw } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import type { Reward } from '@/constants/rewards';
 
@@ -117,16 +117,7 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
     ]).start(() => onClose());
   }, [backdropOpacity, cardOpacity, cardScale, onClose]);
 
-  const handleReplay = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    
-    if (videoRef.current) {
-      await videoRef.current.setPositionAsync(0);
-      await videoRef.current.playAsync();
-    }
-  }, []);
+
 
   if (!reward) return null;
 
@@ -183,7 +174,6 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
                 {
                   opacity: orbOpacity,
                   transform: [{ scale: orbScale }],
-                  borderColor: `${glowColor}40`,
                 }
               ]}
             >
@@ -212,14 +202,7 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
               <Text style={styles.claimButtonText}>Claim Reward</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.replayButton}
-              onPress={handleReplay}
-              activeOpacity={0.7}
-            >
-              <RotateCcw size={14} color="rgba(255,255,255,0.4)" />
-              <Text style={styles.replayText}>Replay</Text>
-            </TouchableOpacity>
+
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -233,14 +216,14 @@ RewardUnlockModal.displayName = 'RewardUnlockModal';
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   card: {
     width: CARD_WIDTH,
-    backgroundColor: '#111',
+    backgroundColor: '#000',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -306,7 +289,6 @@ const styles = StyleSheet.create({
     width: ORB_SIZE,
     height: ORB_SIZE,
     borderRadius: ORB_SIZE / 2,
-    borderWidth: 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -344,18 +326,5 @@ const styles = StyleSheet.create({
     color: '#000',
     letterSpacing: 0.3,
   },
-  replayButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  replayText: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.4)',
-  },
+
 });
