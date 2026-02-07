@@ -7,6 +7,7 @@ import { getUnlockedRewards, type Reward } from '@/constants/rewards';
 
 const SEEN_REWARDS_KEY = '@seen_unlocked_rewards';
 const OFFER_SEEN_KEY = '@subscription_offer_seen';
+const CHECK_DELAY_MS = 2500;
 
 export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const progress = useProgress();
@@ -14,10 +15,11 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const isDeveloper = user?.email === 'developer@test.local';
   const [pendingReward, setPendingReward] = useState<Reward | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [offerSeen, setOfferSeen] = useState(false);
+  const [ready, setReady] = useState(false);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const queueRef = useRef<Reward[]>([]);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -32,33 +34,46 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
           seenIdsRef.current = new Set();
         }
       }
-      if (offerFlag === 'true') {
-        setOfferSeen(true);
-      }
       initializedRef.current = true;
-      console.log('[RewardUnlock] Initialized, offerSeen:', offerFlag === 'true');
+      console.log('[RewardUnlock] Initialized, seenIds:', seenIdsRef.current.size);
+
+      if (offerFlag === 'true') {
+        setReady(true);
+      } else {
+        delayTimerRef.current = setTimeout(() => {
+          console.log('[RewardUnlock] Auto-ready after delay');
+          setReady(true);
+        }, CHECK_DELAY_MS);
+      }
     }).catch(() => {
       initializedRef.current = true;
+      delayTimerRef.current = setTimeout(() => setReady(true), CHECK_DELAY_MS);
     });
+
+    return () => {
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+    };
   }, []);
 
   const markOfferSeen = useCallback(() => {
     console.log('[RewardUnlock] Marking offer as seen');
-    setOfferSeen(true);
     AsyncStorage.setItem(OFFER_SEEN_KEY, 'true').catch(() => {});
-  }, []);
+    if (!ready) {
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+      setTimeout(() => setReady(true), 800);
+    }
+  }, [ready]);
 
   useEffect(() => {
     if (!initializedRef.current) return;
     if (!progress?.isReady) return;
-    if (!offerSeen) {
-      console.log('[RewardUnlock] Waiting for subscription offer to be seen first');
-      return;
-    }
+    if (!ready) return;
 
     const streak = progress.currentStreak ?? 0;
     const tasks = progress.totalCompletedTasks ?? 0;
     const focus = progress.focusTimeMinutes ?? 0;
+
+    console.log('[RewardUnlock] Checking rewards: streak=', streak, 'tasks=', tasks, 'focus=', focus);
 
     const rewards = getUnlockedRewards(streak, tasks, focus, isDeveloper);
     const newlyUnlocked = rewards.filter(r => r.unlocked && !seenIdsRef.current.has(r.id));
@@ -78,7 +93,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         queueRef.current = [...queueRef.current, ...newlyUnlocked];
       }
     }
-  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, offerSeen, isDeveloper]);
+  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, ready, isDeveloper]);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);

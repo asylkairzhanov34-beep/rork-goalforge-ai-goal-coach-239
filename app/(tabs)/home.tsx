@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, AppState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -60,6 +60,7 @@ export default function TodayScreen() {
   
   const videoRefs = useRef<{ [key: string]: Video | null }>({});
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const [videoKey, setVideoKey] = useState(0);
 
   const isDeveloper = user?.email === 'developer@test.local';
 
@@ -205,11 +206,25 @@ export default function TodayScreen() {
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
+      setVideoKey(k => k + 1);
       return () => {
         setIsScreenFocused(false);
       };
     }, [])
   );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        console.log('[Home] App became active, refreshing videos');
+        setIsScreenFocused(true);
+        setVideoKey(k => k + 1);
+      } else if (state === 'background') {
+        setIsScreenFocused(false);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const setVideoRef = useCallback((id: string) => (ref: Video | null) => {
     videoRefs.current[id] = ref;
@@ -431,6 +446,7 @@ export default function TodayScreen() {
                   >
                     <View style={styles.orbVideoWrapper}>
                       <Video
+                        key={`${item.id}-${videoKey}`}
                         ref={setVideoRef(item.id)}
                         source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
                         style={styles.orbVideo}
@@ -438,7 +454,6 @@ export default function TodayScreen() {
                         shouldPlay={isScreenFocused}
                         isLooping
                         isMuted
-                        onPlaybackStatusUpdate={undefined}
                       />
                     </View>
                     {!item.unlocked && (
