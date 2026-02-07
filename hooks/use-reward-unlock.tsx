@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProgress } from '@/hooks/use-progress';
 import { useAuth } from '@/hooks/use-auth-store';
-import { getUnlockedRewards, type Reward } from '@/constants/rewards';
+import { getUnlockedRewards, REWARDS, type Reward } from '@/constants/rewards';
 
 const SEEN_REWARDS_KEY = '@seen_unlocked_rewards';
 const OFFER_SEEN_KEY = '@subscription_offer_seen';
@@ -108,10 +108,21 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     }, 500);
   }, []);
 
+  const triggerTestReward = useCallback((rewardIndex?: number) => {
+    if (!isDeveloper) return;
+    const idx = rewardIndex ?? Math.floor(Math.random() * REWARDS.length);
+    const reward = { ...REWARDS[idx], unlocked: true };
+    console.log('[RewardUnlock] DEV: Triggering test reward:', reward.label);
+    setPendingReward(reward);
+    setModalVisible(true);
+  }, [isDeveloper]);
+
   return {
     pendingReward,
     modalVisible,
     closeModal,
     markOfferSeen,
+    triggerTestReward,
+    isDeveloper,
   };
 });

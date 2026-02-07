@@ -6,7 +6,7 @@ import { Video, ResizeMode } from 'expo-av';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight } from 'lucide-react-native';
+import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight, Gift } from 'lucide-react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
@@ -37,7 +37,7 @@ export default function TodayScreen() {
   const challengeStore = useChallengeStore();
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
-  const { markOfferSeen } = useRewardUnlock();
+  const { markOfferSeen, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
 
   useEffect(() => {
     if (isPremium && !subscriptionChecking) {
@@ -415,7 +415,16 @@ export default function TodayScreen() {
             </View>
           </View>
 
-          
+          {isDevMode && (
+            <TouchableOpacity
+              style={styles.devTestRewardButton}
+              onPress={() => triggerTestReward()}
+              activeOpacity={0.8}
+            >
+              <Gift size={18} color="#000" />
+              <Text style={styles.devTestRewardText}>Test Reward</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.orbContainer}>
             <View 
@@ -946,6 +955,23 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.regular,
     color: theme.colors.text,
     letterSpacing: 0,
+  },
+  devTestRewardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 8,
+    gap: 8,
+  },
+  devTestRewardText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#000',
   },
 
   journalSection: {
