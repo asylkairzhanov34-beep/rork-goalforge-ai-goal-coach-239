@@ -15,8 +15,8 @@ import * as Haptics from 'expo-haptics';
 import type { Reward } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 40;
-const ORB_SIZE = SCREEN_WIDTH * 0.5;
+const CARD_WIDTH = SCREEN_WIDTH;
+const ORB_SIZE = SCREEN_WIDTH * 0.6;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -206,14 +206,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
   },
   card: {
     width: CARD_WIDTH,
     backgroundColor: '#000',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     paddingBottom: 36,
     paddingTop: 8,
     overflow: 'hidden',
@@ -264,7 +260,7 @@ const styles = StyleSheet.create({
   orbSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 32,
   },
   orbContainer: {
     width: ORB_SIZE,
