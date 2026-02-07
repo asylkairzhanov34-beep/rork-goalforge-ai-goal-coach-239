@@ -15,8 +15,8 @@ import * as Haptics from 'expo-haptics';
 import type { Reward } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 48;
-const ORB_SIZE = SCREEN_WIDTH * 0.52;
+const CARD_WIDTH = SCREEN_WIDTH - 40;
+const ORB_SIZE = SCREEN_WIDTH * 0.5;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -159,17 +159,6 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
           <View style={styles.orbSection}>
             <Animated.View 
               style={[
-                styles.orbGlow,
-                {
-                  backgroundColor: glowColor,
-                  opacity: Animated.multiply(orbOpacity, 0.15),
-                  transform: [{ scale: orbScale }],
-                }
-              ]} 
-            />
-            
-            <Animated.View 
-              style={[
                 styles.orbContainer,
                 {
                   opacity: orbOpacity,
@@ -177,19 +166,17 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
                 }
               ]}
             >
-              <View style={[styles.orbInner, { backgroundColor: `${glowColor}10` }]}>
-                <Video
-                  ref={videoRef}
-                  key={videoKey}
-                  source={{ uri: reward.video }}
-                  style={[styles.orbVideo, !videoReady && styles.orbVideoHidden]}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay
-                  isLooping
-                  isMuted
-                  onReadyForDisplay={() => setVideoReady(true)}
-                />
-              </View>
+              <Video
+                ref={videoRef}
+                key={videoKey}
+                source={{ uri: reward.video }}
+                style={[styles.orbVideo, !videoReady && styles.orbVideoHidden]}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted
+                onReadyForDisplay={() => setVideoReady(true)}
+              />
             </Animated.View>
           </View>
 
@@ -224,10 +211,11 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     backgroundColor: '#000',
-    borderRadius: 24,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    paddingBottom: 28,
+    paddingBottom: 36,
+    paddingTop: 8,
     overflow: 'hidden',
   },
   cardHeader: {
@@ -249,7 +237,7 @@ const styles = StyleSheet.create({
   headerContent: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   unlockLabel: {
     fontSize: 13,
@@ -276,42 +264,26 @@ const styles = StyleSheet.create({
   orbSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
-    position: 'relative',
-  },
-  orbGlow: {
-    position: 'absolute',
-    width: ORB_SIZE + 60,
-    height: ORB_SIZE + 60,
-    borderRadius: (ORB_SIZE + 60) / 2,
+    paddingVertical: 40,
   },
   orbContainer: {
     width: ORB_SIZE,
     height: ORB_SIZE,
     borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbInner: {
-    width: ORB_SIZE - 4,
-    height: ORB_SIZE - 4,
-    borderRadius: (ORB_SIZE - 4) / 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   orbVideo: {
-    width: ORB_SIZE - 4,
-    height: ORB_SIZE - 4,
-    borderRadius: (ORB_SIZE - 4) / 2,
+    width: ORB_SIZE,
+    height: ORB_SIZE,
+    borderRadius: ORB_SIZE / 2,
   },
   orbVideoHidden: {
     opacity: 0,
   },
   footer: {
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
+    marginTop: 8,
   },
   claimButton: {
     width: '100%',
