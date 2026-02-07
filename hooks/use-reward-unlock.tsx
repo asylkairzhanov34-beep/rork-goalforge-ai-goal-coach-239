@@ -110,9 +110,26 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
 
   const triggerTestReward = useCallback((rewardIndex?: number) => {
     if (!isDeveloper) return;
-    const idx = rewardIndex ?? Math.floor(Math.random() * REWARDS.length);
+    
+    let idx: number;
+    if (rewardIndex !== undefined) {
+      idx = rewardIndex;
+    } else {
+      const unshownRewards = REWARDS.filter(r => !seenIdsRef.current.has(r.id));
+      if (unshownRewards.length > 0) {
+        const nextReward = unshownRewards[0];
+        idx = REWARDS.findIndex(r => r.id === nextReward.id);
+      } else {
+        idx = 0;
+      }
+    }
+    
     const reward = { ...REWARDS[idx], unlocked: true };
-    console.log('[RewardUnlock] DEV: Triggering test reward:', reward.label);
+    console.log('[RewardUnlock] DEV: Triggering test reward (sequential):', reward.label, 'index:', idx);
+    
+    seenIdsRef.current.add(reward.id);
+    AsyncStorage.setItem(SEEN_REWARDS_KEY, JSON.stringify([...seenIdsRef.current])).catch(() => {});
+    
     setPendingReward(reward);
     setModalVisible(true);
   }, [isDeveloper]);
