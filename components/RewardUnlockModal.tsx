@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { type Reward } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.55;
+const ORB_SIZE = SCREEN_WIDTH * 0.75;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -233,10 +233,11 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     paddingHorizontal: 32,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
   },
   closeButton: {
     position: 'absolute',
@@ -280,9 +281,9 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
   },
   orbContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 40,
   },
   orbVideoWrapper: {
     width: ORB_SIZE,
