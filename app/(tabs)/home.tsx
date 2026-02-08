@@ -747,30 +747,30 @@ export default function TodayScreen() {
             style={[
               styles.floatingPlanButton,
               { 
-                shadowColor: theme.colors.primary,
-                borderColor: 'transparent',
+                shadowColor: '#FFD700',
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 8,
+                borderColor: 'rgba(255, 215, 0, 0.45)',
+                borderWidth: 1.5,
+                backgroundColor: 'rgba(255, 215, 0, 0.08)',
               }
             ]}
             onPress={() => router.push('/plan')}
             activeOpacity={0.85}
           >
-            <LinearGradient
-              colors={[theme.colors.primary, '#E5BE00', '#FFD700', '#FFEA70', '#FFD700', '#B8860B']}
-              locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.floatingButtonGradient}
-            />
+            <View style={[styles.floatingButtonGradient, { backgroundColor: 'rgba(255, 255, 255, 0.06)' }]} />
             <View style={styles.floatingButtonInner}>
-              <Calendar size={20} color="#000" style={styles.planButtonIcon} />
-              <Text style={[styles.floatingPlanButtonText, { color: '#000' }]}>Go to Plan</Text>
+              <Calendar size={20} color="rgba(255, 215, 0, 0.9)" style={styles.planButtonIcon} />
+              <Text style={[styles.floatingPlanButtonText, { color: 'rgba(255, 255, 255, 0.95)' }]}>Go to Plan</Text>
             </View>
             <Animated.View 
               style={[
                 styles.shimmerOverlay,
                 {
                   transform: [{ translateX: shimmerTranslateX }],
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: 'rgba(255, 215, 0, 0.15)',
                 }
               ]} 
             />
