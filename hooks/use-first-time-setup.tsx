@@ -138,8 +138,10 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
 
   const updateProfile = useCallback(
     async (updates: Partial<FirstTimeProfile>) => {
+      let merged: FirstTimeProfile | null = null;
+
       setState((prev) => {
-        const merged = {
+        merged = {
           ...(prev.profile ?? {}),
           ...updates,
         } as FirstTimeProfile;
@@ -157,57 +159,69 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
           merged.isCompleted = prev.profile?.isCompleted ?? false;
         }
 
-        safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(merged));
-
-        if (user?.id) {
-          console.log('[FirstTimeSetupProvider] Syncing profile to Firebase');
-          updateUserProfile(user.id, {
-            firstTimeSetup: serializeProfile(merged),
-          }).catch((error) => {
-            console.error('[FirstTimeSetupProvider] Failed to sync to Firebase:', error);
-          });
-        }
-
         return {
           ...prev,
           profile: merged,
         };
       });
+
+      if (merged) {
+        const serialized = serializeProfile(merged);
+        console.log('[FirstTimeSetupProvider] Persisting profile update to storage');
+        await safeStorageSet(FIRST_TIME_SETUP_KEY, serialized);
+
+        if (user?.id) {
+          console.log('[FirstTimeSetupProvider] Syncing profile to Firebase');
+          await updateUserProfile(user.id, {
+            firstTimeSetup: serialized,
+          }).catch((error) => {
+            console.error('[FirstTimeSetupProvider] Failed to sync to Firebase:', error);
+          });
+        }
+      }
     },
     [FIRST_TIME_SETUP_KEY, serializeProfile, user?.id]
   );
 
   const completeSetup = useCallback(async () => {
+    let completed: FirstTimeProfile | null = null;
+
     setState((prev) => {
       if (!prev.profile) {
         console.warn('[FirstTimeSetupProvider] completeSetup called with no profile - ignoring');
         return prev;
       }
 
-      const completed: FirstTimeProfile = {
+      completed = {
         ...prev.profile,
         isCompleted: true,
       };
-
-      safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(completed));
-
-      if (user?.id) {
-        console.log('[FirstTimeSetupProvider] Saving completed setup to Firebase');
-        saveUserProfile(user.id, {
-          firstTimeSetup: serializeProfile(completed),
-          email: user.email,
-          displayName: completed.nickname,
-          createdAt: new Date().toISOString(),
-        }).catch((error) => {
-          console.error('[FirstTimeSetupProvider] Failed to save to Firebase:', error);
-        });
-      }
 
       return {
         ...prev,
         profile: completed,
       };
     });
+
+    if (completed) {
+      const serialized = serializeProfile(completed);
+      console.log('[FirstTimeSetupProvider] Persisting completed setup to storage');
+      await safeStorageSet(FIRST_TIME_SETUP_KEY, serialized);
+
+      if (user?.id) {
+        console.log('[FirstTimeSetupProvider] Saving completed setup to Firebase');
+        await saveUserProfile(user.id, {
+          firstTimeSetup: serialized,
+          email: user.email,
+          displayName: (completed as FirstTimeProfile).nickname,
+          createdAt: new Date().toISOString(),
+        }).catch((error) => {
+          console.error('[FirstTimeSetupProvider] Failed to save to Firebase:', error);
+        });
+      }
+    } else {
+      console.warn('[FirstTimeSetupProvider] completeSetup: no profile available after setState');
+    }
   }, [FIRST_TIME_SETUP_KEY, serializeProfile, user?.id, user?.email]);
 
   const setStep = useCallback((step: number) => {

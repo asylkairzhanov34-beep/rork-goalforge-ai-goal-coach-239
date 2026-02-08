@@ -80,44 +80,72 @@ export default function FirstTimeSetupScreen() {
   };
 
   const handleStep3Next = async (time: 'morning' | 'afternoon' | 'evening') => {
-    await updateProfile({
-      productivityTime: time,
-    });
-    setSelectedProductivityTime(time);
-    
-    await completeSetup();
-    
-    const permissionGranted = await requestPermissions();
-    if (permissionGranted) {
-      await scheduleGoalReminder(time);
+    try {
+      console.log('[FirstTimeSetup] Step3 completing with time:', time);
+      await updateProfile({
+        productivityTime: time,
+      });
+      setSelectedProductivityTime(time);
+      
+      await completeSetup();
+      console.log('[FirstTimeSetup] Setup completed and persisted successfully');
+      
+      const permissionGranted = await requestPermissions().catch(() => false);
+      if (permissionGranted) {
+        await scheduleGoalReminder(time).catch((e) => {
+          console.warn('[FirstTimeSetup] Failed to schedule reminder:', e);
+        });
+      }
+      
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      console.error('[FirstTimeSetup] handleStep3Next failed:', error);
+      try {
+        await completeSetup();
+        router.replace('/(tabs)/home');
+      } catch (retryError) {
+        console.error('[FirstTimeSetup] Retry also failed:', retryError);
+      }
     }
-    
-    router.replace('/(tabs)/home');
   };
 
   const handleStep3Skip = async () => {
-    await completeSetup();
-    router.replace('/(tabs)/home');
+    try {
+      await completeSetup();
+      console.log('[FirstTimeSetup] Setup completed (skipped step3)');
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      console.error('[FirstTimeSetup] handleStep3Skip failed:', error);
+      router.replace('/(tabs)/home');
+    }
   };
 
   const handleWelcomeComplete = async () => {
-    await completeSetup();
-    
-    const productivityTime = selectedProductivityTime || profile?.productivityTime;
-    if (productivityTime && productivityTime !== 'unknown') {
-      console.log('[FirstTimeSetup] Setting up notifications for productivity time:', productivityTime);
+    try {
+      await completeSetup();
+      console.log('[FirstTimeSetup] Setup completed from welcome screen');
       
-      const permissionGranted = await requestPermissions();
-      
-      if (permissionGranted) {
-        await scheduleGoalReminder(productivityTime);
-        console.log('[FirstTimeSetup] Goal reminder scheduled successfully');
-      } else {
-        console.log('[FirstTimeSetup] Notification permission not granted');
+      const productivityTime = selectedProductivityTime || profile?.productivityTime;
+      if (productivityTime && productivityTime !== 'unknown') {
+        console.log('[FirstTimeSetup] Setting up notifications for productivity time:', productivityTime);
+        
+        const permissionGranted = await requestPermissions().catch(() => false);
+        
+        if (permissionGranted) {
+          await scheduleGoalReminder(productivityTime).catch((e) => {
+            console.warn('[FirstTimeSetup] Failed to schedule reminder:', e);
+          });
+          console.log('[FirstTimeSetup] Goal reminder scheduled successfully');
+        } else {
+          console.log('[FirstTimeSetup] Notification permission not granted');
+        }
       }
+      
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      console.error('[FirstTimeSetup] handleWelcomeComplete failed:', error);
+      router.replace('/(tabs)/home');
     }
-    
-    router.replace('/(tabs)/home');
   };
 
   const sanitizedProductivityTime: 'morning' | 'afternoon' | 'evening' | undefined =
