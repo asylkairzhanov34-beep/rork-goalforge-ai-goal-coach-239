@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Video, ResizeMode } from 'expo-av';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -166,7 +167,9 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={20} color="rgba(255,255,255,0.5)" />
+            <BlurView intensity={40} tint="dark" style={styles.closeButtonBlur}>
+              <X size={18} color="rgba(255,255,255,0.6)" />
+            </BlurView>
           </TouchableOpacity>
 
           <Animated.View style={[styles.headerContent, { opacity: headerOpacity, transform: [{ translateY: headerSlide }] }]}>
@@ -209,7 +212,11 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
               onPress={handleClose}
               activeOpacity={0.85}
             >
-              <Text style={styles.claimButtonText}>Claim Reward</Text>
+              <BlurView intensity={50} tint="dark" style={styles.claimButtonBlur}>
+                <View style={styles.claimButtonInner}>
+                  <Text style={styles.claimButtonText}>Claim Reward</Text>
+                </View>
+              </BlurView>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -242,10 +249,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  closeButtonBlur: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   headerContent: {
     alignItems: 'center',
@@ -305,16 +316,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 56,
     borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  claimButtonBlur: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  claimButtonInner: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   claimButtonText: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.9)',
     letterSpacing: 0.5,
   },
 });
