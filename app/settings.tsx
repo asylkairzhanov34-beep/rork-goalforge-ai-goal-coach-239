@@ -30,7 +30,9 @@ import {
   Trash2,
   CreditCard,
   Crown,
-  ExternalLink
+  ExternalLink,
+  Cloud,
+  CloudOff
 } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
@@ -439,6 +441,31 @@ export default function SettingsScreen() {
 
           <SectionHeader title="Data" />
           <View style={styles.section}>
+            {store?.firebaseSyncOk === false && (
+              <TouchableOpacity 
+                style={styles.syncWarningBanner}
+                onPress={() => Alert.alert(
+                  'Cloud Sync Issue',
+                  store.firebaseSyncError || 'Firebase Firestore Security Rules are not configured. Your data is only stored locally and WILL BE LOST if you delete the app.\n\nTo fix:\n1. Go to Firebase Console\n2. Firestore Database → Rules\n3. Add rules that allow authenticated users to read/write their data\n4. Publish the rules',
+                  [{ text: 'OK' }]
+                )}
+                activeOpacity={0.7}
+              >
+                <CloudOff size={20} color="#EF4444" />
+                <View style={styles.syncWarningText}>
+                  <Text style={styles.syncWarningTitle}>Cloud Sync Not Working</Text>
+                  <Text style={styles.syncWarningSubtitle}>Data stored locally only. Tap for details.</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {store?.firebaseSyncOk === true && (
+              <SettingItem
+                icon={Cloud}
+                title="Cloud Sync"
+                subtitle="Data is synced to Firebase"
+                iconColor="#10B981"
+              />
+            )}
             <SettingItem
               icon={RefreshCw}
               title="Redo Setup"
@@ -643,5 +670,27 @@ const styles = StyleSheet.create({
   appCopyright: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textLight,
+  },
+  syncWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    backgroundColor: '#FEF2F2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FECACA',
+  },
+  syncWarningText: {
+    flex: 1,
+    marginLeft: theme.spacing.sm,
+  },
+  syncWarningTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '600' as const,
+    color: '#DC2626',
+  },
+  syncWarningSubtitle: {
+    fontSize: theme.fontSize.sm,
+    color: '#EF4444',
+    marginTop: 2,
   },
 });

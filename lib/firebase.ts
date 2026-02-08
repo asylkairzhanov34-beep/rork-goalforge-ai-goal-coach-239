@@ -279,10 +279,19 @@ export async function saveUserGoals(userId: string, goals: any[]): Promise<void>
       goalsUpdatedAt: serverTimestamp(),
     }, { merge: true });
     
-    console.log('[Firebase] Goals saved');
+    console.log('[Firebase] Goals saved successfully');
+    firebaseSyncStatus.lastSyncSuccess = true;
+    firebaseSyncStatus.lastSyncTime = Date.now();
+    firebaseSyncStatus.lastError = null;
   } catch (error: any) {
+    console.error('[Firebase] FAILED to save goals:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.code === 'permission-denied' 
+      ? 'Firestore rules not configured - data NOT saved to cloud' 
+      : (error?.message || 'Unknown error');
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied saving goals - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Goals are NOT being saved to Firebase!');
+      console.error('[Firebase] ⚠️ Configure Firestore Security Rules in Firebase Console');
       return;
     }
     throw error;
@@ -299,14 +308,23 @@ export async function getUserGoals(userId: string): Promise<any[]> {
     
     if (docSnap.exists() && docSnap.data().goals) {
       console.log('[Firebase] Goals found:', docSnap.data().goals.length);
+      firebaseSyncStatus.lastSyncSuccess = true;
+      firebaseSyncStatus.lastSyncTime = Date.now();
+      firebaseSyncStatus.lastError = null;
       return docSnap.data().goals;
     }
     
-    console.log('[Firebase] No goals found');
+    console.log('[Firebase] No goals found in Firestore for user:', userId);
     return [];
   } catch (error: any) {
+    console.error('[Firebase] FAILED to get goals:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
+      ? 'Firestore rules not configured - cannot read data from cloud'
+      : (error?.message || 'Unknown error');
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied getting goals - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read goals from Firebase!');
+      console.error('[Firebase] ⚠️ Configure Firestore Security Rules in Firebase Console');
       return [];
     }
     throw error;
@@ -326,10 +344,18 @@ export async function saveUserTasks(userId: string, tasks: any[]): Promise<void>
       tasksUpdatedAt: serverTimestamp(),
     }, { merge: true });
     
-    console.log('[Firebase] Tasks saved');
+    console.log('[Firebase] Tasks saved successfully');
+    firebaseSyncStatus.lastSyncSuccess = true;
+    firebaseSyncStatus.lastSyncTime = Date.now();
+    firebaseSyncStatus.lastError = null;
   } catch (error: any) {
+    console.error('[Firebase] FAILED to save tasks:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
+      ? 'Firestore rules not configured - data NOT saved to cloud'
+      : (error?.message || 'Unknown error');
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied saving tasks - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Tasks are NOT being saved to Firebase!');
       return;
     }
     throw error;
@@ -346,14 +372,22 @@ export async function getUserTasks(userId: string): Promise<any[]> {
     
     if (docSnap.exists() && docSnap.data().tasks) {
       console.log('[Firebase] Tasks found:', docSnap.data().tasks.length);
+      firebaseSyncStatus.lastSyncSuccess = true;
+      firebaseSyncStatus.lastSyncTime = Date.now();
+      firebaseSyncStatus.lastError = null;
       return docSnap.data().tasks;
     }
     
-    console.log('[Firebase] No tasks found');
+    console.log('[Firebase] No tasks found in Firestore for user:', userId);
     return [];
   } catch (error: any) {
+    console.error('[Firebase] FAILED to get tasks:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
+      ? 'Firestore rules not configured - cannot read data from cloud'
+      : (error?.message || 'Unknown error');
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied getting tasks - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read tasks from Firebase!');
       return [];
     }
     throw error;
@@ -373,10 +407,16 @@ export async function saveUserPomodoroSessions(userId: string, sessions: any[]):
       pomodoroUpdatedAt: serverTimestamp(),
     }, { merge: true });
     
-    console.log('[Firebase] Pomodoro sessions saved');
+    console.log('[Firebase] Pomodoro sessions saved successfully');
+    firebaseSyncStatus.lastSyncSuccess = true;
+    firebaseSyncStatus.lastSyncTime = Date.now();
+    firebaseSyncStatus.lastError = null;
   } catch (error: any) {
+    console.error('[Firebase] FAILED to save pomodoro sessions:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied saving pomodoro sessions - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Pomodoro sessions NOT saved!');
       return;
     }
     throw error;
@@ -399,8 +439,11 @@ export async function getUserPomodoroSessions(userId: string): Promise<any[]> {
     console.log('[Firebase] No pomodoro sessions found');
     return [];
   } catch (error: any) {
+    console.error('[Firebase] FAILED to get pomodoro sessions:', error?.code, error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied getting pomodoro sessions - using local storage only');
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read pomodoro sessions!');
       return [];
     }
     throw error;
@@ -498,6 +541,44 @@ export async function getUserSubscription(userId: string): Promise<any | null> {
       return null;
     }
     throw error;
+  }
+}
+
+export const firebaseSyncStatus = {
+  lastSyncSuccess: false,
+  lastSyncTime: 0,
+  lastError: null as string | null,
+  get isSyncing() {
+    return this.lastSyncTime > 0;
+  },
+  get hasError() {
+    return this.lastError !== null;
+  },
+};
+
+export async function testFirestoreConnection(userId: string): Promise<{ success: boolean; error?: string }> {
+  console.log('[Firebase] Testing Firestore connection for user:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    await getDoc(userRef);
+    console.log('[Firebase] ✅ Firestore connection OK - rules are configured');
+    firebaseSyncStatus.lastSyncSuccess = true;
+    firebaseSyncStatus.lastError = null;
+    return { success: true };
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      const msg = 'Firestore Security Rules not configured. Data will only be stored locally and WILL BE LOST if you delete the app. Go to Firebase Console → Firestore → Rules and add proper rules.';
+      console.error('[Firebase] ❌', msg);
+      firebaseSyncStatus.lastSyncSuccess = false;
+      firebaseSyncStatus.lastError = msg;
+      return { success: false, error: msg };
+    }
+    const msg = error?.message || 'Unknown Firestore error';
+    console.error('[Firebase] ❌ Firestore test failed:', msg);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = msg;
+    return { success: false, error: msg };
   }
 }
 

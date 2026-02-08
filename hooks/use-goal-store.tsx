@@ -24,7 +24,8 @@ import {
   getUserPomodoroSessions,
   saveUserPomodoroSessions,
   getUserFullProfile,
-  saveUserFullProfile
+  saveUserFullProfile,
+  testFirestoreConnection
 } from '@/lib/firebase';
 
 const getStorageKeys = (userId: string) => ({
@@ -57,6 +58,28 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const [activeChallengesForStreak, setActiveChallengesForStreak] = useState<ActiveChallengeForStreak[]>([]);
 
   const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
+  const [firebaseSyncOk, setFirebaseSyncOk] = useState<boolean | null>(null);
+  const [firebaseSyncError, setFirebaseSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id || user.id.startsWith('dev_guest_')) return;
+    
+    const checkConnection = async () => {
+      console.log('[GoalStore] Testing Firebase Firestore connection...');
+      const result = await testFirestoreConnection(user.id);
+      setFirebaseSyncOk(result.success);
+      if (!result.success) {
+        setFirebaseSyncError(result.error || 'Unknown error');
+        console.error('[GoalStore] ⚠️ Firebase sync is NOT working:', result.error);
+        console.error('[GoalStore] ⚠️ Data will only be stored locally and will be LOST if app is deleted!');
+      } else {
+        setFirebaseSyncError(null);
+        console.log('[GoalStore] ✅ Firebase sync is working correctly');
+      }
+    };
+    
+    checkConnection();
+  }, [user?.id]);
 
   const profileQuery = useQuery({
     queryKey: ['profile', user?.id, STORAGE_KEYS.PROFILE],
@@ -95,15 +118,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       const localGoals = await safeStorageGet<Goal[] | null>(STORAGE_KEYS.GOALS, null);
       if (localGoals && localGoals.length > 0) {
         InteractionManager.runAfterInteractions(async () => {
-          const firebaseGoals = await getUserGoals(user.id).catch(() => null);
-          if (firebaseGoals && firebaseGoals.length > 0) {
-            await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
+          try {
+            const firebaseGoals = await getUserGoals(user.id);
+            if (firebaseGoals && firebaseGoals.length > 0) {
+              await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
+            } else if (localGoals.length > 0) {
+              console.log('[GoalStore] Firebase has no goals but local has', localGoals.length, '- uploading to Firebase');
+              await saveUserGoals(user.id, localGoals).catch(e => {
+                console.error('[GoalStore] Failed to upload local goals to Firebase:', e);
+              });
+            }
+          } catch (e) {
+            console.error('[GoalStore] Background goals sync failed:', e);
           }
         });
         return localGoals;
       }
       
-      const firebaseGoals = await getUserGoals(user.id).catch(() => null);
+      const firebaseGoals = await getUserGoals(user.id).catch((e) => {
+        console.error('[GoalStore] Failed to load goals from Firebase:', e);
+        return null;
+      });
       if (firebaseGoals && firebaseGoals.length > 0) {
         await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
         return firebaseGoals;
@@ -124,15 +159,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       const localTasks = await safeStorageGet<DailyTask[] | null>(STORAGE_KEYS.TASKS, null);
       if (localTasks && localTasks.length > 0) {
         InteractionManager.runAfterInteractions(async () => {
-          const firebaseTasks = await getUserTasks(user.id).catch(() => null);
-          if (firebaseTasks && firebaseTasks.length > 0) {
-            await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
+          try {
+            const firebaseTasks = await getUserTasks(user.id);
+            if (firebaseTasks && firebaseTasks.length > 0) {
+              await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
+            } else if (localTasks.length > 0) {
+              console.log('[GoalStore] Firebase has no tasks but local has', localTasks.length, '- uploading to Firebase');
+              await saveUserTasks(user.id, localTasks).catch(e => {
+                console.error('[GoalStore] Failed to upload local tasks to Firebase:', e);
+              });
+            }
+          } catch (e) {
+            console.error('[GoalStore] Background tasks sync failed:', e);
           }
         });
         return localTasks;
       }
       
-      const firebaseTasks = await getUserTasks(user.id).catch(() => null);
+      const firebaseTasks = await getUserTasks(user.id).catch((e) => {
+        console.error('[GoalStore] Failed to load tasks from Firebase:', e);
+        return null;
+      });
       if (firebaseTasks && firebaseTasks.length > 0) {
         await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
         return firebaseTasks;
@@ -158,15 +205,22 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       const localSessions = await safeStorageGet<PomodoroSession[] | null>(STORAGE_KEYS.POMODORO_SESSIONS, null);
       if (localSessions && localSessions.length > 0) {
         InteractionManager.runAfterInteractions(async () => {
-          const firebaseSessions = await getUserPomodoroSessions(user.id).catch(() => null);
-          if (firebaseSessions && firebaseSessions.length > 0) {
-            await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, parseSessions(firebaseSessions));
+          try {
+            const firebaseSessions = await getUserPomodoroSessions(user.id);
+            if (firebaseSessions && firebaseSessions.length > 0) {
+              await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, parseSessions(firebaseSessions));
+            }
+          } catch (e) {
+            console.error('[GoalStore] Background pomodoro sync failed:', e);
           }
         });
         return parseSessions(localSessions);
       }
       
-      const firebaseSessions = await getUserPomodoroSessions(user.id).catch(() => null);
+      const firebaseSessions = await getUserPomodoroSessions(user.id).catch((e) => {
+        console.error('[GoalStore] Failed to load pomodoro sessions from Firebase:', e);
+        return null;
+      });
       if (firebaseSessions && firebaseSessions.length > 0) {
         const sessions = parseSessions(firebaseSessions);
         await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, sessions);
@@ -755,6 +809,8 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     pomodoroSessions,
     isLoading: profileQuery.isLoading || goalsQuery.isLoading || tasksQuery.isLoading || pomodoroQuery.isLoading,
     isReady: !profileQuery.isLoading && !goalsQuery.isLoading && !tasksQuery.isLoading && !pomodoroQuery.isLoading,
+    firebaseSyncOk,
+    firebaseSyncError,
     updateProfile,
     createGoal,
     addTask,
