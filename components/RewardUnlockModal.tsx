@@ -287,7 +287,6 @@ const styles = StyleSheet.create({
   orbVideoWrapper: {
     width: ORB_SIZE,
     height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
   },
   orbVideo: {
