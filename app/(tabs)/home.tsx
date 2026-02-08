@@ -332,9 +332,6 @@ export default function TodayScreen() {
 
   const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
 
-  const activeOrbColor = useMemo(() => {
-    return rewards[activeRewardIndex]?.color || theme.colors.primary;
-  }, [activeRewardIndex, rewards]);
 
   const shimmerTranslateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
@@ -721,31 +718,30 @@ export default function TodayScreen() {
             style={[
               styles.floatingPlanButton,
               { 
-                shadowColor: activeOrbColor,
-                borderColor: `${activeOrbColor}50`,
+                shadowColor: theme.colors.primary,
+                borderColor: 'transparent',
               }
             ]}
             onPress={() => router.push('/plan')}
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[`${activeOrbColor}35`, `${activeOrbColor}10`, `${activeOrbColor}05`, `${activeOrbColor}25`]}
-              locations={[0, 0.3, 0.7, 1]}
+              colors={[theme.colors.primary, '#E5BE00', '#FFD700', '#FFEA70', '#FFD700', '#B8860B']}
+              locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.floatingButtonGradient}
             />
-            <View style={[styles.floatingButtonBorder, { borderColor: `${activeOrbColor}30` }]} />
             <View style={styles.floatingButtonInner}>
-              <Calendar size={20} color={activeOrbColor} style={styles.planButtonIcon} />
-              <Text style={[styles.floatingPlanButtonText, { color: activeOrbColor }]}>Go to Plan</Text>
+              <Calendar size={20} color="#000" style={styles.planButtonIcon} />
+              <Text style={[styles.floatingPlanButtonText, { color: '#000' }]}>Go to Plan</Text>
             </View>
             <Animated.View 
               style={[
                 styles.shimmerOverlay,
                 {
                   transform: [{ translateX: shimmerTranslateX }],
-                  backgroundColor: activeOrbColor,
+                  backgroundColor: '#FFFFFF',
                 }
               ]} 
             />
@@ -1339,27 +1335,23 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
     elevation: 12,
-    backgroundColor: 'rgba(18, 18, 18, 0.95)',
-    borderWidth: 1.5,
+    backgroundColor: theme.colors.primary,
+    borderWidth: 0,
   },
   floatingButtonGradient: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
   },
-  floatingButtonBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
+
   shimmerOverlay: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 100,
-    opacity: 0.15,
+    width: 120,
+    opacity: 0.25,
     transform: [{ skewX: '-20deg' }],
   },
   floatingButtonInner: {
