@@ -415,7 +415,7 @@ const ChatScreenContent: React.FC = () => {
 
   const handleSend = useCallback(async () => {
     if (inputText.trim() || attachments.length > 0) {
-      const text = inputText.trim() || (attachments.length > 0 ? 'Посмотри на это изображение' : '');
+      const text = inputText.trim() || (attachments.length > 0 ? 'Look at this image' : '');
       const currentAttachments = [...attachments];
       setInputText('');
       setAttachments([]);
@@ -901,11 +901,11 @@ const ChatScreenContent: React.FC = () => {
               <View style={styles.attachmentMenu}>
                 <TouchableOpacity style={styles.attachmentMenuItem} onPress={pickImage}>
                   <ImageIcon size={20} color="#FFD600" />
-                  <Text style={styles.attachmentMenuText}>Галерея</Text>
+                  <Text style={styles.attachmentMenuText}>Gallery</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.attachmentMenuItem} onPress={takePhoto}>
                   <Camera size={20} color="#FFD600" />
-                  <Text style={styles.attachmentMenuText}>Камера</Text>
+                  <Text style={styles.attachmentMenuText}>Camera</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -927,7 +927,7 @@ const ChatScreenContent: React.FC = () => {
                 style={styles.input}
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder={isRecording ? 'Говорите...' : 'Напишите сообщение...'}
+                placeholder={isRecording ? 'Speaking...' : 'Type a message...'}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 multiline
                 maxLength={1000}

@@ -157,14 +157,14 @@ export default function VideoIntroScreen() {
         {!videoLoaded && !videoError && (
           <View style={styles.videoLoader}>
             <ActivityIndicator size="large" color="#F59E0B" />
-            <Text style={styles.videoLoadingText}>Загрузка...</Text>
+            <Text style={styles.videoLoadingText}>Loading...</Text>
           </View>
         )}
         {videoError || Platform.OS === 'web' ? (
           <View style={styles.videoErrorContainer}>
             <Sparkles size={64} color="#F59E0B" />
             <Text style={styles.videoErrorTitle}>GoalCoach AI</Text>
-            <Text style={styles.videoErrorText}>Добро пожаловать!</Text>
+            <Text style={styles.videoErrorText}>Welcome!</Text>
           </View>
         ) : (
           <Video
@@ -191,7 +191,8 @@ export default function VideoIntroScreen() {
             <TouchableOpacity
               onPress={handleContinue}
               activeOpacity={0.92}
-              style={styles.buttonWrapper}
+              style={[styles.buttonWrapper, !videoFinished && !videoError && Platform.OS !== 'web' && styles.buttonDisabled]}
+              disabled={!videoFinished && !videoError && Platform.OS !== 'web'}
               testID="video-intro-continue"
             >
               <LinearGradient
@@ -294,5 +295,8 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#000',
     letterSpacing: 0.3,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
 });
