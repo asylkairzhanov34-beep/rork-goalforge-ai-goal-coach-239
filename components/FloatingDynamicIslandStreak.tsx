@@ -248,7 +248,8 @@ export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismis
     outputRange: [1, 1.05, 1],
   });
 
-  if (!shouldShow || pathname === '/timer-fullscreen' || isTimerRunning) return null;
+  const isOnHomeScreen = pathname === '/' || pathname === '/home';
+  if (!shouldShow || pathname === '/timer-fullscreen' || isTimerRunning || isOnHomeScreen) return null;
 
   return (
     <Animated.View

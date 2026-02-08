@@ -27,6 +27,8 @@ import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { useProgress } from '@/hooks/use-progress';
 import { useRewardUnlock } from '@/hooks/use-reward-unlock';
 import SubscriptionOfferModal from '@/src/components/SubscriptionOfferModal';
+import { DailyStreakBanner } from '@/components/DailyStreakBanner';
+import { useDailyFirstOpen } from '@/hooks/use-daily-first-open';
 
 
 export default function TodayScreen() {
@@ -38,12 +40,30 @@ export default function TodayScreen() {
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
   const { markOfferSeen, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
+  const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
+  const [showStreakBanner, setShowStreakBanner] = useState(false);
 
   useEffect(() => {
     if (isPremium && !subscriptionChecking) {
       markOfferSeen();
     }
   }, [isPremium, subscriptionChecking, markOfferSeen]);
+
+  useEffect(() => {
+    if (isFirstOpenToday && progress?.isReady && !shouldShowOffer) {
+      console.log('[Home] First open today, showing streak banner');
+      const timer = setTimeout(() => {
+        setShowStreakBanner(true);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isFirstOpenToday, progress?.isReady, shouldShowOffer]);
+
+  const handleDismissStreakBanner = useCallback(() => {
+    setShowStreakBanner(false);
+    markAsTriggered();
+  }, [markAsTriggered]);
+
   const [refreshing, setRefreshing] = useState(false);
   const [, setCurrentQuoteIndex] = useState(() => 
     Math.floor(Math.random() * getQuotes().length)
@@ -411,6 +431,15 @@ export default function TodayScreen() {
               </View>
             </View>
           </View>
+
+          <DailyStreakBanner
+            currentStreak={currentStreak}
+            weekProgress={progress?.weekProgress ?? [false, false, false, false, false, false, false]}
+            totalCompletedTasks={completedTasksCount}
+            focusTimeMinutes={progress?.focusTimeMinutes ?? 0}
+            visible={showStreakBanner}
+            onDismiss={handleDismissStreakBanner}
+          />
 
           {isDevMode && (
             <TouchableOpacity
