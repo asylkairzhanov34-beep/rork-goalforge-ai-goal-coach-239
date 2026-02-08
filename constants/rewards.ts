@@ -166,6 +166,32 @@ export const REWARDS: Reward[] = [
     requirementLabel: '90 days • 270 tasks • 30h',
     unlockHint: '90 day streak + 270 tasks + 30h focus'
   },
+  { 
+    id: 'r12', 
+    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770390547/0126_23_wil1xe.mp4', 
+    label: 'Ascended', 
+    unlocked: false, 
+    color: '#E879F9', 
+    achievement: 'Four months ascended', 
+    rarity: 'Eternal', 
+    ownedBy: '0.5%', 
+    requirement: { streakDays: 120, completedTasks: 360, focusMinutes: 2400 },
+    requirementLabel: '120 days • 360 tasks • 40h',
+    unlockHint: '120 day streak + 360 tasks + 40h focus'
+  },
+  { 
+    id: 'r13', 
+    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770390569/0126_22_pcgir8.mp4', 
+    label: 'Infinite', 
+    unlocked: false, 
+    color: '#38BDF8', 
+    achievement: 'Six months infinite', 
+    rarity: 'Infinite', 
+    ownedBy: '0.1%', 
+    requirement: { streakDays: 180, completedTasks: 540, focusMinutes: 3600 },
+    requirementLabel: '180 days • 540 tasks • 60h',
+    unlockHint: '180 day streak + 540 tasks + 60h focus'
+  },
 ];
 
 export interface RewardProgress {
