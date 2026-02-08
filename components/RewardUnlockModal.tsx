@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 
 import { Video, ResizeMode } from 'expo-av';
@@ -25,6 +26,9 @@ interface RewardUnlockModalProps {
 }
 
 export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModalProps) {
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const orbScaleAnim = useRef(new Animated.Value(0.3)).current;
@@ -38,6 +42,9 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+
+      setVideoLoaded(false);
+      setVideoError(false);
 
       scaleAnim.setValue(0.5);
       opacityAnim.setValue(0);
@@ -182,14 +189,35 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
             ]}
           >
             <View style={styles.orbVideoWrapper}>
-              <Video
-                source={{ uri: reward.video }}
-                style={styles.orbVideo}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay
-                isLooping
-                isMuted
-              />
+              {!videoError && reward.video ? (
+                <Video
+                  source={{ uri: reward.video }}
+                  style={styles.orbVideo}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay
+                  isLooping
+                  isMuted
+                  onLoad={() => {
+                    console.log('[RewardUnlockModal] Video loaded:', reward.id);
+                    setVideoLoaded(true);
+                  }}
+                  onError={(error) => {
+                    console.log('[RewardUnlockModal] Video error for', reward.id, ':', error);
+                    setVideoError(true);
+                  }}
+                />
+              ) : null}
+              {(!videoLoaded || videoError) && (
+                <View style={styles.orbFallback}>
+                  <View style={[styles.orbFallbackInner, { shadowColor: reward.color }]}>
+                    <View style={[styles.orbGlowCircle, { backgroundColor: reward.color }]} />
+                    <View style={styles.orbGlowCircleSecond} />
+                  </View>
+                  {!videoError && (
+                    <ActivityIndicator size="small" color="rgba(255,255,255,0.3)" style={styles.orbLoader} />
+                  )}
+                </View>
+              )}
             </View>
           </Animated.View>
 
@@ -293,6 +321,38 @@ const styles = StyleSheet.create({
   orbVideo: {
     width: '100%',
     height: '100%',
+  },
+  orbFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbFallbackInner: {
+    width: ORB_SIZE * 0.6,
+    height: ORB_SIZE * 0.6,
+    borderRadius: ORB_SIZE * 0.3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 40,
+    elevation: 20,
+  },
+  orbGlowCircle: {
+    width: ORB_SIZE * 0.45,
+    height: ORB_SIZE * 0.45,
+    borderRadius: ORB_SIZE * 0.225,
+    opacity: 0.35,
+  },
+  orbGlowCircleSecond: {
+    position: 'absolute',
+    width: ORB_SIZE * 0.3,
+    height: ORB_SIZE * 0.3,
+    borderRadius: ORB_SIZE * 0.15,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  orbLoader: {
+    position: 'absolute',
   },
   buttonContainer: {
     width: '100%',
