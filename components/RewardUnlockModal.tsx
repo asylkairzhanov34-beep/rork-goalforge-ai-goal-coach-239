@@ -171,7 +171,7 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
           </TouchableOpacity>
 
           <Text style={styles.headerText}>Reward Unlocked</Text>
-          <Text style={[styles.rewardTitle, { color: rewardColor }]}>{reward.label.toUpperCase()}</Text>
+          <Text style={styles.rewardTitle}>{reward.label.toUpperCase()}</Text>
           <Text style={styles.achievementText}>{reward.achievement}</Text>
 
           <Animated.View
@@ -217,7 +217,7 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
             ]}
           >
             <TouchableOpacity
-              style={[styles.claimButton, { backgroundColor: rewardColor }]}
+              style={styles.claimButton}
               onPress={handleClose}
               activeOpacity={0.9}
             >
@@ -293,6 +293,7 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     letterSpacing: 2,
     marginBottom: 8,
+    color: '#FFFFFF',
   },
   achievementText: {
     fontSize: 15,
@@ -344,11 +345,14 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   claimButtonText: {
     fontSize: 17,
     fontWeight: '600' as const,
-    color: '#000000',
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
 });
