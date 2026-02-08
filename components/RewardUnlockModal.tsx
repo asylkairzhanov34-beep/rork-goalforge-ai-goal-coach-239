@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,15 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
-import { X } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import { Gift, Sparkles, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import type { Reward } from '@/constants/rewards';
+import { type Reward } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.58;
+const ORB_SIZE = SCREEN_WIDTH * 0.55;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -24,275 +25,358 @@ interface RewardUnlockModalProps {
   onClose: () => void;
 }
 
-const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, reward, onClose }) => {
-  const [videoReady, setVideoReady] = useState(false);
-  const [videoKey, setVideoKey] = useState(0);
-  const videoRef = useRef<Video>(null);
-
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const cardScale = useRef(new Animated.Value(0.92)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const orbScale = useRef(new Animated.Value(0.7)).current;
-  const orbOpacity = useRef(new Animated.Value(0)).current;
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const footerOpacity = useRef(new Animated.Value(0)).current;
-  const headerSlide = useRef(new Animated.Value(-20)).current;
-  const footerSlide = useRef(new Animated.Value(20)).current;
-
-  const playEntrance = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-
-    setVideoReady(false);
-    setVideoKey(prev => prev + 1);
-
-    backdropOpacity.setValue(0);
-    cardScale.setValue(0.92);
-    cardOpacity.setValue(0);
-    orbScale.setValue(0.7);
-    orbOpacity.setValue(0);
-    headerOpacity.setValue(0);
-    footerOpacity.setValue(0);
-    headerSlide.setValue(-20);
-    footerSlide.setValue(20);
-
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(cardScale, {
-        toValue: 1,
-        tension: 40,
-        friction: 9,
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(headerOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(headerSlide, {
-          toValue: 0,
-          tension: 50,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 150);
-
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.spring(orbScale, {
-          toValue: 1,
-          tension: 35,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(orbOpacity, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-    }, 300);
-
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(footerOpacity, {
-          toValue: 1,
-          duration: 450,
-          useNativeDriver: true,
-        }),
-        Animated.spring(footerSlide, {
-          toValue: 0,
-          tension: 50,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 550);
-  }, [backdropOpacity, cardScale, cardOpacity, orbScale, orbOpacity, headerOpacity, footerOpacity, headerSlide, footerSlide]);
+export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModalProps) {
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const orbScaleAnim = useRef(new Animated.Value(0.3)).current;
+  const orbGlowAnim = useRef(new Animated.Value(0)).current;
+  const textSlideAnim = useRef(new Animated.Value(30)).current;
+  const buttonSlideAnim = useRef(new Animated.Value(50)).current;
+  const sparkleRotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (visible && reward) {
-      playEntrance();
-    }
-  }, [visible, reward, playEntrance]);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
 
-  const handleClose = useCallback(() => {
+      scaleAnim.setValue(0.5);
+      opacityAnim.setValue(0);
+      orbScaleAnim.setValue(0.3);
+      orbGlowAnim.setValue(0);
+      textSlideAnim.setValue(30);
+      buttonSlideAnim.setValue(50);
+
+      Animated.sequence([
+        Animated.parallel([
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.spring(orbScaleAnim, {
+            toValue: 1,
+            tension: 40,
+            friction: 6,
+            useNativeDriver: true,
+          }),
+          Animated.timing(orbGlowAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(textSlideAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(buttonSlideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      const sparkleLoop = Animated.loop(
+        Animated.timing(sparkleRotateAnim, {
+          toValue: 1,
+          duration: 8000,
+          useNativeDriver: true,
+        })
+      );
+      sparkleLoop.start();
+
+      const pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop.start();
+
+      return () => {
+        sparkleLoop.stop();
+        pulseLoop.stop();
+      };
+    }
+  }, [visible, reward]);
+
+  const handleClose = () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
     Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(cardOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-      Animated.timing(cardScale, { toValue: 0.92, duration: 250, useNativeDriver: true }),
-    ]).start(() => onClose());
-  }, [backdropOpacity, cardOpacity, cardScale, onClose]);
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
+  const sparkleRotation = sparkleRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   if (!reward) return null;
 
+  const rewardColor = reward.color || '#FFD700';
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <View style={styles.overlay}>
         <Animated.View
           style={[
-            styles.card,
-            {
-              opacity: cardOpacity,
-              transform: [{ scale: cardScale }],
-            }
+            styles.backdrop,
+            { opacity: opacityAnim },
           ]}
         >
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={handleClose}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <BlurView intensity={40} tint="dark" style={styles.closeButtonBlur}>
-              <X size={18} color="rgba(255,255,255,0.6)" />
-            </BlurView>
+          {Platform.OS === 'ios' ? (
+            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.9)' }]} />
+          )}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              opacity: opacityAnim,
+              transform: [{ scale: scaleAnim }],
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.7}>
+            <X size={20} color="rgba(255,255,255,0.6)" />
           </TouchableOpacity>
 
-          <Animated.View style={[styles.headerContent, { opacity: headerOpacity, transform: [{ translateY: headerSlide }] }]}>
-            <Text style={styles.unlockLabel}>Reward Unlocked</Text>
-            <Text style={styles.rewardName}>
-              {reward.label.toUpperCase()}
-            </Text>
-            <Text style={styles.description}>
-              {reward.unlockHint}
-            </Text>
+          <Animated.View
+            style={[
+              styles.sparkleContainer,
+              { transform: [{ rotate: sparkleRotation }] },
+            ]}
+          >
+            {[...Array(8)].map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.sparkle,
+                  {
+                    transform: [
+                      { rotate: `${i * 45}deg` },
+                      { translateY: -ORB_SIZE * 0.7 },
+                    ],
+                  },
+                ]}
+              >
+                <Sparkles size={16} color={rewardColor} style={{ opacity: 0.6 }} />
+              </View>
+            ))}
           </Animated.View>
 
-          <View style={styles.orbSection}>
+          <View style={styles.headerBadge}>
+            <Gift size={14} color={rewardColor} />
+            <Text style={[styles.headerBadgeText, { color: rewardColor }]}>NEW REWARD</Text>
+          </View>
+
+          <Animated.View
+            style={[
+              styles.orbContainer,
+              {
+                transform: [
+                  { scale: Animated.multiply(orbScaleAnim, pulseAnim) },
+                ],
+              },
+            ]}
+          >
             <Animated.View
               style={[
-                styles.orbContainer,
+                styles.orbGlow,
                 {
-                  opacity: orbOpacity,
-                  transform: [{ scale: orbScale }],
-                }
+                  backgroundColor: rewardColor,
+                  opacity: Animated.multiply(orbGlowAnim, new Animated.Value(0.4)),
+                },
               ]}
-            >
+            />
+            <View style={styles.orbVideoWrapper}>
               <Video
-                ref={videoRef}
-                key={videoKey}
                 source={{ uri: reward.video }}
-                style={[styles.orbVideo, !videoReady && styles.orbVideoHidden]}
+                style={styles.orbVideo}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay
                 isLooping
                 isMuted
-                onReadyForDisplay={() => setVideoReady(true)}
               />
-            </Animated.View>
-          </View>
+            </View>
+          </Animated.View>
 
-          <Animated.View style={[styles.footer, { opacity: footerOpacity, transform: [{ translateY: footerSlide }] }]}>
+          <Animated.View
+            style={[
+              styles.textContainer,
+              {
+                opacity: opacityAnim,
+                transform: [{ translateY: textSlideAnim }],
+              },
+            ]}
+          >
+            <View style={styles.rarityBadge}>
+              <Text style={[styles.rarityText, { color: rewardColor }]}>{reward.rarity}</Text>
+            </View>
+            <Text style={styles.rewardLabel}>{reward.label}</Text>
+            <Text style={styles.achievementText}>{reward.achievement}</Text>
+            <Text style={styles.ownedText}>Owned by {reward.ownedBy} of users</Text>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.buttonContainer,
+              {
+                opacity: opacityAnim,
+                transform: [{ translateY: buttonSlideAnim }],
+              },
+            ]}
+          >
             <TouchableOpacity
               style={styles.claimButton}
               onPress={handleClose}
-              activeOpacity={0.85}
+              activeOpacity={0.9}
             >
-              <BlurView intensity={50} tint="dark" style={styles.claimButtonBlur}>
-                <View style={styles.claimButtonInner}>
-                  <Text style={styles.claimButtonText}>Claim Reward</Text>
-                </View>
-              </BlurView>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              <View style={[styles.claimButtonBorder, { borderColor: `${rewardColor}50` }]} />
+              <Text style={styles.claimButtonText}>Claim Reward</Text>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
-      </Animated.View>
+      </View>
     </Modal>
   );
-};
-
-export const RewardUnlockModal = React.memo(RewardUnlockModalInner);
-RewardUnlockModal.displayName = 'RewardUnlockModal';
+}
 
 const styles = StyleSheet.create({
-  backdrop: {
+  overlay: {
     flex: 1,
-    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  card: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: '#000',
-    justifyContent: 'center',
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  container: {
+    width: SCREEN_WIDTH - 48,
+    maxWidth: 380,
+    backgroundColor: 'rgba(20, 20, 22, 0.95)',
+    borderRadius: 32,
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.5,
+        shadowRadius: 30,
+      },
+      android: {
+        elevation: 25,
+      },
+    }),
   },
   closeButton: {
     position: 'absolute',
-    top: 60,
-    left: 20,
+    top: 16,
+    right: 16,
     width: 36,
     height: 36,
     borderRadius: 18,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 10,
   },
-  closeButtonBlur: {
-    flex: 1,
+  sparkleContainer: {
+    position: 'absolute',
+    top: SCREEN_HEIGHT * 0.15,
+    width: ORB_SIZE * 1.8,
+    height: ORB_SIZE * 1.8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  headerContent: {
+  sparkle: {
+    position: 'absolute',
+  },
+  headerBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    marginBottom: 32,
+    backgroundColor: 'rgba(255,215,0,0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 24,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
   },
-  unlockLabel: {
-    fontSize: 13,
-    fontWeight: '400' as const,
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  rewardName: {
-    fontSize: 30,
+  headerBadgeText: {
+    fontSize: 12,
     fontWeight: '700' as const,
-    letterSpacing: 3,
-    marginBottom: 14,
-    textAlign: 'center',
-    color: '#FFFFFF',
-  },
-  description: {
-    fontSize: 14,
-    fontWeight: '400' as const,
-    color: 'rgba(255,255,255,0.35)',
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 20,
-  },
-  orbSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
+    letterSpacing: 1.5,
   },
   orbContainer: {
+    width: ORB_SIZE,
+    height: ORB_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  orbGlow: {
+    position: 'absolute',
+    width: ORB_SIZE * 1.3,
+    height: ORB_SIZE * 1.3,
+    borderRadius: ORB_SIZE * 0.65,
+  },
+  orbVideoWrapper: {
     width: ORB_SIZE,
     height: ORB_SIZE,
     borderRadius: ORB_SIZE / 2,
@@ -301,39 +385,63 @@ const styles = StyleSheet.create({
   orbVideo: {
     width: ORB_SIZE,
     height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
   },
-  orbVideoHidden: {
-    opacity: 0,
-  },
-  footer: {
+  textContainer: {
     alignItems: 'center',
-    paddingHorizontal: 32,
-    marginTop: 40,
+    marginBottom: 28,
+  },
+  rarityBadge: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  rarityText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  rewardLabel: {
+    fontSize: 28,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  achievementText: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 4,
+  },
+  ownedText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  buttonContainer: {
     width: '100%',
   },
   claimButton: {
-    width: '100%',
     height: 56,
     borderRadius: 28,
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  claimButtonBlur: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  claimButtonInner: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  claimButtonBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+    borderWidth: 1.5,
   },
   claimButtonText: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
 });
+
+export default RewardUnlockModal;

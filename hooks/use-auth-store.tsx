@@ -320,36 +320,54 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       await safeStorageSet(AUTH_STORAGE_KEY, null);
       await safeStorageSet(AUTH_LOGIN_GATE_KEY, false);
       await safeStorageSet(FIRST_LAUNCH_KEY, false);
+      await safeStorageSet(WELCOME_ONBOARDING_KEY, false);
       
-      const subscriptionKeys = [
+      const globalKeys = [
         '@subscription_status',
         'hasSeenSubscriptionOffer',
         'trialStartISO',
         'hasSeenPaywall',
         'trialStartedAt',
-        '@first_launch'
+        '@first_launch',
+        '@seen_unlocked_rewards',
+        '@subscription_offer_seen',
+        '@daily_first_open',
+        '@daily_first_open_triggered',
+        'active_challenges',
+        'timer_sessions',
+        'journal_entries',
+        'manifestation_entries',
+        'breathing_history',
+        'background_timer_state',
+        'background_start_time',
       ];
       
-      for (const key of subscriptionKeys) {
+      for (const key of globalKeys) {
         await safeStorageSet(key, null);
       }
       
       if (userId) {
-        const goalKeys = [
+        const userKeys = [
           `user_profile_${userId}`,
           `goals_${userId}`,
           `daily_tasks_${userId}`,
           `onboarding_answers_${userId}`,
-          `pomodoro_sessions_${userId}`
+          `pomodoro_sessions_${userId}`,
+          `first_time_setup_${userId}`,
+          `challenges_${userId}`,
+          `timer_sessions_${userId}`,
+          `journal_entries_${userId}`,
+          `manifestation_${userId}`,
         ];
         
-        for (const key of goalKeys) {
+        for (const key of userKeys) {
           await safeStorageSet(key, null);
         }
       }
       
       setNeedsLoginGate(false);
       setRequiresFirstLogin(true);
+      setWelcomeOnboardingCompletedState(false);
       
       setAuthState({
         user: null,

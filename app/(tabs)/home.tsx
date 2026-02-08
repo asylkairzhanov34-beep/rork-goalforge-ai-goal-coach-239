@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, AppState } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, AppState, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -12,6 +12,7 @@ import { Image } from 'expo-image';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
 import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, REWARDS } from '@/constants/rewards';
+import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
 
 
@@ -39,7 +40,7 @@ export default function TodayScreen() {
   const challengeStore = useChallengeStore();
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
-  const { markOfferSeen, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
+  const { pendingReward, modalVisible, closeModal, markOfferSeen, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
   const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
   const [showStreakBanner, setShowStreakBanner] = useState(false);
 
@@ -744,38 +745,34 @@ export default function TodayScreen() {
           pointerEvents={isHomeActive ? 'auto' : 'none'}
         >
           <TouchableOpacity 
-            style={[
-              styles.floatingPlanButton,
-              { 
-                shadowColor: '#FFD700',
-                shadowOpacity: 0.3,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 8,
-                borderColor: 'rgba(255, 215, 0, 0.45)',
-                borderWidth: 1.5,
-                backgroundColor: 'rgba(255, 215, 0, 0.08)',
-              }
-            ]}
+            style={styles.glassmorphismButton}
             onPress={() => router.push('/plan')}
             activeOpacity={0.85}
           >
-            <View style={[styles.floatingButtonGradient, { backgroundColor: 'rgba(255, 255, 255, 0.06)' }]} />
-            <View style={styles.floatingButtonInner}>
-              <Calendar size={20} color="rgba(255, 215, 0, 0.9)" style={styles.planButtonIcon} />
-              <Text style={[styles.floatingPlanButtonText, { color: 'rgba(255, 255, 255, 0.95)' }]}>Go to Plan</Text>
+            <View style={styles.glassmorphismInner}>
+              <View style={styles.glassmorphismGlow} />
+              <View style={styles.glassmorphismContent}>
+                <Calendar size={20} color="rgba(255, 215, 0, 0.95)" style={styles.planButtonIcon} />
+                <Text style={styles.glassmorphismText}>Go to Plan</Text>
+              </View>
+              <Animated.View 
+                style={[
+                  styles.shimmerOverlay,
+                  {
+                    transform: [{ translateX: shimmerTranslateX }],
+                    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+                  }
+                ]} 
+              />
             </View>
-            <Animated.View 
-              style={[
-                styles.shimmerOverlay,
-                {
-                  transform: [{ translateX: shimmerTranslateX }],
-                  backgroundColor: 'rgba(255, 215, 0, 0.15)',
-                }
-              ]} 
-            />
           </TouchableOpacity>
         </Animated.View>
+
+        <RewardUnlockModal
+          visible={modalVisible}
+          reward={pendingReward}
+          onClose={closeModal}
+        />
       </View>
     </GradientBackground>
   );
@@ -1373,6 +1370,46 @@ const styles = StyleSheet.create({
   floatingButtonGradient: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
+  },
+  glassmorphismButton: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FFD700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }) as any,
+  },
+  glassmorphismInner: {
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 215, 0, 0.5)',
+    backgroundColor: 'rgba(30, 30, 35, 0.75)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  glassmorphismGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 215, 0, 0.06)',
+  },
+  glassmorphismContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    paddingHorizontal: 28,
+  },
+  glassmorphismText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: 'rgba(255, 255, 255, 0.95)',
+    letterSpacing: 0.3,
   },
 
   shimmerOverlay: {
