@@ -9,15 +9,15 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
-import { Gift, Sparkles, X } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { type Reward } from '@/constants/rewards';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.55;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const ORB_SIZE = SCREEN_WIDTH * 0.5;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -32,7 +32,6 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
   const orbGlowAnim = useRef(new Animated.Value(0)).current;
   const textSlideAnim = useRef(new Animated.Value(30)).current;
   const buttonSlideAnim = useRef(new Animated.Value(50)).current;
-  const sparkleRotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -87,15 +86,6 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
         }),
       ]).start();
 
-      const sparkleLoop = Animated.loop(
-        Animated.timing(sparkleRotateAnim, {
-          toValue: 1,
-          duration: 8000,
-          useNativeDriver: true,
-        })
-      );
-      sparkleLoop.start();
-
       const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -113,7 +103,6 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
       pulseLoop.start();
 
       return () => {
-        sparkleLoop.stop();
         pulseLoop.stop();
       };
     }
@@ -139,11 +128,6 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
       onClose();
     });
   };
-
-  const sparkleRotation = sparkleRotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   if (!reward) return null;
 
@@ -181,37 +165,14 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
           ]}
         >
           <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.7}>
-            <X size={20} color="rgba(255,255,255,0.6)" />
+            <View style={styles.closeButtonInner}>
+              <X size={18} color="rgba(255,255,255,0.7)" />
+            </View>
           </TouchableOpacity>
 
-          <Animated.View
-            style={[
-              styles.sparkleContainer,
-              { transform: [{ rotate: sparkleRotation }] },
-            ]}
-          >
-            {[...Array(8)].map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.sparkle,
-                  {
-                    transform: [
-                      { rotate: `${i * 45}deg` },
-                      { translateY: -ORB_SIZE * 0.7 },
-                    ],
-                  },
-                ]}
-              >
-                <Sparkles size={16} color={rewardColor} style={{ opacity: 0.6 }} />
-              </View>
-            ))}
-          </Animated.View>
-
-          <View style={styles.headerBadge}>
-            <Gift size={14} color={rewardColor} />
-            <Text style={[styles.headerBadgeText, { color: rewardColor }]}>NEW REWARD</Text>
-          </View>
+          <Text style={styles.headerText}>Reward Unlocked</Text>
+          <Text style={[styles.rewardTitle, { color: rewardColor }]}>{reward.label.toUpperCase()}</Text>
+          <Text style={styles.achievementText}>{reward.achievement}</Text>
 
           <Animated.View
             style={[
@@ -228,37 +189,22 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
                 styles.orbGlow,
                 {
                   backgroundColor: rewardColor,
-                  opacity: Animated.multiply(orbGlowAnim, new Animated.Value(0.4)),
+                  opacity: Animated.multiply(orbGlowAnim, new Animated.Value(0.5)),
                 },
               ]}
             />
-            <View style={styles.orbVideoWrapper}>
-              <Video
-                source={{ uri: reward.video }}
-                style={styles.orbVideo}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay
-                isLooping
-                isMuted
-              />
+            <View style={[styles.orbRing, { shadowColor: rewardColor }]}>
+              <View style={styles.orbVideoWrapper}>
+                <Video
+                  source={{ uri: reward.video }}
+                  style={styles.orbVideo}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay
+                  isLooping
+                  isMuted
+                />
+              </View>
             </View>
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.textContainer,
-              {
-                opacity: opacityAnim,
-                transform: [{ translateY: textSlideAnim }],
-              },
-            ]}
-          >
-            <View style={styles.rarityBadge}>
-              <Text style={[styles.rarityText, { color: rewardColor }]}>{reward.rarity}</Text>
-            </View>
-            <Text style={styles.rewardLabel}>{reward.label}</Text>
-            <Text style={styles.achievementText}>{reward.achievement}</Text>
-            <Text style={styles.ownedText}>Owned by {reward.ownedBy} of users</Text>
           </Animated.View>
 
           <Animated.View
@@ -271,17 +217,10 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
             ]}
           >
             <TouchableOpacity
-              style={styles.claimButton}
+              style={[styles.claimButton, { backgroundColor: rewardColor }]}
               onPress={handleClose}
               activeOpacity={0.9}
             >
-              <LinearGradient
-                colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-              />
-              <View style={[styles.claimButtonBorder, { borderColor: `${rewardColor}50` }]} />
               <Text style={styles.claimButtonText}>Claim Reward</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -303,20 +242,20 @@ const styles = StyleSheet.create({
   container: {
     width: SCREEN_WIDTH - 48,
     maxWidth: 380,
-    backgroundColor: 'rgba(20, 20, 22, 0.95)',
-    borderRadius: 32,
-    paddingTop: 48,
-    paddingBottom: 32,
+    backgroundColor: 'rgba(28, 28, 30, 0.98)',
+    borderRadius: 24,
+    paddingTop: 56,
+    paddingBottom: 28,
     paddingHorizontal: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.5,
-        shadowRadius: 30,
+        shadowOpacity: 0.6,
+        shadowRadius: 40,
       },
       android: {
         elevation: 25,
@@ -326,121 +265,91 @@ const styles = StyleSheet.create({
   closeButton: {
     position: 'absolute',
     top: 16,
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    left: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
-  sparkleContainer: {
-    position: 'absolute',
-    top: SCREEN_HEIGHT * 0.15,
-    width: ORB_SIZE * 1.8,
-    height: ORB_SIZE * 1.8,
+  closeButtonInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sparkle: {
-    position: 'absolute',
+  headerText: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
-  headerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,215,0,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 24,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.2)',
+  rewardTitle: {
+    fontSize: 32,
+    fontWeight: '800' as const,
+    letterSpacing: 2,
+    marginBottom: 8,
   },
-  headerBadgeText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    letterSpacing: 1.5,
+  achievementText: {
+    fontSize: 15,
+    fontWeight: '400' as const,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 32,
   },
   orbContainer: {
     width: ORB_SIZE,
     height: ORB_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 40,
   },
   orbGlow: {
     position: 'absolute',
-    width: ORB_SIZE * 1.3,
-    height: ORB_SIZE * 1.3,
-    borderRadius: ORB_SIZE * 0.65,
+    width: ORB_SIZE * 1.4,
+    height: ORB_SIZE * 1.4,
+    borderRadius: ORB_SIZE * 0.7,
   },
-  orbVideoWrapper: {
+  orbRing: {
     width: ORB_SIZE,
     height: ORB_SIZE,
+    borderRadius: ORB_SIZE / 2,
+    padding: 3,
+    ...Platform.select({
+      ios: {
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 20,
+      },
+    }),
+  },
+  orbVideoWrapper: {
+    width: '100%',
+    height: '100%',
     borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
   },
   orbVideo: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-  },
-  textContainer: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  rarityBadge: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  rarityText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  rewardLabel: {
-    fontSize: 28,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  achievementText: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.7)',
-    marginBottom: 4,
-  },
-  ownedText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
+    width: '100%',
+    height: '100%',
   },
   buttonContainer: {
     width: '100%',
   },
   claimButton: {
-    height: 56,
-    borderRadius: 28,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  claimButtonBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
-    borderWidth: 1.5,
   },
   claimButtonText: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: '#000000',
+    letterSpacing: 0.3,
   },
 });
 
