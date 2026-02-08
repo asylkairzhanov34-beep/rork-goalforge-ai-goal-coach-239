@@ -103,7 +103,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r7', 
-    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970766/0126_18_i9c43s.mp4', 
+    video: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769970570/0126_17_bh50ax.mp4', 
     label: 'Celestial', 
     unlocked: false, 
     color: '#22D3EE', 
@@ -129,7 +129,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r9', 
-    video: GRAY_ORB_VIDEO, 
+    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770556614/0126_25_l0quro.mp4', 
     label: 'Mythic', 
     unlocked: false, 
     color: '#F472B6', 
@@ -142,7 +142,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r10', 
-    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770390569/0126_22_pcgir8.mp4', 
+    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770556580/0126_24_sg20im.mp4', 
     label: 'Transcendent', 
     unlocked: false, 
     color: '#8B5CF6', 
@@ -155,7 +155,7 @@ export const REWARDS: Reward[] = [
   },
   { 
     id: 'r11', 
-    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770390547/0126_23_wil1xe.mp4', 
+    video: 'https://res.cloudinary.com/dbrrfb8tf/video/upload/v1770556545/0126_26_a3xqqd.mp4', 
     label: 'Eternal', 
     unlocked: false, 
     color: '#14B8A6', 
