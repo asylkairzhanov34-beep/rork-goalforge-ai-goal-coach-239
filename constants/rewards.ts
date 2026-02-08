@@ -29,12 +29,12 @@ export const REWARDS: Reward[] = [
     label: 'Ignited', 
     unlocked: false, 
     color: '#FF6B6B', 
-    achievement: 'First step taken', 
+    achievement: 'Journey begins', 
     rarity: 'Common', 
     ownedBy: '95%', 
-    requirement: { streakDays: 0, completedTasks: 1, focusMinutes: 0 },
-    requirementLabel: '1 task',
-    unlockHint: 'Complete your first task'
+    requirement: { streakDays: 0, completedTasks: 0, focusMinutes: 0 },
+    requirementLabel: 'Start your journey',
+    unlockHint: 'Begin your journey'
   },
   { 
     id: 'r2', 
@@ -42,12 +42,12 @@ export const REWARDS: Reward[] = [
     label: 'Awakened', 
     unlocked: false, 
     color: '#60A5FA', 
-    achievement: 'Building momentum', 
+    achievement: 'First tasks completed', 
     rarity: 'Common', 
     ownedBy: '82%', 
-    requirement: { streakDays: 2, completedTasks: 3, focusMinutes: 15 },
-    requirementLabel: '2 days • 3 tasks • 15min',
-    unlockHint: '2 day streak + 3 tasks + 15min focus'
+    requirement: { streakDays: 0, completedTasks: 2, focusMinutes: 0 },
+    requirementLabel: '2 tasks',
+    unlockHint: 'Complete 2 tasks'
   },
   { 
     id: 'r3', 

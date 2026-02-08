@@ -75,14 +75,12 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     const todayCompleted = progress.todayCompletedTasks ?? 0;
     const todayTotal = progress.todayTotalTasks ?? 0;
 
-    const allTodayTasksDone = todayTotal > 0 && todayCompleted >= todayTotal;
-
     console.log('[RewardUnlock] Checking rewards: streak=', streak, 'tasks=', tasks, 'focus=', focus, 'todayDone=', todayCompleted, '/', todayTotal);
 
-    if (!allTodayTasksDone && !isDeveloper) {
-      console.log('[RewardUnlock] Not all daily tasks completed, skipping reward check');
-      return;
-    }
+    // First reward (r1) is given just for entering the app after trial offer (ready = true)
+    // For other rewards, check if all today's tasks are done
+    const firstRewardEligible = ready; // First reward just requires app entry after trial
+    const otherRewardsEligible = (todayTotal > 0 && todayCompleted >= todayTotal) || isDeveloper;
 
     const newlyUnlocked: Reward[] = [];
     for (let i = 0; i < REWARDS.length; i++) {
@@ -99,6 +97,16 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
           console.log('[RewardUnlock] Sequential block: cannot unlock', reward.label, 'because', prevReward.label, 'not yet earned');
           break;
         }
+      }
+
+      // First reward is given just for app entry after trial
+      // Other rewards require completing all today's tasks first
+      const isFirstReward = i === 0;
+      const canCheckReward = isFirstReward ? firstRewardEligible : otherRewardsEligible;
+      
+      if (!canCheckReward && !isDeveloper) {
+        console.log('[RewardUnlock] Cannot check reward', reward.label, '- eligibility not met');
+        break;
       }
 
       const qualified = isDeveloper || isRewardUnlocked(reward, streak, tasks, focus);

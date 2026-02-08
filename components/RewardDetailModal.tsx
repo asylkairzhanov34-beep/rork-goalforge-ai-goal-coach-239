@@ -16,7 +16,7 @@ import { X, Check, Lock, Flame, Target, Clock, Share2, ChevronLeft, ChevronRight
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Reward, RewardProgress } from '@/constants/rewards';
-import { formatFocusTime } from '@/constants/rewards';
+import { formatFocusTime, GRAY_ORB_VIDEO } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = SCREEN_WIDTH * 0.48;
@@ -147,7 +147,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
           <View style={[styles.orbRing, { borderColor: `${item.color}25` }]}>
             <View style={styles.orbInner}>
               <Video
-                source={{ uri: item.unlocked ? item.video : item.video }}
+                source={{ uri: item.unlocked ? item.video : GRAY_ORB_VIDEO }}
                 style={styles.orbVideo}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay={visible && isCurrent}
@@ -157,7 +157,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
               />
               {!item.unlocked && (
                 <View style={styles.lockedOverlay}>
-                  <Lock size={32} color="rgba(255,255,255,0.5)" />
+                  <Lock size={32} color="rgba(255,255,255,0.7)" />
                 </View>
               )}
             </View>
@@ -265,7 +265,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
                 <View style={[styles.orbRing, { borderColor: `${displayGlow}25` }]}>
                   <View style={styles.orbInner}>
                     <Video
-                      source={{ uri: displayReward.video }}
+                      source={{ uri: displayUnlocked ? displayReward.video : GRAY_ORB_VIDEO }}
                       style={styles.orbVideo}
                       resizeMode={ResizeMode.COVER}
                       shouldPlay={visible}
@@ -275,7 +275,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
                     />
                     {!displayUnlocked && (
                       <View style={styles.lockedOverlay}>
-                        <Lock size={32} color="rgba(255,255,255,0.5)" />
+                        <Lock size={32} color="rgba(255,255,255,0.7)" />
                       </View>
                     )}
                   </View>
