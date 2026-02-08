@@ -6,12 +6,12 @@ import { Video, ResizeMode } from 'expo-av';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight, Gift } from 'lucide-react-native';
+import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight, Gift, Flame, Clock } from 'lucide-react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
-import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, REWARDS } from '@/constants/rewards';
+import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, REWARDS, getNextLockedReward, getRewardProgress, formatFocusTime } from '@/constants/rewards';
 import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
 
@@ -91,6 +91,20 @@ export default function TodayScreen() {
     const focusMin = progress?.focusTimeMinutes ?? 0;
     return getUnlockedRewards(streak, tasks, focusMin, isDeveloper);
   }, [progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, isDeveloper]);
+
+  const nextLockedReward = useMemo(() => {
+    return getNextLockedReward(rewards);
+  }, [rewards]);
+
+  const nextRewardProgress = useMemo(() => {
+    if (!nextLockedReward) return null;
+    return getRewardProgress(
+      nextLockedReward,
+      progress?.currentStreak ?? 0,
+      progress?.totalCompletedTasks ?? 0,
+      progress?.focusTimeMinutes ?? 0
+    );
+  }, [nextLockedReward, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
 
 
   
@@ -544,13 +558,70 @@ export default function TodayScreen() {
             )}
           </View>
 
-
-
-          
-
-
-
-
+          {nextLockedReward && nextRewardProgress && (
+            <View style={styles.nextRewardSection}>
+              <View style={styles.nextRewardHeader}>
+                <Text style={styles.nextRewardTitle}>Next Milestone</Text>
+                <Text style={styles.nextRewardName}>{nextLockedReward.label}</Text>
+              </View>
+              <View style={styles.nextRewardProgressRow}>
+                <View style={styles.nextRewardProgressItem}>
+                  <View style={styles.nextRewardIconWrap}>
+                    <Flame size={14} color={nextRewardProgress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
+                  </View>
+                  <Text style={styles.nextRewardProgressLabel}>Streak</Text>
+                  <Text style={styles.nextRewardProgressValue}>
+                    {progress?.currentStreak ?? 0}/{nextLockedReward.requirement.streakDays}
+                  </Text>
+                  <View style={styles.nextRewardProgressBar}>
+                    <View style={[
+                      styles.nextRewardProgressFill,
+                      { 
+                        width: `${Math.min(nextRewardProgress.streakProgress, 100)}%`,
+                        backgroundColor: nextRewardProgress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
+                      }
+                    ]} />
+                  </View>
+                </View>
+                <View style={styles.nextRewardProgressItem}>
+                  <View style={styles.nextRewardIconWrap}>
+                    <Target size={14} color={nextRewardProgress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
+                  </View>
+                  <Text style={styles.nextRewardProgressLabel}>Tasks</Text>
+                  <Text style={styles.nextRewardProgressValue}>
+                    {progress?.totalCompletedTasks ?? 0}/{nextLockedReward.requirement.completedTasks}
+                  </Text>
+                  <View style={styles.nextRewardProgressBar}>
+                    <View style={[
+                      styles.nextRewardProgressFill,
+                      { 
+                        width: `${Math.min(nextRewardProgress.tasksProgress, 100)}%`,
+                        backgroundColor: nextRewardProgress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
+                      }
+                    ]} />
+                  </View>
+                </View>
+                <View style={styles.nextRewardProgressItem}>
+                  <View style={styles.nextRewardIconWrap}>
+                    <Clock size={14} color={nextRewardProgress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
+                  </View>
+                  <Text style={styles.nextRewardProgressLabel}>Focus</Text>
+                  <Text style={styles.nextRewardProgressValue}>
+                    {formatFocusTime(progress?.focusTimeMinutes ?? 0)}/{formatFocusTime(nextLockedReward.requirement.focusMinutes)}
+                  </Text>
+                  <View style={styles.nextRewardProgressBar}>
+                    <View style={[
+                      styles.nextRewardProgressFill,
+                      { 
+                        width: `${Math.min(nextRewardProgress.focusProgress, 100)}%`,
+                        backgroundColor: nextRewardProgress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
+                      }
+                    ]} />
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
 
           <TouchableOpacity 
             style={styles.coachCard}
@@ -936,6 +1007,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500' as const,
     color: theme.colors.primary,
+  },
+  nextRewardSection: {
+    marginTop: 20,
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  nextRewardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  nextRewardTitle: {
+    fontSize: 11,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+  },
+  nextRewardName: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  nextRewardProgressRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  nextRewardProgressItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  nextRewardIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextRewardProgressLabel: {
+    fontSize: 10,
+    fontWeight: '500' as const,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.3,
+  },
+  nextRewardProgressValue: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  nextRewardProgressBar: {
+    width: '100%',
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  nextRewardProgressFill: {
+    height: '100%',
+    borderRadius: 2,
   },
 
   firstStepText: {

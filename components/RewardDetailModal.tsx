@@ -16,7 +16,7 @@ import { X, Check, Lock, Flame, Target, Clock, Share2, ChevronLeft, ChevronRight
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Reward, RewardProgress } from '@/constants/rewards';
-import { formatFocusTime, GRAY_ORB_VIDEO } from '@/constants/rewards';
+import { formatFocusTime, LOCKED_ORB_VIDEO } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = SCREEN_WIDTH * 0.48;
@@ -147,7 +147,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
           <View style={[styles.orbRing, { borderColor: `${item.color}25` }]}>
             <View style={styles.orbInner}>
               <Video
-                source={{ uri: item.unlocked ? item.video : GRAY_ORB_VIDEO }}
+                source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
                 style={styles.orbVideo}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay={visible && isCurrent}
@@ -265,7 +265,7 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
                 <View style={[styles.orbRing, { borderColor: `${displayGlow}25` }]}>
                   <View style={styles.orbInner}>
                     <Video
-                      source={{ uri: displayUnlocked ? displayReward.video : GRAY_ORB_VIDEO }}
+                      source={{ uri: displayUnlocked ? displayReward.video : LOCKED_ORB_VIDEO }}
                       style={styles.orbVideo}
                       resizeMode={ResizeMode.COVER}
                       shouldPlay={visible}

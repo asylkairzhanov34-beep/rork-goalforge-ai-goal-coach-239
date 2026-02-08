@@ -78,9 +78,11 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     console.log('[RewardUnlock] Checking rewards: streak=', streak, 'tasks=', tasks, 'focus=', focus, 'todayDone=', todayCompleted, '/', todayTotal);
 
     // First reward (r1) is given just for entering the app after trial offer (ready = true)
-    // For other rewards, check if all today's tasks are done
-    const firstRewardEligible = ready; // First reward just requires app entry after trial
-    const otherRewardsEligible = (todayTotal > 0 && todayCompleted >= todayTotal) || isDeveloper;
+    // Second reward (r2) is simple - complete 2 tasks total
+    // Other rewards check if you meet the requirements AND completed today's plan
+    const firstRewardEligible = ready;
+    const secondRewardEligible = tasks >= 2; // Second reward is simple - just 2 tasks
+    const otherRewardsEligible = (todayTotal > 0 && todayCompleted >= todayTotal) || tasks > 0 || isDeveloper;
 
     const newlyUnlocked: Reward[] = [];
     for (let i = 0; i < REWARDS.length; i++) {
@@ -99,10 +101,18 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         }
       }
 
-      // First reward is given just for app entry after trial
-      // Other rewards require completing all today's tasks first
+      // Determine eligibility based on reward index
       const isFirstReward = i === 0;
-      const canCheckReward = isFirstReward ? firstRewardEligible : otherRewardsEligible;
+      const isSecondReward = i === 1;
+      let canCheckReward = false;
+      
+      if (isFirstReward) {
+        canCheckReward = firstRewardEligible;
+      } else if (isSecondReward) {
+        canCheckReward = secondRewardEligible;
+      } else {
+        canCheckReward = otherRewardsEligible;
+      }
       
       if (!canCheckReward && !isDeveloper) {
         console.log('[RewardUnlock] Cannot check reward', reward.label, '- eligibility not met');
@@ -111,6 +121,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
 
       const qualified = isDeveloper || isRewardUnlocked(reward, streak, tasks, focus);
       if (qualified) {
+        console.log('[RewardUnlock] Reward qualified:', reward.label);
         newlyUnlocked.push({ ...reward, unlocked: true });
       } else {
         break;
