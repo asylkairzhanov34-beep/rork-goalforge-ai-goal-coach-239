@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProgress } from '@/hooks/use-progress';
 import { useAuth } from '@/hooks/use-auth-store';
-import { getUnlockedRewards, REWARDS, type Reward } from '@/constants/rewards';
+import { isRewardUnlocked, REWARDS, type Reward } from '@/constants/rewards';
 
 const SEEN_REWARDS_KEY = '@seen_unlocked_rewards';
 const OFFER_SEEN_KEY = '@subscription_offer_seen';
@@ -72,14 +72,45 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     const streak = progress.currentStreak ?? 0;
     const tasks = progress.totalCompletedTasks ?? 0;
     const focus = progress.focusTimeMinutes ?? 0;
+    const todayCompleted = progress.todayCompletedTasks ?? 0;
+    const todayTotal = progress.todayTotalTasks ?? 0;
 
-    console.log('[RewardUnlock] Checking rewards: streak=', streak, 'tasks=', tasks, 'focus=', focus);
+    const allTodayTasksDone = todayTotal > 0 && todayCompleted >= todayTotal;
 
-    const rewards = getUnlockedRewards(streak, tasks, focus, isDeveloper);
-    const newlyUnlocked = rewards.filter(r => r.unlocked && !seenIdsRef.current.has(r.id));
+    console.log('[RewardUnlock] Checking rewards: streak=', streak, 'tasks=', tasks, 'focus=', focus, 'todayDone=', todayCompleted, '/', todayTotal);
+
+    if (!allTodayTasksDone && !isDeveloper) {
+      console.log('[RewardUnlock] Not all daily tasks completed, skipping reward check');
+      return;
+    }
+
+    const newlyUnlocked: Reward[] = [];
+    for (let i = 0; i < REWARDS.length; i++) {
+      const reward = REWARDS[i];
+      const alreadySeen = seenIdsRef.current.has(reward.id);
+
+      if (alreadySeen) continue;
+
+      if (i > 0) {
+        const prevReward = REWARDS[i - 1];
+        const prevSeen = seenIdsRef.current.has(prevReward.id);
+        const prevQualified = isRewardUnlocked(prevReward, streak, tasks, focus);
+        if (!prevSeen && !prevQualified) {
+          console.log('[RewardUnlock] Sequential block: cannot unlock', reward.label, 'because', prevReward.label, 'not yet earned');
+          break;
+        }
+      }
+
+      const qualified = isDeveloper || isRewardUnlocked(reward, streak, tasks, focus);
+      if (qualified) {
+        newlyUnlocked.push({ ...reward, unlocked: true });
+      } else {
+        break;
+      }
+    }
 
     if (newlyUnlocked.length > 0) {
-      console.log('[RewardUnlock] New rewards detected:', newlyUnlocked.map(r => r.label));
+      console.log('[RewardUnlock] New rewards detected (sequential):', newlyUnlocked.map(r => r.label));
 
       const allSeenIds = [...seenIdsRef.current, ...newlyUnlocked.map(r => r.id)];
       seenIdsRef.current = new Set(allSeenIds);
@@ -93,7 +124,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         queueRef.current = [...queueRef.current, ...newlyUnlocked];
       }
     }
-  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, modalVisible, pendingReward, ready, isDeveloper]);
+  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, progress?.todayCompletedTasks, progress?.todayTotalTasks, modalVisible, pendingReward, ready, isDeveloper]);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
@@ -120,6 +151,8 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         const nextReward = unshownRewards[0];
         idx = REWARDS.findIndex(r => r.id === nextReward.id);
       } else {
+        seenIdsRef.current = new Set();
+        AsyncStorage.setItem(SEEN_REWARDS_KEY, JSON.stringify([])).catch(() => {});
         idx = 0;
       }
     }

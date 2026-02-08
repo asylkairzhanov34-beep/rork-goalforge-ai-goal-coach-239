@@ -11,6 +11,7 @@ export interface ProgressData {
   bestStreak: number;
   totalCompletedTasks: number;
   todayCompletedTasks: number;
+  todayTotalTasks: number;
   focusTimeMinutes: number;
   focusTimeDisplay: string;
   todayFocusMinutes: number;
@@ -119,18 +120,28 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     return goalTasks + challengeTasks;
   }, [goalStore?.dailyTasks, challengeStore?.activeChallenges]);
 
-  const todayCompletedTasks = useMemo(() => {
-    const goalToday = goalStore?.getTodayTasks?.()?.filter(t => t.completed).length || 0;
+  const todayTasksCounts = useMemo(() => {
+    const goalTodayAll = goalStore?.getTodayTasks?.() || [];
+    const goalTodayCompleted = goalTodayAll.filter(t => t.completed).length;
+    const goalTodayTotal = goalTodayAll.length;
     
-    let challengeToday = 0;
+    let challengeTodayCompleted = 0;
+    let challengeTodayTotal = 0;
     const activeChallenge = challengeStore?.getActiveChallenge?.();
     if (activeChallenge) {
       const todayTasks = challengeStore?.getTodayTasks?.(activeChallenge.id) || [];
-      challengeToday = todayTasks.filter(t => t.completed).length;
+      challengeTodayCompleted = todayTasks.filter(t => t.completed).length;
+      challengeTodayTotal = todayTasks.length;
     }
     
-    return goalToday + challengeToday;
+    return {
+      completed: goalTodayCompleted + challengeTodayCompleted,
+      total: goalTodayTotal + challengeTodayTotal,
+    };
   }, [goalStore, challengeStore]);
+
+  const todayCompletedTasks = todayTasksCounts.completed;
+  const todayTotalTasks = todayTasksCounts.total;
 
   const currentStreak = useMemo(() => {
     return goalStore?.profile?.currentStreak ?? 0;
@@ -158,6 +169,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     bestStreak,
     totalCompletedTasks,
     todayCompletedTasks,
+    todayTotalTasks,
     focusTimeMinutes: totalFocusMinutes,
     focusTimeDisplay,
     todayFocusMinutes,
@@ -168,6 +180,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
     bestStreak,
     totalCompletedTasks,
     todayCompletedTasks,
+    todayTotalTasks,
     totalFocusMinutes,
     focusTimeDisplay,
     todayFocusMinutes,

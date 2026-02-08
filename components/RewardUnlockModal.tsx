@@ -14,9 +14,8 @@ import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import type { Reward } from '@/constants/rewards';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH;
-const ORB_SIZE = SCREEN_WIDTH * 0.6;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ORB_SIZE = SCREEN_WIDTH * 0.58;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -30,11 +29,14 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
   const videoRef = useRef<Video>(null);
 
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const cardScale = useRef(new Animated.Value(0.9)).current;
+  const cardScale = useRef(new Animated.Value(0.92)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
-  const orbScale = useRef(new Animated.Value(0.8)).current;
+  const orbScale = useRef(new Animated.Value(0.7)).current;
   const orbOpacity = useRef(new Animated.Value(0)).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const footerOpacity = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(-20)).current;
+  const footerSlide = useRef(new Animated.Value(20)).current;
 
   const playEntrance = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -45,42 +47,61 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
     setVideoKey(prev => prev + 1);
 
     backdropOpacity.setValue(0);
-    cardScale.setValue(0.9);
+    cardScale.setValue(0.92);
     cardOpacity.setValue(0);
-    orbScale.setValue(0.8);
+    orbScale.setValue(0.7);
     orbOpacity.setValue(0);
-    contentOpacity.setValue(0);
+    headerOpacity.setValue(0);
+    footerOpacity.setValue(0);
+    headerSlide.setValue(-20);
+    footerSlide.setValue(20);
 
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 400,
+        duration: 500,
         useNativeDriver: true,
       }),
       Animated.spring(cardScale, {
         toValue: 1,
-        tension: 50,
-        friction: 8,
+        tension: 40,
+        friction: 9,
         useNativeDriver: true,
       }),
       Animated.timing(cardOpacity, {
         toValue: 1,
-        duration: 350,
+        duration: 400,
         useNativeDriver: true,
       }),
     ]).start();
 
     setTimeout(() => {
       Animated.parallel([
+        Animated.timing(headerOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.spring(headerSlide, {
+          toValue: 0,
+          tension: 50,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 150);
+
+    setTimeout(() => {
+      Animated.parallel([
         Animated.spring(orbScale, {
           toValue: 1,
-          tension: 40,
-          friction: 6,
+          tension: 35,
+          friction: 7,
           useNativeDriver: true,
         }),
         Animated.timing(orbOpacity, {
           toValue: 1,
-          duration: 500,
+          duration: 600,
           useNativeDriver: true,
         }),
       ]).start();
@@ -88,16 +109,24 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-    }, 200);
+    }, 300);
 
     setTimeout(() => {
-      Animated.timing(contentOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
-    }, 400);
-  }, [backdropOpacity, cardScale, cardOpacity, orbScale, orbOpacity, contentOpacity]);
+      Animated.parallel([
+        Animated.timing(footerOpacity, {
+          toValue: 1,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+        Animated.spring(footerSlide, {
+          toValue: 0,
+          tension: 50,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 550);
+  }, [backdropOpacity, cardScale, cardOpacity, orbScale, orbOpacity, headerOpacity, footerOpacity, headerSlide, footerSlide]);
 
   useEffect(() => {
     if (visible && reward) {
@@ -111,22 +140,18 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
     }
 
     Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-      Animated.timing(cardOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(cardScale, { toValue: 0.9, duration: 200, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(cardOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(cardScale, { toValue: 0.92, duration: 250, useNativeDriver: true }),
     ]).start(() => onClose());
   }, [backdropOpacity, cardOpacity, cardScale, onClose]);
 
-
-
   if (!reward) return null;
-
-  const glowColor = reward.color || '#60A5FA';
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-        <Animated.View 
+        <Animated.View
           style={[
             styles.card,
             {
@@ -135,20 +160,18 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
             }
           ]}
         >
-          <View style={styles.cardHeader}>
-            <TouchableOpacity 
-              style={styles.closeButton} 
-              onPress={handleClose}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <X size={20} color="rgba(255,255,255,0.6)" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={handleClose}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <X size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
 
-          <Animated.View style={[styles.headerContent, { opacity: contentOpacity }]}>
+          <Animated.View style={[styles.headerContent, { opacity: headerOpacity, transform: [{ translateY: headerSlide }] }]}>
             <Text style={styles.unlockLabel}>Reward Unlocked</Text>
-            <Text style={[styles.rewardName, { color: glowColor }]}>
+            <Text style={styles.rewardName}>
               {reward.label.toUpperCase()}
             </Text>
             <Text style={styles.description}>
@@ -157,7 +180,7 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
           </Animated.View>
 
           <View style={styles.orbSection}>
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.orbContainer,
                 {
@@ -180,16 +203,14 @@ const RewardUnlockModalInner: React.FC<RewardUnlockModalProps> = ({ visible, rew
             </Animated.View>
           </View>
 
-          <Animated.View style={[styles.footer, { opacity: contentOpacity }]}>
+          <Animated.View style={[styles.footer, { opacity: footerOpacity, transform: [{ translateY: footerSlide }] }]}>
             <TouchableOpacity
-              style={[styles.claimButton, { backgroundColor: glowColor }]}
+              style={styles.claimButton}
               onPress={handleClose}
               activeOpacity={0.85}
             >
               <Text style={styles.claimButtonText}>Claim Reward</Text>
             </TouchableOpacity>
-
-
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -208,59 +229,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   card: {
-    width: CARD_WIDTH,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     backgroundColor: '#000',
-    paddingBottom: 36,
-    paddingTop: 8,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 8,
   },
   closeButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   headerContent: {
     alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 16,
+    paddingHorizontal: 32,
+    marginBottom: 32,
   },
   unlockLabel: {
     fontSize: 13,
-    fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    fontWeight: '400' as const,
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 12,
   },
   rewardName: {
-    fontSize: 28,
-    fontWeight: '800' as const,
-    letterSpacing: 2,
-    marginBottom: 12,
+    fontSize: 30,
+    fontWeight: '700' as const,
+    letterSpacing: 3,
+    marginBottom: 14,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   description: {
     fontSize: 14,
     fontWeight: '400' as const,
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.35)',
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   orbSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
+    paddingVertical: 20,
   },
   orbContainer: {
     width: ORB_SIZE,
@@ -278,21 +297,24 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingHorizontal: 28,
-    marginTop: 8,
+    paddingHorizontal: 32,
+    marginTop: 40,
+    width: '100%',
   },
   claimButton: {
     width: '100%',
-    height: 54,
-    borderRadius: 27,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   claimButtonText: {
     fontSize: 16,
-    fontWeight: '700' as const,
-    color: '#000',
-    letterSpacing: 0.3,
+    fontWeight: '600' as const,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-
 });
