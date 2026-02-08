@@ -11,13 +11,12 @@ import {
 } from 'react-native';
 
 import { Video, ResizeMode } from 'expo-av';
-import { BlurView } from 'expo-blur';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { type Reward } from '@/constants/rewards';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.5;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ORB_SIZE = SCREEN_WIDTH * 0.55;
 
 interface RewardUnlockModalProps {
   visible: boolean;
@@ -131,7 +130,7 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
 
   if (!reward) return null;
 
-  const rewardColor = reward.color || '#FFD700';
+
 
   return (
     <Modal
@@ -148,11 +147,7 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
             { opacity: opacityAnim },
           ]}
         >
-          {Platform.OS === 'ios' ? (
-            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.9)' }]} />
-          )}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }]} />
         </Animated.View>
 
         <Animated.View
@@ -170,9 +165,11 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.headerText}>Reward Unlocked</Text>
-          <Text style={styles.rewardTitle}>{reward.label.toUpperCase()}</Text>
-          <Text style={styles.achievementText}>{reward.achievement}</Text>
+          <View style={styles.headerSection}>
+            <Text style={styles.headerText}>Reward Unlocked</Text>
+            <Text style={styles.rewardTitle}>{reward.label.toUpperCase()}</Text>
+            <Text style={styles.achievementText}>{reward.achievement}</Text>
+          </View>
 
           <Animated.View
             style={[
@@ -184,26 +181,15 @@ export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModa
               },
             ]}
           >
-            <Animated.View
-              style={[
-                styles.orbGlow,
-                {
-                  backgroundColor: rewardColor,
-                  opacity: Animated.multiply(orbGlowAnim, new Animated.Value(0.5)),
-                },
-              ]}
-            />
-            <View style={[styles.orbRing, { shadowColor: rewardColor }]}>
-              <View style={styles.orbVideoWrapper}>
-                <Video
-                  source={{ uri: reward.video }}
-                  style={styles.orbVideo}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay
-                  isLooping
-                  isMuted
-                />
-              </View>
+            <View style={styles.orbVideoWrapper}>
+              <Video
+                source={{ uri: reward.video }}
+                style={styles.orbVideo}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                isMuted
+              />
             </View>
           </Animated.View>
 
@@ -240,96 +226,67 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   container: {
-    width: SCREEN_WIDTH - 48,
-    maxWidth: 380,
-    backgroundColor: 'rgba(28, 28, 30, 0.98)',
-    borderRadius: 24,
-    paddingTop: 56,
-    paddingBottom: 28,
-    paddingHorizontal: 24,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#000000',
+    paddingTop: 100,
+    paddingBottom: 50,
+    paddingHorizontal: 32,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.6,
-        shadowRadius: 40,
-      },
-      android: {
-        elevation: 25,
-      },
-    }),
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   closeButton: {
     position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    top: 60,
+    left: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   closeButtonInner: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 2,
+    textTransform: 'uppercase' as const,
+    marginBottom: 16,
   },
   rewardTitle: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    letterSpacing: 2,
-    marginBottom: 8,
+    fontSize: 34,
+    fontWeight: '700' as const,
+    letterSpacing: 4,
+    marginBottom: 10,
     color: '#FFFFFF',
+    textAlign: 'center' as const,
   },
   achievementText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '400' as const,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: 32,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center' as const,
   },
   orbContainer: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
-  },
-  orbGlow: {
-    position: 'absolute',
-    width: ORB_SIZE * 1.4,
-    height: ORB_SIZE * 1.4,
-    borderRadius: ORB_SIZE * 0.7,
-  },
-  orbRing: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
-    padding: 3,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 20,
-      },
-    }),
   },
   orbVideoWrapper: {
-    width: '100%',
-    height: '100%',
+    width: ORB_SIZE,
+    height: ORB_SIZE,
     borderRadius: ORB_SIZE / 2,
     overflow: 'hidden',
   },
@@ -339,20 +296,21 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     width: '100%',
+    paddingHorizontal: 8,
   },
   claimButton: {
-    height: 52,
-    borderRadius: 26,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   claimButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600' as const,
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 0.3,
   },
 });
