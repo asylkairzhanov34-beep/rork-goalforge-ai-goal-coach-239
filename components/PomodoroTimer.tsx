@@ -9,7 +9,8 @@ import { Picker } from '@react-native-picker/picker';
 import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useTimer } from '@/hooks/use-timer-store';
-import { getLastUnlockedReward } from '@/constants/rewards';
+import { useProgress } from '@/hooks/use-progress';
+import { REWARDS, isRewardUnlocked, GRAY_ORB_VIDEO } from '@/constants/rewards';
 import { VideoOrb } from '@/components/VideoOrb';
 
 
@@ -34,7 +35,23 @@ const QUICK_PRESETS = [10, 25, 45, 60];
 export function PomodoroTimer() {
   const { currentGoal } = useGoalStore();
   const timerStore = useTimer();
-  const lastUnlockedOrb = useMemo(() => getLastUnlockedReward(), []);
+  const progress = useProgress();
+
+  const lastUnlockedOrb = useMemo(() => {
+    const streak = progress?.currentStreak ?? 0;
+    const tasks = progress?.totalCompletedTasks ?? 0;
+    const focus = progress?.focusTimeMinutes ?? 0;
+
+    let lastUnlocked = null;
+    for (let i = 0; i < REWARDS.length; i++) {
+      if (isRewardUnlocked(REWARDS[i], streak, tasks, focus)) {
+        lastUnlocked = REWARDS[i];
+      } else {
+        break;
+      }
+    }
+    return lastUnlocked;
+  }, [progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
   
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -236,7 +253,7 @@ export function PomodoroTimer() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progress = totalTime > 0 ? 1 - (currentTime / totalTime) : 0;
+  const timerProgress = totalTime > 0 ? 1 - (currentTime / totalTime) : 0;
   const todaySessions = getTodaySessions ? getTodaySessions() : [];
   const todayFocusSessions = todaySessions.filter(s => s.type === 'focus').length;
 
@@ -309,7 +326,7 @@ export function PomodoroTimer() {
                     fill="transparent"
                     strokeLinecap="round"
                     strokeDasharray={CIRCUMFERENCE}
-                    strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
+                    strokeDashoffset={CIRCUMFERENCE * (1 - timerProgress)}
                     transform={`rotate(-90 ${TIMER_SIZE / 2} ${TIMER_SIZE / 2})`}
                   />
                 </Svg>
@@ -323,11 +340,11 @@ export function PomodoroTimer() {
                         width: TIMER_SIZE, 
                         height: TIMER_SIZE, 
                         borderRadius: TIMER_SIZE / 2,
-                        borderTopColor: progress > 0 ? '#FFD12A' : 'transparent',
-                        borderRightColor: progress > 0.25 ? '#FFD12A' : 'transparent',
-                        borderBottomColor: progress > 0.5 ? '#FFD12A' : 'transparent',
-                        borderLeftColor: progress > 0.75 ? '#FFD12A' : 'transparent',
-                        transform: [{ rotate: `${progress * 360 - 90}deg` }],
+                        borderTopColor: timerProgress > 0 ? '#FFD12A' : 'transparent',
+                        borderRightColor: timerProgress > 0.25 ? '#FFD12A' : 'transparent',
+                        borderBottomColor: timerProgress > 0.5 ? '#FFD12A' : 'transparent',
+                        borderLeftColor: timerProgress > 0.75 ? '#FFD12A' : 'transparent',
+                        transform: [{ rotate: `${timerProgress * 360 - 90}deg` }],
                       }
                     ]} 
                   />
@@ -556,13 +573,13 @@ export function PomodoroTimer() {
 
       {/* Dream Card */}
       {currentGoal && (
-        <View style={[styles.dreamCard, { borderColor: `${lastUnlockedOrb.color}25` }]}>
+        <View style={[styles.dreamCard, { borderColor: lastUnlockedOrb ? `${lastUnlockedOrb.color}25` : 'rgba(255,255,255,0.06)' }]}>
           <View style={styles.dreamHeader}>
-            <View style={[styles.dreamOrbContainer, { shadowColor: lastUnlockedOrb.color }]}>
+            <View style={[styles.dreamOrbContainer, { shadowColor: lastUnlockedOrb?.color ?? '#666' }]}>
               <VideoOrb
-                uri={lastUnlockedOrb.video}
+                uri={lastUnlockedOrb?.video ?? GRAY_ORB_VIDEO}
                 size={ORB_SIZE}
-                color={lastUnlockedOrb.color}
+                color={lastUnlockedOrb?.color ?? '#666'}
                 shouldPlay
               />
             </View>
@@ -572,7 +589,7 @@ export function PomodoroTimer() {
             </View>
           </View>
           <View style={styles.dreamProgress}>
-            <View style={[styles.dreamProgressBar, { width: `${Math.min(progress * 100, 100)}%`, backgroundColor: lastUnlockedOrb.color }]} />
+            <View style={[styles.dreamProgressBar, { width: `${Math.min(timerProgress * 100, 100)}%`, backgroundColor: lastUnlockedOrb?.color ?? '#666' }]} />
           </View>
         </View>
       )}
