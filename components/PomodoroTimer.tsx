@@ -10,7 +10,7 @@ import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useTimer } from '@/hooks/use-timer-store';
 import { getLastUnlockedReward } from '@/constants/rewards';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoOrb } from '@/components/VideoOrb';
 
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -559,13 +559,11 @@ export function PomodoroTimer() {
         <View style={[styles.dreamCard, { borderColor: `${lastUnlockedOrb.color}25` }]}>
           <View style={styles.dreamHeader}>
             <View style={[styles.dreamOrbContainer, { shadowColor: lastUnlockedOrb.color }]}>
-              <Video
-                source={{ uri: lastUnlockedOrb.video }}
-                style={styles.dreamOrbVideo}
-                resizeMode={ResizeMode.COVER}
+              <VideoOrb
+                uri={lastUnlockedOrb.video}
+                size={ORB_SIZE}
+                color={lastUnlockedOrb.color}
                 shouldPlay
-                isLooping
-                isMuted
               />
             </View>
             <View style={styles.dreamTextContainer}>
@@ -853,10 +851,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  dreamOrbVideo: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-  },
+
   dreamTextContainer: {
     flex: 1,
   },

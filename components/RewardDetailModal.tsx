@@ -10,7 +10,7 @@ import {
   Platform,
   FlatList,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoOrb } from '@/components/VideoOrb';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, Check, Lock, Flame, Target, Clock, Share2, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -20,6 +20,7 @@ import { formatFocusTime, LOCKED_ORB_VIDEO } from '@/constants/rewards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = SCREEN_WIDTH * 0.48;
+const VIDEO_ORB_SIZE = Math.round(ORB_SIZE);
 
 interface RewardDetailModalProps {
   visible: boolean;
@@ -144,24 +145,19 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
           styles.orbContainer,
           { transform: [{ scale: isCurrent ? orbScale : 1 }] },
         ]}>
-          <View style={[styles.orbRing, { borderColor: `${item.color}25` }]}>
-            <View style={styles.orbInner}>
-              <Video
-                source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
-                style={styles.orbVideo}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={visible && isCurrent}
-                isLooping
-                isMuted
-                onReadyForDisplay={() => { if (isCurrent) setVideoReady(true); }}
-              />
-              {!item.unlocked && (
-                <View style={styles.lockedOverlay}>
-                  <Lock size={32} color="rgba(255,255,255,0.7)" />
-                </View>
-              )}
+          <VideoOrb
+            uri={item.unlocked ? item.video : LOCKED_ORB_VIDEO}
+            size={VIDEO_ORB_SIZE}
+            color={item.color}
+            shouldPlay={visible && isCurrent}
+            showBorder
+            borderColor={`${item.color}25`}
+          />
+          {!item.unlocked && (
+            <View style={[styles.lockedOverlay, { width: VIDEO_ORB_SIZE, height: VIDEO_ORB_SIZE, borderRadius: VIDEO_ORB_SIZE / 2 }]}>
+              <Lock size={32} color="rgba(255,255,255,0.7)" />
             </View>
-          </View>
+          )}
         </Animated.View>
       </View>
     );
@@ -262,24 +258,19 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
           ) : (
             <View style={styles.singleOrbSection}>
               <Animated.View style={[styles.orbContainer, { transform: [{ scale: orbScale }] }]}>
-                <View style={[styles.orbRing, { borderColor: `${displayGlow}25` }]}>
-                  <View style={styles.orbInner}>
-                    <Video
-                      source={{ uri: displayUnlocked ? displayReward.video : LOCKED_ORB_VIDEO }}
-                      style={styles.orbVideo}
-                      resizeMode={ResizeMode.COVER}
-                      shouldPlay={visible}
-                      isLooping
-                      isMuted
-                      onReadyForDisplay={() => setVideoReady(true)}
-                    />
-                    {!displayUnlocked && (
-                      <View style={styles.lockedOverlay}>
-                        <Lock size={32} color="rgba(255,255,255,0.7)" />
-                      </View>
-                    )}
+                <VideoOrb
+                  uri={displayUnlocked ? displayReward.video : LOCKED_ORB_VIDEO}
+                  size={VIDEO_ORB_SIZE}
+                  color={displayGlow}
+                  shouldPlay={visible}
+                  showBorder
+                  borderColor={`${displayGlow}25`}
+                />
+                {!displayUnlocked && (
+                  <View style={[styles.lockedOverlay, { width: VIDEO_ORB_SIZE, height: VIDEO_ORB_SIZE, borderRadius: VIDEO_ORB_SIZE / 2 }]}>
+                    <Lock size={32} color="rgba(255,255,255,0.7)" />
                   </View>
-                </View>
+                )}
               </Animated.View>
             </View>
           )}
@@ -528,30 +519,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orbRing: {
-    width: ORB_SIZE + 8,
-    height: ORB_SIZE + 8,
-    borderRadius: (ORB_SIZE + 8) / 2,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbInner: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
-    overflow: 'hidden',
-  },
-  orbVideo: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-  },
   lockedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: ORB_SIZE / 2,
   },
   navArrow: {
     position: 'absolute',
