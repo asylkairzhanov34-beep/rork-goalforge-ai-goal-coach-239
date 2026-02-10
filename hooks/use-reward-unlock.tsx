@@ -19,6 +19,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const queueRef = useRef<Reward[]>([]);
+  const isShowingRef = useRef(false);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -135,7 +136,8 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
       seenIdsRef.current = new Set(allSeenIds);
       AsyncStorage.setItem(SEEN_REWARDS_KEY, JSON.stringify(allSeenIds)).catch(() => {});
 
-      if (!modalVisible && !pendingReward) {
+      if (!isShowingRef.current) {
+        isShowingRef.current = true;
         setPendingReward(newlyUnlocked[0]);
         setModalVisible(true);
         queueRef.current = newlyUnlocked.slice(1);
@@ -143,19 +145,21 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
         queueRef.current = [...queueRef.current, ...newlyUnlocked];
       }
     }
-  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, progress?.todayCompletedTasks, progress?.todayTotalTasks, modalVisible, pendingReward, ready, isDeveloper]);
+  }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, progress?.todayCompletedTasks, progress?.todayTotalTasks, ready, isDeveloper]);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
     setPendingReward(null);
+    isShowingRef.current = false;
 
     setTimeout(() => {
       if (queueRef.current.length > 0) {
         const next = queueRef.current.shift()!;
+        isShowingRef.current = true;
         setPendingReward(next);
         setModalVisible(true);
       }
-    }, 500);
+    }, 600);
   }, []);
 
   const triggerTestReward = useCallback((rewardIndex?: number) => {

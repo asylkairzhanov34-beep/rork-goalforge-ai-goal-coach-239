@@ -96,18 +96,33 @@ export default function TodayScreen() {
     return getNextLockedReward(rewards);
   }, [rewards]);
 
-  const nextRewardProgress = useMemo(() => {
-    if (!nextLockedReward) return null;
-    return getRewardProgress(
-      nextLockedReward,
+  const activeRewardMilestone = useMemo(() => {
+    const activeReward = rewards[activeRewardIndex];
+    if (!activeReward) return null;
+
+    let targetReward: typeof activeReward | null = null;
+
+    if (activeReward.unlocked) {
+      targetReward = rewards.slice(activeRewardIndex + 1).find(r => !r.unlocked) ?? nextLockedReward;
+    } else {
+      targetReward = activeReward;
+    }
+
+    if (!targetReward) return null;
+
+    const req = targetReward.requirement;
+    if (req.streakDays === 0 && req.completedTasks === 0 && req.focusMinutes === 0) return null;
+
+    const prog = getRewardProgress(
+      targetReward,
       progress?.currentStreak ?? 0,
       progress?.totalCompletedTasks ?? 0,
       progress?.focusTimeMinutes ?? 0
     );
-  }, [nextLockedReward, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
 
+    return { reward: targetReward, progress: prog };
+  }, [rewards, activeRewardIndex, nextLockedReward, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes]);
 
-  
   const rewardsRef = useRef(rewards);
   useEffect(() => { rewardsRef.current = rewards; }, [rewards]);
   
@@ -556,72 +571,78 @@ export default function TodayScreen() {
                 <Text style={styles.achievementText}>{rewards[activeRewardIndex]?.achievement}</Text>
               </View>
             )}
-          </View>
 
-          {nextLockedReward && nextRewardProgress && (
-            <View style={styles.nextRewardSection}>
-              <View style={styles.nextRewardHeader}>
-                <Text style={styles.nextRewardTitle}>Next Milestone</Text>
-                <Text style={styles.nextRewardName}>{nextLockedReward.label}</Text>
+            {activeRewardMilestone && (
+              <View style={styles.orbMilestone}>
+                <View style={styles.orbMilestoneHeader}>
+                  <Text style={styles.orbMilestoneLabel}>NEXT MILESTONE</Text>
+                  <Text style={styles.orbMilestoneName}>{activeRewardMilestone.reward.label}</Text>
+                </View>
+                <View style={styles.orbMilestoneRow}>
+                  {activeRewardMilestone.reward.requirement.streakDays > 0 && (
+                    <View style={styles.orbMilestoneItem}>
+                      <View style={[styles.orbMilestoneIconWrap, activeRewardMilestone.progress.streakProgress >= 100 && styles.orbMilestoneIconDone]}>
+                        <Flame size={13} color={activeRewardMilestone.progress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.4)'} />
+                      </View>
+                      <Text style={styles.orbMilestoneItemLabel}>Streak</Text>
+                      <Text style={styles.orbMilestoneItemValue}>
+                        {progress?.currentStreak ?? 0}/{activeRewardMilestone.reward.requirement.streakDays}
+                      </Text>
+                      <View style={styles.orbMilestoneBar}>
+                        <View style={[
+                          styles.orbMilestoneFill,
+                          { 
+                            width: `${Math.min(activeRewardMilestone.progress.streakProgress, 100)}%`,
+                            backgroundColor: activeRewardMilestone.progress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.2)'
+                          }
+                        ]} />
+                      </View>
+                    </View>
+                  )}
+                  {activeRewardMilestone.reward.requirement.completedTasks > 0 && (
+                    <View style={styles.orbMilestoneItem}>
+                      <View style={[styles.orbMilestoneIconWrap, activeRewardMilestone.progress.tasksProgress >= 100 && styles.orbMilestoneIconDone]}>
+                        <Target size={13} color={activeRewardMilestone.progress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.4)'} />
+                      </View>
+                      <Text style={styles.orbMilestoneItemLabel}>Tasks</Text>
+                      <Text style={styles.orbMilestoneItemValue}>
+                        {progress?.totalCompletedTasks ?? 0}/{activeRewardMilestone.reward.requirement.completedTasks}
+                      </Text>
+                      <View style={styles.orbMilestoneBar}>
+                        <View style={[
+                          styles.orbMilestoneFill,
+                          { 
+                            width: `${Math.min(activeRewardMilestone.progress.tasksProgress, 100)}%`,
+                            backgroundColor: activeRewardMilestone.progress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.2)'
+                          }
+                        ]} />
+                      </View>
+                    </View>
+                  )}
+                  {activeRewardMilestone.reward.requirement.focusMinutes > 0 && (
+                    <View style={styles.orbMilestoneItem}>
+                      <View style={[styles.orbMilestoneIconWrap, activeRewardMilestone.progress.focusProgress >= 100 && styles.orbMilestoneIconDone]}>
+                        <Clock size={13} color={activeRewardMilestone.progress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.4)'} />
+                      </View>
+                      <Text style={styles.orbMilestoneItemLabel}>Focus</Text>
+                      <Text style={styles.orbMilestoneItemValue}>
+                        {formatFocusTime(progress?.focusTimeMinutes ?? 0)}/{formatFocusTime(activeRewardMilestone.reward.requirement.focusMinutes)}
+                      </Text>
+                      <View style={styles.orbMilestoneBar}>
+                        <View style={[
+                          styles.orbMilestoneFill,
+                          { 
+                            width: `${Math.min(activeRewardMilestone.progress.focusProgress, 100)}%`,
+                            backgroundColor: activeRewardMilestone.progress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.2)'
+                          }
+                        ]} />
+                      </View>
+                    </View>
+                  )}
+                </View>
               </View>
-              <View style={styles.nextRewardProgressRow}>
-                <View style={styles.nextRewardProgressItem}>
-                  <View style={styles.nextRewardIconWrap}>
-                    <Flame size={14} color={nextRewardProgress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
-                  </View>
-                  <Text style={styles.nextRewardProgressLabel}>Streak</Text>
-                  <Text style={styles.nextRewardProgressValue}>
-                    {progress?.currentStreak ?? 0}/{nextLockedReward.requirement.streakDays}
-                  </Text>
-                  <View style={styles.nextRewardProgressBar}>
-                    <View style={[
-                      styles.nextRewardProgressFill,
-                      { 
-                        width: `${Math.min(nextRewardProgress.streakProgress, 100)}%`,
-                        backgroundColor: nextRewardProgress.streakProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
-                      }
-                    ]} />
-                  </View>
-                </View>
-                <View style={styles.nextRewardProgressItem}>
-                  <View style={styles.nextRewardIconWrap}>
-                    <Target size={14} color={nextRewardProgress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
-                  </View>
-                  <Text style={styles.nextRewardProgressLabel}>Tasks</Text>
-                  <Text style={styles.nextRewardProgressValue}>
-                    {progress?.totalCompletedTasks ?? 0}/{nextLockedReward.requirement.completedTasks}
-                  </Text>
-                  <View style={styles.nextRewardProgressBar}>
-                    <View style={[
-                      styles.nextRewardProgressFill,
-                      { 
-                        width: `${Math.min(nextRewardProgress.tasksProgress, 100)}%`,
-                        backgroundColor: nextRewardProgress.tasksProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
-                      }
-                    ]} />
-                  </View>
-                </View>
-                <View style={styles.nextRewardProgressItem}>
-                  <View style={styles.nextRewardIconWrap}>
-                    <Clock size={14} color={nextRewardProgress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.5)'} />
-                  </View>
-                  <Text style={styles.nextRewardProgressLabel}>Focus</Text>
-                  <Text style={styles.nextRewardProgressValue}>
-                    {formatFocusTime(progress?.focusTimeMinutes ?? 0)}/{formatFocusTime(nextLockedReward.requirement.focusMinutes)}
-                  </Text>
-                  <View style={styles.nextRewardProgressBar}>
-                    <View style={[
-                      styles.nextRewardProgressFill,
-                      { 
-                        width: `${Math.min(nextRewardProgress.focusProgress, 100)}%`,
-                        backgroundColor: nextRewardProgress.focusProgress >= 100 ? '#4ADE80' : 'rgba(255,255,255,0.3)'
-                      }
-                    ]} />
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
+            )}
+          </View>
 
           <TouchableOpacity 
             style={styles.coachCard}
@@ -895,15 +916,12 @@ const styles = StyleSheet.create({
   },
   orbContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
     marginVertical: 0,
     marginTop: 16,
-    height: ORB_SIZE + 240,
     backgroundColor: 'transparent',
     marginHorizontal: -20,
-    paddingVertical: 16,
-    paddingBottom: 32,
-    position: 'relative',
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   orbTouchable: {
     width: SCREEN_WIDTH,
@@ -1008,70 +1026,71 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     color: theme.colors.primary,
   },
-  nextRewardSection: {
-    marginTop: 20,
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+  orbMilestone: {
+    width: '100%',
+    paddingHorizontal: 40,
+    marginTop: 18,
   },
-  nextRewardHeader: {
+  orbMilestoneHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  nextRewardTitle: {
-    fontSize: 11,
-    fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1,
-    textTransform: 'uppercase' as const,
+  orbMilestoneLabel: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.28)',
+    letterSpacing: 1.2,
   },
-  nextRewardName: {
+  orbMilestoneName: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.55)',
   },
-  nextRewardProgressRow: {
+  orbMilestoneRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
-  nextRewardProgressItem: {
+  orbMilestoneItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
-  nextRewardIconWrap: {
-    width: 28,
-    height: 28,
+  orbMilestoneIconWrap: {
+    width: 26,
+    height: 26,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  nextRewardProgressLabel: {
+  orbMilestoneIconDone: {
+    backgroundColor: 'rgba(74,222,128,0.06)',
+    borderColor: 'rgba(74,222,128,0.12)',
+  },
+  orbMilestoneItemLabel: {
     fontSize: 10,
     fontWeight: '500' as const,
-    color: 'rgba(255,255,255,0.35)',
+    color: 'rgba(255,255,255,0.3)',
     letterSpacing: 0.3,
   },
-  nextRewardProgressValue: {
+  orbMilestoneItemValue: {
     fontSize: 11,
     fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
   },
-  nextRewardProgressBar: {
+  orbMilestoneBar: {
     width: '100%',
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 2,
     overflow: 'hidden',
     marginTop: 2,
   },
-  nextRewardProgressFill: {
+  orbMilestoneFill: {
     height: '100%',
     borderRadius: 2,
   },
