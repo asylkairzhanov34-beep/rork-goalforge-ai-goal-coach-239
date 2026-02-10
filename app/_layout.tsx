@@ -281,6 +281,14 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
+        name="video-intro-2" 
+        options={{ 
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          animation: 'fade'
+        }} 
+      />
+      <Stack.Screen 
         name="welcome-onboarding" 
         options={{ 
           headerShown: false,

@@ -19,13 +19,13 @@ import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
-const VIDEO_URL = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769273122/0124_3_bdocck.mp4';
+const VIDEO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qn25r09vgr7vmf8yti7ng';
 
-export default function VideoIntroScreen() {
+export default function VideoIntro2Screen() {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
-  
+
   const videoRef = useRef<VideoType>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -35,12 +35,12 @@ export default function VideoIntroScreen() {
   const triggerProgressiveVibration = useCallback((progress: number, isPlaying: boolean) => {
     if (Platform.OS === 'web') return;
     if (!isPlaying) return;
-    
+
     const now = Date.now();
-    
+
     let interval: number;
     let style: Haptics.ImpactFeedbackStyle;
-    
+
     if (progress >= 0.95) {
       interval = 40;
       style = Haptics.ImpactFeedbackStyle.Heavy;
@@ -78,7 +78,7 @@ export default function VideoIntroScreen() {
       interval = 250;
       style = Haptics.ImpactFeedbackStyle.Light;
     }
-    
+
     if (now - lastVibrationTime.current >= interval) {
       Haptics.impactAsync(style);
       lastVibrationTime.current = now;
@@ -97,30 +97,30 @@ export default function VideoIntroScreen() {
     if (status.isLoaded) {
       if (!videoLoaded) {
         setVideoLoaded(true);
-        console.log('[VideoIntro] Video loaded successfully');
+        console.log('[VideoIntro2] Video loaded successfully');
       }
-      
+
       if (status.durationMillis && status.durationMillis > 0) {
         videoDuration.current = status.durationMillis;
       }
-      
+
       if (status.isPlaying && videoDuration.current > 0 && status.positionMillis && !videoFinished) {
         const progress = status.positionMillis / videoDuration.current;
         triggerProgressiveVibration(progress, status.isPlaying);
       }
-      
+
       if (status.didJustFinish && !videoFinished) {
         setVideoFinished(true);
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        console.log('[VideoIntro] Video ended, vibration stopped');
+        console.log('[VideoIntro2] Video ended');
       }
     }
   }, [videoLoaded, videoFinished, triggerProgressiveVibration]);
 
   const handleVideoError = useCallback((error: string) => {
-    console.error('[VideoIntro] Video error:', error);
+    console.error('[VideoIntro2] Video error:', error);
     setVideoError(true);
   }, []);
 
@@ -147,7 +147,7 @@ export default function VideoIntroScreen() {
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
-      router.replace('/video-intro-2');
+      router.replace('/welcome-onboarding');
     });
   }, [buttonScale, fadeAnim]);
 
@@ -193,7 +193,7 @@ export default function VideoIntroScreen() {
               activeOpacity={0.92}
               style={[styles.buttonWrapper, !videoFinished && !videoError && Platform.OS !== 'web' && styles.buttonDisabled]}
               disabled={!videoFinished && !videoError && Platform.OS !== 'web'}
-              testID="video-intro-continue"
+              testID="video-intro-2-continue"
             >
               <LinearGradient
                 colors={['#F59E0B', '#F59E0BDD']}
