@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import createContextHook from '@nkzw/create-context-hook';
 import { User, AuthState } from '@/types/auth';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
@@ -21,6 +23,7 @@ const WELCOME_ONBOARDING_KEY = 'welcome_onboarding_completed_v1';
 const AUTH_INIT_TIMEOUT = 4000;
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
+  const queryClient = useQueryClient();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isLoading: true,
@@ -313,55 +316,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[Auth] Deleting account...');
     
     try {
-      const userId = authState.user?.id;
-      
       await deleteCurrentUser();
+      console.log('[Auth] Firebase user and Firestore doc deleted');
       
-      await safeStorageSet(AUTH_STORAGE_KEY, null);
-      await safeStorageSet(AUTH_LOGIN_GATE_KEY, false);
-      await safeStorageSet(FIRST_LAUNCH_KEY, false);
-      await safeStorageSet(WELCOME_ONBOARDING_KEY, false);
+      console.log('[Auth] Clearing all React Query cache...');
+      queryClient.clear();
       
-      const globalKeys = [
-        '@subscription_status',
-        'hasSeenSubscriptionOffer',
-        'trialStartISO',
-        'hasSeenPaywall',
-        'trialStartedAt',
-        '@first_launch',
-        '@seen_unlocked_rewards',
-        '@subscription_offer_seen',
-        '@daily_first_open',
-        '@daily_first_open_triggered',
-        'active_challenges',
-        'timer_sessions',
-        'journal_entries',
-        'manifestation_entries',
-        'breathing_history',
-        'background_timer_state',
-        'background_start_time',
-      ];
-      
-      for (const key of globalKeys) {
-        await safeStorageSet(key, null);
-      }
-      
-      if (userId) {
-        const userKeys = [
-          `user_profile_${userId}`,
-          `goals_${userId}`,
-          `daily_tasks_${userId}`,
-          `onboarding_answers_${userId}`,
-          `pomodoro_sessions_${userId}`,
-          `first_time_setup_${userId}`,
-          `challenges_${userId}`,
-          `timer_sessions_${userId}`,
-          `journal_entries_${userId}`,
-          `manifestation_${userId}`,
-        ];
-        
-        for (const key of userKeys) {
-          await safeStorageSet(key, null);
+      console.log('[Auth] Clearing all AsyncStorage...');
+      try {
+        await AsyncStorage.clear();
+        console.log('[Auth] AsyncStorage cleared successfully');
+      } catch (storageError) {
+        console.warn('[Auth] AsyncStorage.clear() error (non-fatal):', storageError);
+        const allKeys = await AsyncStorage.getAllKeys().catch(() => [] as string[]);
+        if (allKeys.length > 0) {
+          await AsyncStorage.multiRemove(allKeys).catch(() => {});
         }
       }
       
@@ -389,7 +358,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       
       return false;
     }
-  }, [authState.user?.id]);
+  }, [queryClient]);
 
   return useMemo(() => ({
     ...authState,

@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
 import { InteractionManager } from 'react-native';
 import { Goal, DailyTask, UserProfile, PomodoroSession, PomodoroStats, TaskFeedback } from '@/types/goal';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
@@ -60,6 +60,27 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
   const [firebaseSyncOk, setFirebaseSyncOk] = useState<boolean | null>(null);
   const [firebaseSyncError, setFirebaseSyncError] = useState<string | null>(null);
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (prevUserIdRef.current === undefined) {
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+    if (prevUserIdRef.current !== currentUserId) {
+      console.log('[GoalStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting local state');
+      setCurrentGoal(null);
+      setDailyTasks([]);
+      setPomodoroSessions([]);
+      setProfile(DEFAULT_PROFILE);
+      setActiveChallengesForStreak([]);
+      setFirebaseSyncOk(null);
+      setFirebaseSyncError(null);
+      streakCheckedRef.current = null;
+      prevUserIdRef.current = currentUserId;
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id || user.id.startsWith('dev_guest_')) return;

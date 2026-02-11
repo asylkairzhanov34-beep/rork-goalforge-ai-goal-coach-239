@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ActiveChallenge, 
   ChallengeCustomization, 
@@ -48,6 +48,21 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   const [stats, setStats] = useState<ChallengeStats>(DEFAULT_STATS);
 
   const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (prevUserIdRef.current === undefined) {
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+    if (prevUserIdRef.current !== currentUserId) {
+      console.log('[ChallengeStore] User changed, resetting local state');
+      setActiveChallenges([]);
+      setStats(DEFAULT_STATS);
+      prevUserIdRef.current = currentUserId;
+    }
+  }, [user?.id]);
 
   const challengesQuery = useQuery({
     queryKey: ['activeChallenges', user?.id, STORAGE_KEYS.ACTIVE_CHALLENGES],
