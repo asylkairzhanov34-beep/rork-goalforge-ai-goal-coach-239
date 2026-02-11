@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
-const VIDEO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qn25r09vgr7vmf8yti7ng';
+const VIDEO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/k1zzetp7zbzgwvqznsmbm';
 
 export default function VideoIntro2Screen() {
   const [videoLoaded, setVideoLoaded] = useState(false);
