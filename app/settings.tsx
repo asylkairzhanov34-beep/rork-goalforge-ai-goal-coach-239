@@ -526,14 +526,7 @@ export default function SettingsScreen() {
                   showArrow
                   iconColor="#F59E0B"
                 />
-                <SettingItem
-                  icon={Trash2}
-                  title="Delete Account"
-                  subtitle="Delete all data permanently"
-                  onPress={handleDeleteAccount}
-                  showArrow
-                  iconColor="#EF4444"
-                />
+  
               </View>
             </>
           )}
@@ -558,7 +551,7 @@ export default function SettingsScreen() {
 
           <View style={styles.appInfo}>
             <Text style={styles.appName}>GoalCoach AI</Text>
-            <Text style={styles.appVersion}>Version 1.0</Text>
+            <Text style={styles.appVersion}>Version 1.0.2</Text>
             <Text style={styles.appCopyright}>© 2024 GoalCoach. All rights reserved.</Text>
           </View>
         </ScrollView>

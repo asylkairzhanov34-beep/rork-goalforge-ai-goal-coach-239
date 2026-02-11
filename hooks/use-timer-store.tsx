@@ -773,7 +773,20 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           console.log('[TimerStore] Timer is active, saving state');
           await saveBackgroundState(state);
           
-          // Schedule completion notification
+          const timeStr = formatTimeForNotification(state.currentTime);
+          const modeLabels = {
+            focus: '🎯 Focus Session',
+            shortBreak: '☕ Short Break',
+            longBreak: '🌴 Long Break',
+          };
+          await showLiveTimerNotification(
+            state.currentTime,
+            state.mode,
+            false,
+            state.totalTime
+          );
+          console.log('[TimerStore] Showed active timer notification:', timeStr);
+          
           if (state.currentTime > 5) {
             const modeConfig = {
               focus: { emoji: '🎯', title: 'Focus Complete!', body: 'Amazing work! Time for a well-deserved break. 🌟' },
@@ -794,6 +807,14 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           } else {
             console.log('[TimerStore] Timer too short, skipping notification');
           }
+        } else if (state.isRunning && state.isPaused && state.currentTime > 0) {
+          await showLiveTimerNotification(
+            state.currentTime,
+            state.mode,
+            true,
+            state.totalTime
+          );
+          console.log('[TimerStore] Showed paused timer notification');
         } else {
           console.log('[TimerStore] Timer not active, no notification scheduled');
         }
@@ -970,11 +991,9 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       if (mode === 'focus') {
         duration = prev.totalTime === prev.currentTime && prev.mode === 'focus' ? prev.totalTime : TIMER_DURATIONS.focus;
       } else if (mode === 'shortBreak') {
-        const focusTime = prev.mode === 'focus' ? prev.totalTime : TIMER_DURATIONS.focus;
-        duration = Math.round(focusTime / 5);
+        duration = TIMER_DURATIONS.shortBreak;
       } else {
-        const focusTime = prev.mode === 'focus' ? prev.totalTime : TIMER_DURATIONS.focus;
-        duration = Math.round(focusTime / 3);
+        duration = TIMER_DURATIONS.longBreak;
       }
       
       return {

@@ -144,8 +144,8 @@ export default function ProfileScreen() {
     {
       icon: Info,
       title: 'About',
-      subtitle: 'Version 1.0',
-      onPress: () => Alert.alert('GoalCoach AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0'),
+      subtitle: 'Version 1.0.2',
+      onPress: () => Alert.alert('GoalCoach AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0.2'),
       iconColor: '#9CA3AF',
     },
   ];

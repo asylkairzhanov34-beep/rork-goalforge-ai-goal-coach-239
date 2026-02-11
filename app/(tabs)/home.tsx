@@ -537,40 +537,6 @@ export default function TodayScreen() {
               </View>
             )}
             <Text style={styles.firstStepText}>{rewards[activeRewardIndex]?.label}</Text>
-            <Text style={styles.requirementText}>
-              {rewards[activeRewardIndex]?.unlocked 
-                ? rewards[activeRewardIndex]?.achievement 
-                : getProgressText(
-                    rewards[activeRewardIndex],
-                    currentStreak,
-                    completedTasksCount,
-                    progress?.focusTimeMinutes ?? 0
-                  )}
-            </Text>
-            
-            <View style={styles.orbStatsContainer}>
-              <View style={styles.orbStatItem}>
-                <Text style={styles.orbStatLabel}>COMPLETED</Text>
-                <Text style={styles.orbStatValue}>{completedTasksCount}</Text>
-              </View>
-              <View style={styles.orbStatDivider} />
-              <View style={styles.orbStatItem}>
-                <Text style={styles.orbStatLabel}>FOCUS TIME</Text>
-                <Text style={styles.orbStatValue}>{focusTimeDisplay}</Text>
-              </View>
-              <View style={styles.orbStatDivider} />
-              <View style={styles.orbStatItem}>
-                <Text style={styles.orbStatLabel}>DAYS STREAK</Text>
-                <Text style={styles.orbStatValue}>{currentStreak}</Text>
-              </View>
-            </View>
-            
-            {rewards[activeRewardIndex]?.unlocked && (
-              <View style={styles.achievementBadge}>
-                <Trophy size={14} color={theme.colors.primary} />
-                <Text style={styles.achievementText}>{rewards[activeRewardIndex]?.achievement}</Text>
-              </View>
-            )}
 
             {activeRewardMilestone && (
               <View style={styles.orbMilestone}>
@@ -642,6 +608,30 @@ export default function TodayScreen() {
                 </View>
               </View>
             )}
+
+            <View style={styles.orbStatsContainer}>
+              <View style={styles.orbStatItem}>
+                <Text style={styles.orbStatLabel}>COMPLETED</Text>
+                <Text style={styles.orbStatValue}>{completedTasksCount}</Text>
+              </View>
+              <View style={styles.orbStatDivider} />
+              <View style={styles.orbStatItem}>
+                <Text style={styles.orbStatLabel}>FOCUS TIME</Text>
+                <Text style={styles.orbStatValue}>{focusTimeDisplay}</Text>
+              </View>
+              <View style={styles.orbStatDivider} />
+              <View style={styles.orbStatItem}>
+                <Text style={styles.orbStatLabel}>DAYS STREAK</Text>
+                <Text style={styles.orbStatValue}>{currentStreak}</Text>
+              </View>
+            </View>
+            
+            {rewards[activeRewardIndex]?.unlocked && (
+              <View style={styles.achievementBadge}>
+                <Trophy size={14} color={theme.colors.primary} />
+                <Text style={styles.achievementText}>{rewards[activeRewardIndex]?.achievement}</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity 
@@ -677,18 +667,6 @@ export default function TodayScreen() {
           <View style={styles.quickActionsSection}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.quickActionsRow}>
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/breathing')}
-                testID="quick-action-breathing"
-                activeOpacity={0.8}
-              >
-                <View style={styles.quickActionIconWrap}>
-                  <Wind size={22} color={theme.colors.primary} strokeWidth={1.5} />
-                </View>
-                <Text style={styles.quickActionText}>Breathe</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.quickActionItem}
                 onPress={() => router.push('/manifestation')}
