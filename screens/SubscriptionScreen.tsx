@@ -15,7 +15,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   X, 
-  Sparkles,
   Crown,
   Zap,
   Brain,
@@ -23,25 +22,27 @@ import {
   TrendingUp,
   Shield,
   Star,
+  Check,
+  ChevronRight,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSubscription } from '@/hooks/use-subscription-store';
 
-
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface SubscriptionScreenProps {
   skipButton?: boolean;
 }
 
 const FEATURES = [
-  { icon: Brain, title: 'AI Coach', description: 'Personal daily guidance' },
-  { icon: Target, title: 'Smart Goals', description: 'AI-powered task generation' },
-  { icon: TrendingUp, title: 'Analytics', description: 'Deep progress insights' },
-  { icon: Zap, title: 'Priority Speed', description: 'Faster AI responses' },
-  { icon: Shield, title: 'All Features', description: 'Full premium access' },
-  { icon: Star, title: 'Future Updates', description: 'Always get the latest' },
+  { icon: Brain, title: 'AI Coach', description: 'Personal daily guidance', color: '#C084FC' },
+  { icon: Target, title: 'Smart Goals', description: 'AI-powered task generation', color: '#60A5FA' },
+  { icon: TrendingUp, title: 'Analytics', description: 'Deep progress insights', color: '#34D399' },
+  { icon: Zap, title: 'Priority Speed', description: 'Faster AI responses', color: '#FBBF24' },
+  { icon: Shield, title: 'All Features', description: 'Full premium access', color: '#F87171' },
+  { icon: Star, title: 'Future Updates', description: 'Always get the latest', color: '#38BDF8' },
 ];
 
 export default function SubscriptionScreen({ skipButton = false }: SubscriptionScreenProps) {
@@ -61,28 +62,71 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const crownScale = useRef(new Animated.Value(0.3)).current;
+  const crownRotate = useRef(new Animated.Value(0)).current;
+  const featureAnims = useRef(FEATURES.map(() => new Animated.Value(0))).current;
+  const ctaGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400,
+        duration: 500,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 400,
+        duration: 500,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
+      Animated.spring(crownScale, {
         toValue: 1,
-        friction: 8,
-        tension: 40,
+        friction: 5,
+        tension: 60,
         useNativeDriver: true,
       }),
     ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(crownRotate, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(crownRotate, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    const stagger = FEATURES.map((_, i) =>
+      Animated.timing(featureAnims[i], {
+        toValue: 1,
+        duration: 350,
+        delay: 200 + i * 80,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(80, stagger).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(ctaGlow, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ctaGlow, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
   useEffect(() => {
@@ -134,35 +178,53 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     router.back();
   };
 
+  const crownRotateInterp = crownRotate.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['-4deg', '4deg', '-4deg'],
+  });
+
+  const ctaGlowOpacity = ctaGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
+
   if (isPremium) {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={['#1a1a2e', '#16213e', '#0f0f23']}
+          colors={['#0C0C1A', '#121228', '#0A0A18']}
           style={StyleSheet.absoluteFill}
         />
+        <View style={styles.bgOrbOne} />
+        <View style={styles.bgOrbTwo} />
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
             <View style={styles.headerSpacer} />
             <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-              <X size={24} color="#fff" />
+              <X size={20} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.premiumActiveContainer}>
-            <View style={styles.premiumBadge}>
-              <Crown size={48} color="#FFD700" />
+            <View style={styles.premiumCrownWrap}>
+              <LinearGradient
+                colors={['rgba(255,215,0,0.2)', 'rgba(255,215,0,0.05)', 'transparent']}
+                style={styles.premiumCrownGlow}
+              />
+              <Crown size={56} color="#FFD700" />
             </View>
             <Text style={styles.premiumTitle}>Premium Active</Text>
             <Text style={styles.premiumSubtitle}>
-              You have full access to all features
+              You have full access to all premium features
             </Text>
             
             <TouchableOpacity 
               style={styles.manageBtn}
               onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+              activeOpacity={0.8}
             >
               <Text style={styles.manageBtnText}>Manage Subscription</Text>
+              <ChevronRight size={16} color="#FFD700" />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -173,15 +235,17 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#1a1a2e', '#16213e', '#0f0f23']}
+        colors={['#0C0C1A', '#121228', '#0A0A18']}
         style={StyleSheet.absoluteFill}
       />
+      <View style={styles.bgOrbOne} />
+      <View style={styles.bgOrbTwo} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.headerSpacer} />
           <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-            <X size={24} color="rgba(255,255,255,0.7)" />
+            <X size={20} color="rgba(255,255,255,0.6)" />
           </TouchableOpacity>
         </View>
 
@@ -199,35 +263,57 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
               }
             ]}
           >
-            <View style={styles.iconBadge}>
-              <Sparkles size={32} color="#FFD700" />
-            </View>
-            <Text style={styles.heroTitle}>Unlock Your Full Potential</Text>
+            <Animated.View style={[
+              styles.crownContainer,
+              {
+                transform: [
+                  { scale: crownScale },
+                  { rotate: crownRotateInterp },
+                ],
+              }
+            ]}>
+              <LinearGradient
+                colors={['rgba(255,215,0,0.15)', 'rgba(255,215,0,0.03)', 'transparent']}
+                style={styles.crownGlow}
+              />
+              <View style={styles.crownInner}>
+                <Crown size={40} color="#FFD700" />
+              </View>
+            </Animated.View>
+
+            <Text style={styles.heroLabel}>GOALCOACH PRO</Text>
+            <Text style={styles.heroTitle}>Elevate Your{'\n'}Performance</Text>
             <Text style={styles.heroSubtitle}>
-              Get AI-powered coaching and premium features
+              Unlock AI-powered coaching designed to transform your daily habits
             </Text>
           </Animated.View>
 
-          <Animated.View 
-            style={[
-              styles.featuresGrid,
-              {
-                opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }],
-              }
-            ]}
-          >
-            {FEATURES.map((feature, index) => (
-              <View key={index} style={styles.featureItem}>
-                <View style={styles.featureIcon}>
-                  <feature.icon size={20} color="#4ECDC4" />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureDesc}>{feature.description}</Text>
-                </View>
-              </View>
-            ))}
+          <Animated.View style={[styles.featuresSection, { opacity: fadeAnim }]}>
+            <View style={styles.featuresGrid}>
+              {FEATURES.map((feature, index) => (
+                <Animated.View
+                  key={index}
+                  style={[
+                    styles.featureCard,
+                    {
+                      opacity: featureAnims[index],
+                      transform: [{
+                        translateY: featureAnims[index].interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0],
+                        }),
+                      }],
+                    }
+                  ]}
+                >
+                  <View style={[styles.featureIconWrap, { backgroundColor: `${feature.color}15` }]}>
+                    <feature.icon size={18} color={feature.color} />
+                  </View>
+                  <Text style={styles.featureCardTitle}>{feature.title}</Text>
+                  <Text style={styles.featureCardDesc}>{feature.description}</Text>
+                </Animated.View>
+              ))}
+            </View>
           </Animated.View>
 
           {isInitialized && packages.length > 0 ? (
@@ -237,6 +323,7 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                 { opacity: fadeAnim }
               ]}
             >
+              <Text style={styles.packagesLabel}>Choose Your Plan</Text>
               {packages.map((pkg) => {
                 const isSelected = selectedPackage === pkg.identifier;
                 const isYearly = pkg.identifier.includes('annual') || pkg.identifier.includes('year');
@@ -247,6 +334,7 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                     style={[
                       styles.packageCard,
                       isSelected && styles.packageCardSelected,
+                      isYearly && isSelected && styles.packageCardYearlySelected,
                     ]}
                     onPress={() => {
                       setSelectedPackage(pkg.identifier);
@@ -257,35 +345,44 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                     activeOpacity={0.8}
                   >
                     {isYearly && (
-                      <View style={styles.bestValueBadge}>
-                        <Text style={styles.bestValueText}>BEST VALUE</Text>
-                      </View>
+                      <LinearGradient
+                        colors={['#FFD700', '#F59E0B']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.saveBadge}
+                      >
+                        <Text style={styles.saveBadgeText}>SAVE 60%</Text>
+                      </LinearGradient>
                     )}
                     
-                    <View style={styles.packageContent}>
-                      <View style={styles.packageLeft}>
-                        <View style={[
-                          styles.radioOuter,
-                          isSelected && styles.radioOuterSelected
-                        ]}>
-                          {isSelected && <View style={styles.radioInner} />}
-                        </View>
-                        <View>
-                          <Text style={[
-                            styles.packageName,
-                            isSelected && styles.packageNameSelected
-                          ]}>
-                            {pkg.product.title}
-                          </Text>
-                          <Text style={styles.packageDesc}>{pkg.product.description}</Text>
-                        </View>
-                      </View>
-                      <Text style={[
-                        styles.packagePrice,
-                        isSelected && styles.packagePriceSelected
+                    <View style={styles.packageRow}>
+                      <View style={[
+                        styles.radioCircle,
+                        isSelected && styles.radioCircleSelected,
                       ]}>
-                        {pkg.product.priceString}
-                      </Text>
+                        {isSelected && (
+                          <View style={styles.radioFill}>
+                            <Check size={12} color="#0C0C1A" strokeWidth={3} />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.packageInfo}>
+                        <Text style={[
+                          styles.packageTitle,
+                          isSelected && styles.packageTitleSelected,
+                        ]}>
+                          {pkg.product.title}
+                        </Text>
+                        <Text style={styles.packageSubtitle}>{pkg.product.description}</Text>
+                      </View>
+                      <View style={styles.packagePriceWrap}>
+                        <Text style={[
+                          styles.packagePrice,
+                          isSelected && styles.packagePriceSelected,
+                        ]}>
+                          {pkg.product.priceString}
+                        </Text>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -295,7 +392,7 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
             <View style={styles.loadingSection}>
               {!error ? (
                 <>
-                  <ActivityIndicator size="large" color="#4ECDC4" />
+                  <ActivityIndicator size="large" color="#FFD700" />
                   <Text style={styles.loadingText}>
                     {isInitialized ? 'Loading plans...' : 'Connecting to store...'}
                   </Text>
@@ -314,40 +411,58 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
             </View>
           )}
 
-          <View style={{ height: 160 }} />
+          <View style={{ height: 180 }} />
         </ScrollView>
 
-        <View style={[styles.ctaSection, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <TouchableOpacity
-            style={[
-              styles.ctaButton,
-              (isPurchasing || packages.length === 0) && styles.ctaButtonDisabled,
-            ]}
-            onPress={handlePurchase}
-            disabled={isPurchasing || packages.length === 0}
-            activeOpacity={0.9}
-          >
-            {isPurchasing ? (
-              <ActivityIndicator color="#0f0f23" />
-            ) : (
-              <Text style={styles.ctaText}>Continue</Text>
-            )}
-          </TouchableOpacity>
+        <LinearGradient
+          colors={['transparent', '#0C0C1A', '#0C0C1A']}
+          style={[styles.ctaGradient, { paddingBottom: Math.max(insets.bottom, 20) }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.ctaInner} pointerEvents="auto">
+            <TouchableOpacity
+              style={[
+                styles.ctaButton,
+                (isPurchasing || packages.length === 0) && styles.ctaButtonDisabled,
+              ]}
+              onPress={handlePurchase}
+              disabled={isPurchasing || packages.length === 0}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={['#FFD700', '#F59E0B']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradientInner}
+              >
+                {isPurchasing ? (
+                  <ActivityIndicator color="#0C0C1A" />
+                ) : (
+                  <>
+                    <Text style={styles.ctaText}>Start Premium</Text>
+                    <Animated.View style={{ opacity: ctaGlowOpacity }}>
+                      <Crown size={18} color="#0C0C1A" />
+                    </Animated.View>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
 
-          <View style={styles.linksRow}>
-            <TouchableOpacity onPress={handleRestore}>
-              <Text style={styles.linkText}>Restore Purchases</Text>
-            </TouchableOpacity>
-            <Text style={styles.linkDivider}>•</Text>
-            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
-              <Text style={styles.linkText}>Terms</Text>
-            </TouchableOpacity>
-            <Text style={styles.linkDivider}>•</Text>
-            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/privacy/')}>
-              <Text style={styles.linkText}>Privacy</Text>
-            </TouchableOpacity>
+            <View style={styles.linksRow}>
+              <TouchableOpacity onPress={handleRestore}>
+                <Text style={styles.linkText}>Restore Purchases</Text>
+              </TouchableOpacity>
+              <Text style={styles.linkDot}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+                <Text style={styles.linkText}>Terms</Text>
+              </TouchableOpacity>
+              <Text style={styles.linkDot}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/privacy/')}>
+                <Text style={styles.linkText}>Privacy</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </LinearGradient>
       </SafeAreaView>
     </View>
   );
@@ -356,7 +471,25 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: '#0C0C1A',
+  },
+  bgOrbOne: {
+    position: 'absolute',
+    top: -80,
+    left: -60,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(255,215,0,0.04)',
+  },
+  bgOrbTwo: {
+    position: 'absolute',
+    bottom: 100,
+    right: -80,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(139,92,246,0.04)',
   },
   safeArea: {
     flex: 1,
@@ -366,18 +499,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: 56,
+    height: 52,
   },
   headerSpacer: {
-    width: 40,
+    width: 36,
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   scrollView: {
     flex: 1,
@@ -387,143 +522,177 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 28,
   },
-  iconBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+  crownContainer: {
+    width: 88,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
+  crownGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 44,
+  },
+  crownInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(255,215,0,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.15)',
+  },
+  heroLabel: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#FFD700',
+    letterSpacing: 3,
+    marginBottom: 12,
+  },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700' as const,
     color: '#fff',
     textAlign: 'center',
+    lineHeight: 38,
     marginBottom: 12,
   },
   heroSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
     lineHeight: 22,
+    maxWidth: 300,
+  },
+  featuresSection: {
+    marginBottom: 28,
   },
   featuresGrid: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
-  },
-  featureItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  featureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+  featureCard: {
+    width: (SCREEN_WIDTH - 50) / 2,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  featureIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginBottom: 10,
   },
-  featureText: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: 15,
+  featureCardTitle: {
+    fontSize: 14,
     fontWeight: '600' as const,
     color: '#fff',
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  featureDesc: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+  featureCardDesc: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    lineHeight: 16,
   },
   packagesSection: {
-    gap: 12,
+    gap: 10,
+  },
+  packagesLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase' as const,
+    marginBottom: 4,
   },
   packageCard: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 16,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.06)',
     position: 'relative',
     overflow: 'hidden',
   },
   packageCardSelected: {
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    borderColor: '#4ECDC4',
+    backgroundColor: 'rgba(255,215,0,0.04)',
+    borderColor: 'rgba(255,215,0,0.3)',
   },
-  bestValueBadge: {
+  packageCardYearlySelected: {
+    backgroundColor: 'rgba(255,215,0,0.06)',
+    borderColor: 'rgba(255,215,0,0.4)',
+  },
+  saveBadge: {
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#FFD700',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderBottomLeftRadius: 12,
+    borderBottomLeftRadius: 10,
   },
-  bestValueText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: '#0f0f23',
+  saveBadgeText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: '#0C0C1A',
+    letterSpacing: 0.5,
   },
-  packageContent: {
+  packageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  packageLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  radioOuter: {
+  radioCircle: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  radioOuterSelected: {
-    borderColor: '#4ECDC4',
+  radioCircleSelected: {
+    borderColor: '#FFD700',
+    backgroundColor: '#FFD700',
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#4ECDC4',
+  radioFill: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  packageName: {
+  packageInfo: {
+    flex: 1,
+  },
+  packageTitle: {
     fontSize: 16,
     fontWeight: '600' as const,
     color: '#fff',
     marginBottom: 2,
   },
-  packageNameSelected: {
-    color: '#4ECDC4',
+  packageTitleSelected: {
+    color: '#FFD700',
   },
-  packageDesc: {
+  packageSubtitle: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.4)',
+  },
+  packagePriceWrap: {
+    alignItems: 'flex-end',
   },
   packagePrice: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: '#fff',
+    color: 'rgba(255,255,255,0.7)',
   },
   packagePriceSelected: {
-    color: '#4ECDC4',
+    color: '#FFD700',
   },
   loadingSection: {
     alignItems: 'center',
@@ -532,11 +701,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
   },
   errorText: {
     fontSize: 14,
-    color: '#FF6B6B',
+    color: '#F87171',
     textAlign: 'center',
     paddingHorizontal: 20,
     marginBottom: 16,
@@ -544,56 +713,67 @@ const styles = StyleSheet.create({
   retryButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+    backgroundColor: 'rgba(255,215,0,0.1)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#4ECDC4',
+    borderColor: 'rgba(255,215,0,0.3)',
   },
   retryButtonText: {
     fontSize: 15,
     fontWeight: '600' as const,
-    color: '#4ECDC4',
+    color: '#FFD700',
   },
-  ctaSection: {
+  ctaGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#0f0f23',
+    paddingTop: 32,
+  },
+  ctaInner: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   ctaButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 14,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  ctaGradientInner: {
     height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4ECDC4',
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    gap: 8,
   },
   ctaButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   ctaText: {
     fontSize: 17,
-    fontWeight: '600' as const,
-    color: '#0f0f23',
+    fontWeight: '700' as const,
+    color: '#0C0C1A',
+    letterSpacing: 0.3,
   },
   linksRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginBottom: 4,
   },
   linkText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
   },
-  linkDivider: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
+  linkDot: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.2)',
   },
   premiumActiveContainer: {
     flex: 1,
@@ -601,34 +781,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  premiumBadge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+  premiumCrownWrap: {
+    width: 120,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
+  },
+  premiumCrownGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 60,
   },
   premiumTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700' as const,
     color: '#FFD700',
     marginBottom: 12,
   },
   premiumSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 36,
+    lineHeight: 22,
   },
   manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 14,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    borderRadius: 12,
+    paddingHorizontal: 28,
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: 'rgba(255, 215, 0, 0.2)',
   },
   manageBtnText: {
     fontSize: 16,

@@ -125,10 +125,6 @@ export default function VideoIntroScreen() {
   }, []);
 
   const handleContinue = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-
     Animated.sequence([
       Animated.timing(buttonScale, {
         toValue: 0.92,

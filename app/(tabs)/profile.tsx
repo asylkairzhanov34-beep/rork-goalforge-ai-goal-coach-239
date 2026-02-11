@@ -28,7 +28,7 @@ export default function ProfileScreen() {
   const [newNickname, setNewNickname] = useState('');
   const insets = useSafeAreaInsets();
 
-  const AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
+  const DEFAULT_AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
   
   const [milestonesExpanded, setMilestonesExpanded] = useState(false);
   const [selectedRewardIndex, setSelectedRewardIndex] = useState<number | null>(null);
@@ -43,6 +43,14 @@ export default function ProfileScreen() {
   const allRewards = useMemo(() => {
     return getUnlockedRewards(streakVal, tasksVal, focusVal, isDeveloper);
   }, [streakVal, tasksVal, focusVal, isDeveloper]);
+
+  const lastEarnedRewardVideo = useMemo(() => {
+    const unlocked = allRewards.filter(r => r.unlocked);
+    if (unlocked.length > 0) {
+      return unlocked[unlocked.length - 1].video;
+    }
+    return DEFAULT_AVATAR_VIDEO;
+  }, [allRewards]);
 
   const unlockedCount = allRewards.filter(r => r.unlocked).length;
   const totalCount = allRewards.length;
@@ -252,7 +260,7 @@ export default function ProfileScreen() {
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <Video
-                source={{ uri: AVATAR_VIDEO }}
+                source={{ uri: lastEarnedRewardVideo }}
                 style={styles.avatarVideo}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay
