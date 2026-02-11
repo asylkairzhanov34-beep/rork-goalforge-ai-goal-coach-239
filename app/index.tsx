@@ -68,6 +68,11 @@ export default function Index() {
     return <Redirect href="/auth" />;
   }
 
+  if (setupLoading) {
+    console.log('[Index] Waiting for setup profile to load from Firebase...');
+    return <AppLoadingScreen testID="app-loading-setup" />;
+  }
+
   if (!profile || !profile.nickname || !profile.isCompleted) {
     console.log('[Index] Redirecting to first-time-setup:', {
       hasProfile: !!profile,

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { StyleSheet, ActivityIndicator, View, Text } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientBackground } from '@/components/GradientBackground';
@@ -12,9 +12,10 @@ import Step3Biorhythm from '@/components/setup/Step3Biorhythm';
 import Step4Welcome from '@/components/setup/Step4Welcome';
 
 export default function FirstTimeSetupScreen() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const { profile, currentStep, isLoading: setupLoading, updateProfile, completeSetup, setStep } = useFirstTimeSetup();
   const { requestPermissions, scheduleGoalReminder } = useNotifications();
+  const hasCheckedProfile = useRef(false);
 
   const initialStep = useMemo(() => {
     const safe = Number.isFinite(currentStep) ? currentStep : 0;
@@ -43,8 +44,23 @@ export default function FirstTimeSetupScreen() {
     }
   }, [completeSetup, didAutoComplete, localStep, profile?.isCompleted, profile?.nickname]);
 
+  useEffect(() => {
+    if (!setupLoading && profile?.isCompleted && !hasCheckedProfile.current) {
+      hasCheckedProfile.current = true;
+      console.log('[FirstTimeSetupRoute] Profile loaded from Firebase - already completed, redirecting');
+      router.replace('/(tabs)/home');
+    }
+  }, [setupLoading, profile?.isCompleted]);
+
   if (authLoading || setupLoading) {
-    return null;
+    return (
+      <GradientBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F59E0B" />
+          <Text style={styles.loadingText}>Loading your data...</Text>
+        </View>
+      </GradientBackground>
+    );
   }
 
   if (!isAuthenticated) {
@@ -204,5 +220,16 @@ export default function FirstTimeSetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    fontWeight: '500' as const,
   },
 });

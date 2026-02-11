@@ -13,6 +13,8 @@ import {
   signOut as firebaseSignOut,
   deleteCurrentUser,
   subscribeToAuthState,
+  getUserProfile,
+  saveUserProfile,
   FirebaseUser
 } from '@/lib/firebase';
 
@@ -222,6 +224,24 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log('[Auth] - Firebase UID:', firebaseUser.uid);
       console.log('[Auth] - Email:', firebaseUser.email);
 
+      try {
+        console.log('[Auth] Checking for existing user data in Firebase...');
+        const existingProfile = await getUserProfile(firebaseUser.uid);
+        
+        if (existingProfile?.firstTimeSetup?.isCompleted) {
+          console.log('[Auth] ✅ Returning user detected - restoring local flags');
+          await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+          setWelcomeOnboardingCompletedState(true);
+          await safeStorageSet(FIRST_LAUNCH_KEY, true);
+          setRequiresFirstLogin(false);
+          console.log('[Auth] Local flags restored from Firebase data');
+        } else {
+          console.log('[Auth] New user or incomplete setup - no flags to restore');
+        }
+      } catch (profileCheckError) {
+        console.warn('[Auth] Failed to check existing profile (non-fatal):', profileCheckError);
+      }
+
       await markLoginGateSeen();
 
       console.log('[Auth] ========== Login Success ==========');
@@ -310,7 +330,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[Auth] Setting welcome onboarding completed:', completed);
     await safeStorageSet(WELCOME_ONBOARDING_KEY, completed);
     setWelcomeOnboardingCompletedState(completed);
-  }, []);
+
+    if (completed && authState.user?.id && !authState.user.id.startsWith('dev_guest_')) {
+      try {
+        console.log('[Auth] Saving onboarding completion to Firebase');
+        await saveUserProfile(authState.user.id, {
+          onboardingCompleted: true,
+          onboardingCompletedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.warn('[Auth] Failed to save onboarding flag to Firebase:', error);
+      }
+    }
+  }, [authState.user?.id]);
 
   const deleteAccount = useCallback(async (): Promise<boolean> => {
     console.log('[Auth] Deleting account...');

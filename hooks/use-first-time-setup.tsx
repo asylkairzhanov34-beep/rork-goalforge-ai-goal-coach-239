@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import {
   FirstTimeProfile,
@@ -25,6 +25,17 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
   });
 
   const FIRST_TIME_SETUP_KEY = getFirstTimeSetupKey(user?.id || 'default');
+
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const currentId = user?.id;
+    if (prevUserIdRef.current !== currentId && currentId) {
+      console.log('[FirstTimeSetupProvider] User ID changed to', currentId, '- setting loading state');
+      setState(prev => ({ ...prev, isLoading: true }));
+    }
+    prevUserIdRef.current = currentId;
+  }, [user?.id]);
 
   const serializeProfile = useCallback((profile: FirstTimeProfile): FirstTimeProfileSerialized => {
     return {
@@ -95,17 +106,27 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
 
       if (user?.id) {
         console.log('[FirstTimeSetupProvider] Loading from Firebase for user:', user.id);
-        const firebaseProfile = await getUserProfile(user.id);
+        
+        try {
+          const firebaseProfile = await getUserProfile(user.id);
 
-        if (firebaseProfile?.firstTimeSetup) {
-          console.log('[FirstTimeSetupProvider] Firebase profile found');
-          stored = deserializeProfile(firebaseProfile.firstTimeSetup);
+          if (firebaseProfile?.firstTimeSetup) {
+            console.log('[FirstTimeSetupProvider] Firebase profile found, isCompleted:', firebaseProfile.firstTimeSetup.isCompleted);
+            stored = deserializeProfile(firebaseProfile.firstTimeSetup);
 
-          if (stored) {
-            await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(stored));
+            if (stored) {
+              console.log('[FirstTimeSetupProvider] Caching Firebase profile to local storage');
+              await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(stored));
+            }
+          } else {
+            console.log('[FirstTimeSetupProvider] No Firebase profile found for user:', user.id);
           }
-        } else {
-          console.log('[FirstTimeSetupProvider] No Firebase profile, checking local storage');
+        } catch (firebaseError) {
+          console.warn('[FirstTimeSetupProvider] Firebase load failed:', firebaseError);
+        }
+
+        if (!stored) {
+          console.log('[FirstTimeSetupProvider] Trying local storage fallback');
           const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
           stored = deserializeProfile(local);
         }
@@ -115,23 +136,19 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
         stored = deserializeProfile(local);
       }
 
-      console.log('[FirstTimeSetupProvider] Profile loaded:', stored ? 'Yes' : 'No');
+      console.log('[FirstTimeSetupProvider] Profile loaded:', stored ? `Yes (completed: ${stored.isCompleted})` : 'No');
 
-      requestAnimationFrame(() => {
-        setState({
-          profile: stored,
-          currentStep: 0,
-          isLoading: false,
-        });
+      setState({
+        profile: stored,
+        currentStep: 0,
+        isLoading: false,
       });
     } catch (error) {
       console.error('[FirstTimeSetupProvider] Error loading profile:', error);
-      requestAnimationFrame(() => {
-        setState({
-          profile: null,
-          currentStep: 0,
-          isLoading: false,
-        });
+      setState({
+        profile: null,
+        currentStep: 0,
+        isLoading: false,
       });
     }
   }, [FIRST_TIME_SETUP_KEY, deserializeProfile, serializeProfile, user?.id]);
@@ -210,11 +227,23 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
 
       if (user?.id) {
         console.log('[FirstTimeSetupProvider] Saving completed setup to Firebase');
+        
+        let existingCreatedAt: string | null = null;
+        try {
+          const existing = await getUserProfile(user.id);
+          if (existing?.createdAt) {
+            existingCreatedAt = existing.createdAt;
+          }
+        } catch (e) {
+          console.warn('[FirstTimeSetupProvider] Could not check existing createdAt:', e);
+        }
+        
         await saveUserProfile(user.id, {
           firstTimeSetup: serialized,
           email: user.email,
           displayName: (completed as FirstTimeProfile).nickname,
-          createdAt: new Date().toISOString(),
+          createdAt: existingCreatedAt || new Date().toISOString(),
+          onboardingCompleted: true,
         }).catch((error) => {
           console.error('[FirstTimeSetupProvider] Failed to save to Firebase:', error);
         });
