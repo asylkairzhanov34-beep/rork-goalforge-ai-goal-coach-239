@@ -27,7 +27,6 @@ import {
   Target,
   RefreshCw,
   LogOut,
-  Trash2,
   CreditCard,
   Crown,
   ExternalLink,
@@ -109,7 +108,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { updateProfile } = useFirstTimeSetup();
   const store = useGoalStore();
-  const { deleteAccount, logout, user } = useAuth();
+  const { logout, user } = useAuth();
   const subscription = useSubscription();
   
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -272,48 +271,6 @@ export default function SettingsScreen() {
     );
   };
 
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This action is irreversible! All your data, including progress, goals, and subscription will be deleted permanently.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Confirmation',
-              'Are you sure you want to delete your account? This action cannot be undone.',
-              [
-                { text: 'No, keep it', style: 'cancel' },
-                { 
-                  text: 'Yes, delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      const success = await deleteAccount();
-                      if (success) {
-                        Alert.alert('Done', 'Account deleted', [
-                          { text: 'OK', onPress: () => router.replace('/auth') }
-                        ]);
-                      } else {
-                        Alert.alert('Error', 'Failed to delete account. Please try again later.');
-                      }
-                    } catch (error) {
-                      const message = error instanceof Error ? error.message : 'Unknown error';
-                      Alert.alert('Error', message);
-                    }
-                  }
-                },
-              ]
-            );
-          }
-        },
-      ]
-    );
-  };
 
   return (
     <GradientBackground>
@@ -551,7 +508,7 @@ export default function SettingsScreen() {
 
           <View style={styles.appInfo}>
             <Text style={styles.appName}>GoalCoach AI</Text>
-            <Text style={styles.appVersion}>Version 1.0.2</Text>
+            <Text style={styles.appVersion}>Version 1.0.6</Text>
             <Text style={styles.appCopyright}>© 2024 GoalCoach. All rights reserved.</Text>
           </View>
         </ScrollView>

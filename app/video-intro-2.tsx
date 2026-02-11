@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Sparkles } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,61 +28,6 @@ export default function VideoIntro2Screen() {
   const videoRef = useRef<VideoType>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
-  const lastVibrationTime = useRef(0);
-  const videoDuration = useRef(0);
-
-  const triggerProgressiveVibration = useCallback((progress: number, isPlaying: boolean) => {
-    if (Platform.OS === 'web') return;
-    if (!isPlaying) return;
-
-    const now = Date.now();
-
-    let interval: number;
-    let style: Haptics.ImpactFeedbackStyle;
-
-    if (progress >= 0.95) {
-      interval = 40;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.9) {
-      interval = 50;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.85) {
-      interval = 60;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.8) {
-      interval = 80;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.7) {
-      interval = 100;
-      style = Haptics.ImpactFeedbackStyle.Medium;
-    } else if (progress >= 0.6) {
-      interval = 120;
-      style = Haptics.ImpactFeedbackStyle.Medium;
-    } else if (progress >= 0.5) {
-      interval = 140;
-      style = Haptics.ImpactFeedbackStyle.Medium;
-    } else if (progress >= 0.4) {
-      interval = 160;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.3) {
-      interval = 180;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.2) {
-      interval = 200;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.1) {
-      interval = 220;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else {
-      interval = 250;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    }
-
-    if (now - lastVibrationTime.current >= interval) {
-      Haptics.impactAsync(style);
-      lastVibrationTime.current = now;
-    }
-  }, []);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -100,24 +44,12 @@ export default function VideoIntro2Screen() {
         console.log('[VideoIntro2] Video loaded successfully');
       }
 
-      if (status.durationMillis && status.durationMillis > 0) {
-        videoDuration.current = status.durationMillis;
-      }
-
-      if (status.isPlaying && videoDuration.current > 0 && status.positionMillis && !videoFinished) {
-        const progress = status.positionMillis / videoDuration.current;
-        triggerProgressiveVibration(progress, status.isPlaying);
-      }
-
       if (status.didJustFinish && !videoFinished) {
         setVideoFinished(true);
-        if (Platform.OS !== 'web') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
         console.log('[VideoIntro2] Video ended');
       }
     }
-  }, [videoLoaded, videoFinished, triggerProgressiveVibration]);
+  }, [videoLoaded, videoFinished]);
 
   const handleVideoError = useCallback((error: string) => {
     console.error('[VideoIntro2] Video error:', error);
@@ -125,10 +57,6 @@ export default function VideoIntro2Screen() {
   }, []);
 
   const handleContinue = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-
     Animated.sequence([
       Animated.timing(buttonScale, {
         toValue: 0.92,

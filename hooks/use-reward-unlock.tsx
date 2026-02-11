@@ -21,6 +21,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
   const queueRef = useRef<Reward[]>([]);
   const isShowingRef = useRef(false);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingShowRef = useRef<Reward[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -130,22 +131,28 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     }
 
     if (newlyUnlocked.length > 0) {
-      console.log('[RewardUnlock] New rewards detected (sequential):', newlyUnlocked.map(r => r.label));
+      console.log('[RewardUnlock] New rewards detected, queuing for home screen:', newlyUnlocked.map(r => r.label));
 
       const allSeenIds = [...seenIdsRef.current, ...newlyUnlocked.map(r => r.id)];
       seenIdsRef.current = new Set(allSeenIds);
       AsyncStorage.setItem(SEEN_REWARDS_KEY, JSON.stringify(allSeenIds)).catch(() => {});
 
-      if (!isShowingRef.current) {
-        isShowingRef.current = true;
-        setPendingReward(newlyUnlocked[0]);
-        setModalVisible(true);
-        queueRef.current = newlyUnlocked.slice(1);
-      } else {
-        queueRef.current = [...queueRef.current, ...newlyUnlocked];
-      }
+      pendingShowRef.current = [...pendingShowRef.current, ...newlyUnlocked];
     }
   }, [progress?.isReady, progress?.currentStreak, progress?.totalCompletedTasks, progress?.focusTimeMinutes, progress?.todayCompletedTasks, progress?.todayTotalTasks, ready, isDeveloper]);
+
+  const showPendingRewards = useCallback(() => {
+    if (pendingShowRef.current.length > 0 && !isShowingRef.current) {
+      console.log('[RewardUnlock] Showing queued rewards on home screen entry');
+      const first = pendingShowRef.current[0];
+      const rest = pendingShowRef.current.slice(1);
+      pendingShowRef.current = [];
+      isShowingRef.current = true;
+      setPendingReward(first);
+      setModalVisible(true);
+      queueRef.current = rest;
+    }
+  }, []);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
@@ -195,6 +202,7 @@ export const [RewardUnlockProvider, useRewardUnlock] = createContextHook(() => {
     modalVisible,
     closeModal,
     markOfferSeen,
+    showPendingRewards,
     triggerTestReward,
     isDeveloper,
   };

@@ -40,7 +40,7 @@ export default function TodayScreen() {
   const challengeStore = useChallengeStore();
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
-  const { pendingReward, modalVisible, closeModal, markOfferSeen, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
+  const { pendingReward, modalVisible, closeModal, markOfferSeen, showPendingRewards, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
   const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
   const [showStreakBanner, setShowStreakBanner] = useState(false);
 
@@ -125,6 +125,20 @@ export default function TodayScreen() {
 
   const rewardsRef = useRef(rewards);
   useEffect(() => { rewardsRef.current = rewards; }, [rewards]);
+
+  useEffect(() => {
+    if (progress?.isReady) {
+      const currentRewards = rewardsRef.current;
+      let lastIdx = 0;
+      for (let i = currentRewards.length - 1; i >= 0; i--) {
+        if (currentRewards[i].unlocked) {
+          lastIdx = i;
+          break;
+        }
+      }
+      setActiveRewardIndex(lastIdx);
+    }
+  }, [progress?.isReady]);
   
   const TOTAL_REWARDS = REWARDS.length;
   
@@ -257,10 +271,26 @@ export default function TodayScreen() {
     useCallback(() => {
       setIsScreenFocused(true);
       setVideoKey(k => k + 1);
+
+      const currentRewards = rewardsRef.current;
+      let lastIdx = 0;
+      for (let i = currentRewards.length - 1; i >= 0; i--) {
+        if (currentRewards[i].unlocked) {
+          lastIdx = i;
+          break;
+        }
+      }
+      setActiveRewardIndex(lastIdx);
+
+      const rewardTimer = setTimeout(() => {
+        showPendingRewards();
+      }, 600);
+
       return () => {
         setIsScreenFocused(false);
+        clearTimeout(rewardTimer);
       };
-    }, [])
+    }, [showPendingRewards])
   );
 
   useEffect(() => {
