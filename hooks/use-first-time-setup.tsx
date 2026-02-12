@@ -7,7 +7,7 @@ import {
 } from '@/types/first-time-setup';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
 import { useAuth } from '@/hooks/use-auth-store';
-import { saveUserProfile, getUserProfile, updateUserProfile } from '@/lib/firebase';
+import { saveUserProfile, getUserProfile, updateUserProfile, firebaseSyncStatus } from '@/lib/firebase';
 
 const getFirstTimeSetupKey = (userId: string) => `first_time_setup_${userId}`;
 
@@ -98,6 +98,44 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
     };
   }, []);
 
+  const loadProfileFromFirebase = useCallback(async (userId: string, retryCount = 0): Promise<FirstTimeProfile | null> => {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 800;
+
+    try {
+      console.log(`[FirstTimeSetupProvider] Firebase load attempt ${retryCount + 1}/${MAX_RETRIES + 1} for user: ${userId}`);
+      const firebaseProfile = await getUserProfile(userId);
+
+      if (firebaseProfile?.firstTimeSetup) {
+        console.log('[FirstTimeSetupProvider] ✅ Firebase profile found, isCompleted:', firebaseProfile.firstTimeSetup.isCompleted);
+        const profile = deserializeProfile(firebaseProfile.firstTimeSetup);
+        if (profile) {
+          await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(profile));
+        }
+        return profile;
+      }
+
+      if (firebaseSyncStatus.permissionDenied) {
+        console.warn('[FirstTimeSetupProvider] ❌ Firestore permission denied - falling back to local cache');
+        return null;
+      }
+
+      console.log('[FirstTimeSetupProvider] No Firebase profile found for user:', userId);
+      return null;
+    } catch (firebaseError) {
+      console.warn(`[FirstTimeSetupProvider] Firebase load attempt ${retryCount + 1} failed:`, firebaseError);
+
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[FirstTimeSetupProvider] Retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+        return loadProfileFromFirebase(userId, retryCount + 1);
+      }
+
+      console.error('[FirstTimeSetupProvider] All Firebase retries exhausted, using local cache');
+      return null;
+    }
+  }, [FIRST_TIME_SETUP_KEY, deserializeProfile, serializeProfile]);
+
   const loadProfile = useCallback(async () => {
     setState(prev => ({ ...prev, isLoading: true }));
     
@@ -107,28 +145,18 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
       let stored: FirstTimeProfile | null = null;
 
       if (user?.id && !user.id.startsWith('dev_guest_')) {
-        console.log('[FirstTimeSetupProvider] Loading from Firebase for user:', user.id);
-        
-        try {
-          const firebaseProfile = await getUserProfile(user.id);
+        stored = await loadProfileFromFirebase(user.id);
 
-          if (firebaseProfile?.firstTimeSetup) {
-            console.log('[FirstTimeSetupProvider] Firebase profile found, isCompleted:', firebaseProfile.firstTimeSetup.isCompleted);
-            stored = deserializeProfile(firebaseProfile.firstTimeSetup);
-
-            if (stored) {
-              console.log('[FirstTimeSetupProvider] Caching Firebase profile to local storage');
-              await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(stored));
-            }
-          } else {
-            console.log('[FirstTimeSetupProvider] No Firebase profile found - new user, clearing local cache');
-            await safeStorageSet(FIRST_TIME_SETUP_KEY, null);
-            stored = null;
-          }
-        } catch (firebaseError) {
-          console.warn('[FirstTimeSetupProvider] Firebase load failed:', firebaseError);
+        if (!stored) {
+          console.log('[FirstTimeSetupProvider] Firebase returned nothing, checking local cache...');
           const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
           stored = deserializeProfile(local);
+
+          if (stored) {
+            console.log('[FirstTimeSetupProvider] ✅ Found profile in local cache, isCompleted:', stored.isCompleted);
+          } else {
+            console.log('[FirstTimeSetupProvider] No local cache either - new user');
+          }
         }
       } else if (user?.id) {
         console.log('[FirstTimeSetupProvider] Dev guest, loading from local storage');
@@ -136,7 +164,7 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
         stored = deserializeProfile(local);
       }
 
-      console.log('[FirstTimeSetupProvider] Profile loaded:', stored ? `Yes (completed: ${stored.isCompleted})` : 'No');
+      console.log('[FirstTimeSetupProvider] Final profile result:', stored ? `Yes (completed: ${stored.isCompleted}, nickname: ${stored.nickname})` : 'No profile');
 
       setState({
         profile: stored,
@@ -145,13 +173,15 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
       });
     } catch (error) {
       console.error('[FirstTimeSetupProvider] Error loading profile:', error);
+      const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null).catch(() => null);
+      const fallback = local ? deserializeProfile(local) : null;
       setState({
-        profile: null,
+        profile: fallback,
         currentStep: 0,
         isLoading: false,
       });
     }
-  }, [FIRST_TIME_SETUP_KEY, deserializeProfile, serializeProfile, user?.id]);
+  }, [FIRST_TIME_SETUP_KEY, deserializeProfile, loadProfileFromFirebase, user?.id]);
 
   const updateProfile = useCallback(
     async (updates: Partial<FirstTimeProfile>) => {

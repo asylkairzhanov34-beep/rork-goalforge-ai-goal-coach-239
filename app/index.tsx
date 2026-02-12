@@ -5,13 +5,14 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
-const MAX_LOADING_TIMEOUT = 4000;
+const MAX_LOADING_TIMEOUT = 6000;
 
 export default function Index() {
   const [isReady, setIsReady] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [forceReady, setForceReady] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasLoggedRouting = useRef(false);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
   const {
@@ -28,7 +29,7 @@ export default function Index() {
     setIsClient(true);
     
     timeoutRef.current = setTimeout(() => {
-      console.warn('[Index] Loading timeout reached, forcing app to proceed');
+      console.warn('[Index] Loading timeout reached after 6s, forcing app to proceed');
       setForceReady(true);
     }, MAX_LOADING_TIMEOUT);
     
@@ -66,18 +67,24 @@ export default function Index() {
     });
   }, [isAuthenticated, profile?.isCompleted, setWelcomeOnboardingCompleted, welcomeOnboardingCompleted]);
 
-  const isStillLoading = !isClient || !isReady || authLoading || setupLoading;
-  
-  if (isStillLoading && !forceReady) {
+  if (!isClient || !isReady) {
     return <AppLoadingScreen testID="app-loading" />;
   }
-  
-  if (timeoutRef.current) {
+
+  if (authLoading && !forceReady) {
+    return <AppLoadingScreen testID="app-loading-auth" />;
+  }
+
+  if (timeoutRef.current && (!authLoading && !setupLoading)) {
     clearTimeout(timeoutRef.current);
     timeoutRef.current = null;
   }
 
   if (!isAuthenticated || needsLoginGate || requiresFirstLogin) {
+    if (!hasLoggedRouting.current) {
+      console.log('[Index] Routing to /auth:', { isAuthenticated, needsLoginGate, requiresFirstLogin });
+      hasLoggedRouting.current = true;
+    }
     return <Redirect href="/auth" />;
   }
 
@@ -86,7 +93,7 @@ export default function Index() {
     return <Redirect href="/video-intro" />;
   }
 
-  if (setupLoading) {
+  if (setupLoading && !forceReady) {
     console.log('[Index] Waiting for setup profile to load from Firebase...');
     return <AppLoadingScreen testID="app-loading-setup" />;
   }
@@ -95,11 +102,14 @@ export default function Index() {
     console.log('[Index] Redirecting to first-time-setup:', {
       hasProfile: !!profile,
       hasNickname: !!profile?.nickname,
-      isCompleted: profile?.isCompleted
+      isCompleted: profile?.isCompleted,
+      setupLoading,
+      forceReady,
     });
     return <Redirect href="/first-time-setup" />;
   }
 
+  console.log('[Index] ✅ All checks passed, routing to home');
   return <Redirect href="/(tabs)/home" />;
 }
 

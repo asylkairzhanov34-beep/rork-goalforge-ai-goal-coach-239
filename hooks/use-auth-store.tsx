@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import createContextHook from '@nkzw/create-context-hook';
@@ -15,6 +15,8 @@ import {
   subscribeToAuthState,
   getUserProfile,
   saveUserProfile,
+  testFirestoreConnection,
+  firebaseSyncStatus,
   FirebaseUser
 } from '@/lib/firebase';
 
@@ -249,9 +251,35 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log('[Auth] - Firebase UID:', firebaseUser.uid);
       console.log('[Auth] - Email:', firebaseUser.email);
 
+      console.log('[Auth] Testing Firestore access...');
+      const firestoreTest = await testFirestoreConnection(firebaseUser.uid);
+      
+      if (!firestoreTest.success) {
+        console.error('[Auth] ❌ FIRESTORE TEST FAILED:', firestoreTest.error);
+        if (firestoreTest.permissionDenied) {
+          setTimeout(() => {
+            Alert.alert(
+              'Синхронизация данных',
+              'Firestore Security Rules не настроены. Ваши данные сохраняются только локально и будут потеряны при удалении приложения.\n\nНастройте правила Firestore в Firebase Console:\nFirestore → Rules → разрешите доступ для авторизованных пользователей.',
+              [{ text: 'Понятно' }]
+            );
+          }, 500);
+        }
+      } else {
+        console.log('[Auth] ✅ Firestore access confirmed');
+      }
+
       try {
         console.log('[Auth] Checking for existing user data in Firebase...');
         const existingProfile = await getUserProfile(firebaseUser.uid);
+        
+        console.log('[Auth] Existing profile result:', {
+          exists: !!existingProfile,
+          hasSetup: !!existingProfile?.firstTimeSetup,
+          isCompleted: existingProfile?.firstTimeSetup?.isCompleted,
+          hasNickname: !!existingProfile?.firstTimeSetup?.nickname,
+          syncWorking: firebaseSyncStatus.isWorking,
+        });
         
         if (existingProfile?.firstTimeSetup?.isCompleted) {
           console.log('[Auth] ✅ Returning user detected - restoring local flags');
@@ -259,12 +287,25 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           setWelcomeOnboardingCompletedState(true);
           await safeStorageSet(FIRST_LAUNCH_KEY, true);
           setRequiresFirstLogin(false);
-          console.log('[Auth] Local flags restored from Firebase data');
+          
+          if (existingProfile.firstTimeSetup.nickname) {
+            const setupKey = `first_time_setup_${firebaseUser.uid}`;
+            await safeStorageSet(setupKey, existingProfile.firstTimeSetup);
+            console.log('[Auth] ✅ Cached Firebase profile to local storage for key:', setupKey);
+          }
+          
+          console.log('[Auth] ✅ Local flags restored from Firebase data');
+        } else if (existingProfile?.onboardingCompleted) {
+          console.log('[Auth] Partial profile found (onboarding completed but setup incomplete)');
+          await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+          setWelcomeOnboardingCompletedState(true);
+          await safeStorageSet(FIRST_LAUNCH_KEY, true);
+          setRequiresFirstLogin(false);
         } else {
           console.log('[Auth] New user or incomplete setup - no flags to restore');
         }
       } catch (profileCheckError) {
-        console.warn('[Auth] Failed to check existing profile (non-fatal):', profileCheckError);
+        console.error('[Auth] ❌ Failed to check existing profile:', profileCheckError);
       }
 
       await markLoginGateSeen();

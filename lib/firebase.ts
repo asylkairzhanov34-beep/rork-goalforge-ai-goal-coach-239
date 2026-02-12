@@ -188,32 +188,54 @@ export async function saveUserProfile(userId: string, data: any): Promise<void> 
       ...cleanedData,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    console.log('[Firebase] ✅ Profile saved to Firestore for user:', userId);
+    firebaseSyncStatus.lastSyncSuccess = true;
+    firebaseSyncStatus.lastSyncTime = Date.now();
+    firebaseSyncStatus.lastError = null;
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied saving profile - using local storage only');
+      console.error('[Firebase] ❌ PERMISSION DENIED saving profile for user:', userId, '- DATA NOT SAVED TO CLOUD');
+      firebaseSyncStatus.lastSyncSuccess = false;
+      firebaseSyncStatus.permissionDenied = true;
+      firebaseSyncStatus.lastError = 'permission-denied on saveUserProfile';
       return;
     }
+    console.error('[Firebase] ❌ Error saving profile:', error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.message || 'Unknown save error';
     throw error;
   }
 }
 
 export async function getUserProfile(userId: string): Promise<any | null> {
   try {
+    console.log('[Firebase] Getting profile for user:', userId);
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
     
     const docSnap = await getDoc(userRef);
     
     if (docSnap.exists()) {
-      return docSnap.data();
+      const data = docSnap.data();
+      console.log('[Firebase] ✅ Profile found in Firestore, hasSetup:', !!data?.firstTimeSetup, 'isCompleted:', data?.firstTimeSetup?.isCompleted);
+      firebaseSyncStatus.lastSyncSuccess = true;
+      firebaseSyncStatus.lastSyncTime = Date.now();
+      return data;
     }
     
+    console.log('[Firebase] Profile document does not exist for user:', userId);
     return null;
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
-      console.warn('[Firebase] Permission denied getting profile - using local storage only');
+      console.error('[Firebase] ❌ PERMISSION DENIED reading profile for user:', userId, '- CANNOT RESTORE DATA');
+      firebaseSyncStatus.lastSyncSuccess = false;
+      firebaseSyncStatus.permissionDenied = true;
+      firebaseSyncStatus.lastError = 'permission-denied on getUserProfile';
       return null;
     }
+    console.error('[Firebase] ❌ Error getting profile:', error?.message);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = error?.message || 'Unknown get error';
     throw error;
   }
 }
@@ -469,38 +491,72 @@ export const firebaseSyncStatus = {
   lastSyncSuccess: false,
   lastSyncTime: 0,
   lastError: null as string | null,
+  permissionDenied: false,
+  testedAt: 0,
   get isSyncing() {
     return this.lastSyncTime > 0;
   },
   get hasError() {
     return this.lastError !== null;
   },
+  get isWorking() {
+    return this.testedAt > 0 && this.lastSyncSuccess && !this.permissionDenied;
+  },
 };
 
-export async function testFirestoreConnection(userId: string): Promise<{ success: boolean; error?: string }> {
-  console.log('[Firebase] Testing Firestore connection for user:', userId);
+export async function testFirestoreConnection(userId: string): Promise<{ success: boolean; error?: string; permissionDenied?: boolean }> {
+  console.log('[Firebase] ===== Testing Firestore read/write for user:', userId, '=====');
+  const firestore = getFirebaseDB();
+  const userRef = doc(firestore, 'users', userId);
+
   try {
-    const firestore = getFirebaseDB();
-    const userRef = doc(firestore, 'users', userId);
-    await getDoc(userRef);
-    console.log('[Firebase] ✅ Firestore connection OK - rules are configured');
-    firebaseSyncStatus.lastSyncSuccess = true;
-    firebaseSyncStatus.lastError = null;
-    return { success: true };
+    const snap = await getDoc(userRef);
+    console.log('[Firebase] ✅ Firestore READ OK, exists:', snap.exists());
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
-      const msg = 'Firestore Security Rules not configured. Data will only be stored locally and WILL BE LOST if you delete the app. Go to Firebase Console → Firestore → Rules and add proper rules.';
-      console.error('[Firebase] ❌', msg);
+      const msg = 'Firestore Security Rules блокируют доступ. Данные НЕ сохраняются в облако и будут потеряны при удалении приложения.';
+      console.error('[Firebase] ❌ READ permission-denied:', msg);
       firebaseSyncStatus.lastSyncSuccess = false;
       firebaseSyncStatus.lastError = msg;
-      return { success: false, error: msg };
+      firebaseSyncStatus.permissionDenied = true;
+      firebaseSyncStatus.testedAt = Date.now();
+      return { success: false, error: msg, permissionDenied: true };
     }
-    const msg = error?.message || 'Unknown Firestore error';
-    console.error('[Firebase] ❌ Firestore test failed:', msg);
+    const msg = error?.message || 'Unknown Firestore read error';
+    console.error('[Firebase] ❌ Firestore read failed:', msg);
     firebaseSyncStatus.lastSyncSuccess = false;
     firebaseSyncStatus.lastError = msg;
+    firebaseSyncStatus.testedAt = Date.now();
     return { success: false, error: msg };
   }
+
+  try {
+    await setDoc(userRef, { _lastAccessTest: new Date().toISOString() }, { merge: true });
+    console.log('[Firebase] ✅ Firestore WRITE OK');
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      const msg = 'Firestore Security Rules блокируют запись. Данные НЕ сохраняются в облако.';
+      console.error('[Firebase] ❌ WRITE permission-denied:', msg);
+      firebaseSyncStatus.lastSyncSuccess = false;
+      firebaseSyncStatus.lastError = msg;
+      firebaseSyncStatus.permissionDenied = true;
+      firebaseSyncStatus.testedAt = Date.now();
+      return { success: false, error: msg, permissionDenied: true };
+    }
+    const msg = error?.message || 'Unknown Firestore write error';
+    console.error('[Firebase] ❌ Firestore write failed:', msg);
+    firebaseSyncStatus.lastSyncSuccess = false;
+    firebaseSyncStatus.lastError = msg;
+    firebaseSyncStatus.testedAt = Date.now();
+    return { success: false, error: msg };
+  }
+
+  console.log('[Firebase] ===== Firestore test PASSED =====');
+  firebaseSyncStatus.lastSyncSuccess = true;
+  firebaseSyncStatus.lastError = null;
+  firebaseSyncStatus.permissionDenied = false;
+  firebaseSyncStatus.testedAt = Date.now();
+  return { success: true };
 }
 
 function removeUndefinedValues(obj: any): any {
