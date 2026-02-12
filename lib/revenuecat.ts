@@ -1,21 +1,55 @@
 import { Platform } from 'react-native';
-import Purchases, { 
-  CustomerInfo, 
-  PurchasesPackage, 
-  PurchasesOfferings,
-  LOG_LEVEL,
-} from 'react-native-purchases';
 
-export type RevenueCatCustomerInfo = CustomerInfo;
-export type RevenueCatPackage = PurchasesPackage;
-export type RevenueCatOfferings = PurchasesOfferings;
+export type RevenueCatCustomerInfo = {
+  originalAppUserId: string;
+  latestExpirationDate: string | null;
+  activeSubscriptions: string[];
+  entitlements: {
+    active: Record<string, any>;
+    all: Record<string, any>;
+  };
+};
+
+export type RevenueCatPackage = {
+  identifier: string;
+  product: {
+    identifier: string;
+    title: string;
+    description: string;
+    price: number;
+    priceString: string;
+    currencyCode: string;
+  };
+};
+
+export type RevenueCatOfferings = {
+  current: {
+    identifier: string;
+    availablePackages: RevenueCatPackage[];
+  } | null;
+  all: Record<string, any>;
+};
+
+let Purchases: any = null;
+let LOG_LEVEL: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const mod = require('react-native-purchases');
+    Purchases = mod.default || mod;
+    LOG_LEVEL = mod.LOG_LEVEL;
+    console.log('[RevenueCat] Native module loaded');
+  } catch (e) {
+    console.warn('[RevenueCat] Failed to load native module:', e);
+  }
+}
 
 const TEST_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY;
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
 
 let isConfigured = false;
-let cachedOfferings: PurchasesOfferings | null = null;
+let cachedOfferings: RevenueCatOfferings | null = null;
 let currentApiKeyType: 'test' | 'ios' | 'android' = 'test';
 
 function getPrimaryApiKey(): { key: string | undefined; type: 'test' | 'ios' | 'android' } {
@@ -35,12 +69,18 @@ function getPrimaryApiKey(): { key: string | undefined; type: 'test' | 'ios' | '
 }
 
 const configureWithKey = async (apiKey: string, keyType: 'test' | 'ios' | 'android'): Promise<boolean> => {
+  if (!Purchases) {
+    console.warn('[RevenueCat] Native module not available');
+    return false;
+  }
   try {
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+    if (LOG_LEVEL) {
+      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+    }
     Purchases.configure({ apiKey });
     isConfigured = true;
     currentApiKeyType = keyType;
-    console.log(`[RevenueCat] ✅ Configured with ${keyType.toUpperCase()} key`);
+    console.log(`[RevenueCat] Configured with ${keyType.toUpperCase()} key`);
     return true;
   } catch (error) {
     console.error(`[RevenueCat] Configuration error (${keyType}):`, error);
@@ -49,19 +89,24 @@ const configureWithKey = async (apiKey: string, keyType: 'test' | 'ios' | 'andro
 };
 
 export const initializeRevenueCat = async (): Promise<boolean> => {
+  if (Platform.OS === 'web' || !Purchases) {
+    console.log('[RevenueCat] Skipping init (web or no native module)');
+    return false;
+  }
+
   if (isConfigured) {
     console.log('[RevenueCat] Already configured with', currentApiKeyType);
     return true;
   }
 
-  console.log('[RevenueCat] 🚀 Initializing...');
+  console.log('[RevenueCat] Initializing...');
   console.log('[RevenueCat] Platform:', Platform.OS);
   console.log('[RevenueCat] Keys available - TEST:', !!TEST_KEY, 'iOS:', !!IOS_KEY, 'Android:', !!ANDROID_KEY);
 
   const primary = getPrimaryApiKey();
   
   if (!primary.key) {
-    console.error('[RevenueCat] ❌ No API key found!');
+    console.error('[RevenueCat] No API key found!');
     return false;
   }
 
@@ -69,36 +114,33 @@ export const initializeRevenueCat = async (): Promise<boolean> => {
 };
 
 const reconfigureWithTestStore = async (): Promise<boolean> => {
-  if (!TEST_KEY) {
-    console.log('[RevenueCat] No TEST_KEY for fallback');
+  if (!TEST_KEY || !Purchases) {
     return false;
   }
   
   if (currentApiKeyType === 'test') {
-    console.log('[RevenueCat] Already using test store');
     return false;
   }
 
-  console.log('[RevenueCat] 🔄 Switching to Test Store...');
+  console.log('[RevenueCat] Switching to Test Store...');
   isConfigured = false;
   cachedOfferings = null;
   
   return configureWithKey(TEST_KEY, 'test');
 };
 
-const fetchOfferingsInternal = async (): Promise<PurchasesOfferings | null> => {
+const fetchOfferingsInternal = async (): Promise<RevenueCatOfferings | null> => {
+  if (!Purchases) return null;
+  
   const offerings = await Purchases.getOfferings();
   
-  console.log('[RevenueCat] ========== OFFERINGS DEBUG ==========');
   console.log('[RevenueCat] Using key type:', currentApiKeyType);
-  console.log('[RevenueCat] Has offerings:', !!offerings);
-  console.log('[RevenueCat] All offerings keys:', Object.keys(offerings?.all || {}));
   console.log('[RevenueCat] Has current:', !!offerings?.current);
   
   const currentPackages = offerings?.current?.availablePackages;
   if (currentPackages && currentPackages.length > 0) {
-    console.log('[RevenueCat] ✅ Current offering:', offerings.current?.identifier);
-    currentPackages.forEach((pkg, i) => {
+    console.log('[RevenueCat] Current offering:', offerings.current?.identifier);
+    currentPackages.forEach((pkg: any, i: number) => {
       console.log(`[RevenueCat] Package ${i + 1}:`, {
         id: pkg.identifier,
         productId: pkg.product?.identifier,
@@ -112,7 +154,7 @@ const fetchOfferingsInternal = async (): Promise<PurchasesOfferings | null> => {
   for (const key of allKeys) {
     const offering = offerings.all[key];
     if (offering?.availablePackages?.length > 0) {
-      console.log('[RevenueCat] 🔄 Using fallback offering:', key);
+      console.log('[RevenueCat] Using fallback offering:', key);
       return { ...offerings, current: offering };
     }
   }
@@ -120,17 +162,16 @@ const fetchOfferingsInternal = async (): Promise<PurchasesOfferings | null> => {
   return null;
 };
 
-export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
+export const getOfferings = async (): Promise<RevenueCatOfferings | null> => {
+  if (Platform.OS === 'web' || !Purchases) return null;
+
   if (!isConfigured) {
     const success = await initializeRevenueCat();
-    if (!success) {
-      console.error('[RevenueCat] Cannot fetch offerings - not configured');
-      return null;
-    }
+    if (!success) return null;
   }
 
   try {
-    console.log('[RevenueCat] 📦 Fetching offerings...');
+    console.log('[RevenueCat] Fetching offerings...');
     
     let offerings = await fetchOfferingsInternal();
     
@@ -140,36 +181,25 @@ export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
       return offerings;
     }
     
-    console.warn('[RevenueCat] ⚠️ No packages found with', currentApiKeyType, 'key');
+    console.warn('[RevenueCat] No packages found with', currentApiKeyType, 'key');
     
     if (currentApiKeyType !== 'test' && TEST_KEY) {
-      console.log('[RevenueCat] 🔄 Trying Test Store as fallback...');
       const switched = await reconfigureWithTestStore();
-      
       if (switched) {
         offerings = await fetchOfferingsInternal();
-        
         const testPkgs = offerings?.current?.availablePackages;
         if (testPkgs && testPkgs.length > 0) {
-          console.log('[RevenueCat] ✅ Test Store has packages!');
           cachedOfferings = offerings;
           return offerings;
         }
       }
     }
     
-    console.error('[RevenueCat] ❌ NO OFFERINGS WITH PACKAGES FOUND');
-    console.error('[RevenueCat] Possible causes:');
-    console.error('[RevenueCat] 1. Products pending approval in App Store Connect');
-    console.error('[RevenueCat] 2. No products attached to offerings in RevenueCat');
-    console.error('[RevenueCat] 3. Bundle ID mismatch');
-    
     return null;
   } catch (error: any) {
-    console.error('[RevenueCat] ❌ Error fetching offerings:', error?.message || error);
+    console.error('[RevenueCat] Error fetching offerings:', error?.message || error);
     
     if (currentApiKeyType !== 'test' && TEST_KEY) {
-      console.log('[RevenueCat] 🔄 Error occurred, trying Test Store...');
       try {
         const switched = await reconfigureWithTestStore();
         if (switched) {
@@ -189,7 +219,9 @@ export const getOfferings = async (): Promise<PurchasesOfferings | null> => {
   }
 };
 
-export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
+export const getCustomerInfo = async (): Promise<RevenueCatCustomerInfo | null> => {
+  if (Platform.OS === 'web' || !Purchases) return null;
+
   if (!isConfigured) {
     const success = await initializeRevenueCat();
     if (!success) return null;
@@ -198,8 +230,6 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
   try {
     const info = await Purchases.getCustomerInfo();
     console.log('[RevenueCat] Customer info loaded');
-    console.log('[RevenueCat] Active subscriptions:', info.activeSubscriptions);
-    console.log('[RevenueCat] Entitlements:', Object.keys(info.entitlements.active));
     return info;
   } catch (error) {
     console.error('[RevenueCat] Error getting customer info:', error);
@@ -207,14 +237,13 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
   }
 };
 
-export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerInfo | null> => {
+export const purchasePackage = async (pkg: any): Promise<RevenueCatCustomerInfo | null> => {
+  if (Platform.OS === 'web' || !Purchases) return null;
+
   try {
-    console.log('[RevenueCat] 🛒 Starting purchase:', pkg.product.identifier);
-    console.log('[RevenueCat] Price:', pkg.product.priceString);
-    
+    console.log('[RevenueCat] Starting purchase:', pkg.product.identifier);
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    
-    console.log('[RevenueCat] ✅ Purchase successful!');
+    console.log('[RevenueCat] Purchase successful!');
     return customerInfo;
   } catch (error: any) {
     if (error.userCancelled) {
@@ -226,7 +255,9 @@ export const purchasePackage = async (pkg: PurchasesPackage): Promise<CustomerIn
   }
 };
 
-export const restorePurchases = async (): Promise<CustomerInfo | null> => {
+export const restorePurchases = async (): Promise<RevenueCatCustomerInfo | null> => {
+  if (Platform.OS === 'web' || !Purchases) return null;
+
   if (!isConfigured) {
     const success = await initializeRevenueCat();
     if (!success) return null;
@@ -235,7 +266,7 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
   try {
     console.log('[RevenueCat] Restoring purchases...');
     const info = await Purchases.restorePurchases();
-    console.log('[RevenueCat] ✅ Restore complete');
+    console.log('[RevenueCat] Restore complete');
     return info;
   } catch (error) {
     console.error('[RevenueCat] Restore error:', error);
@@ -243,18 +274,18 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
   }
 };
 
-export const identifyUser = async (userId: string): Promise<CustomerInfo | null> => {
+export const identifyUser = async (userId: string): Promise<RevenueCatCustomerInfo | null> => {
+  if (Platform.OS === 'web' || !Purchases) return null;
+
   if (!isConfigured) {
     const success = await initializeRevenueCat();
     if (!success) return null;
   }
 
   try {
-    console.log('[RevenueCat] 🔗 Identifying user:', userId);
+    console.log('[RevenueCat] Identifying user:', userId);
     const { customerInfo } = await Purchases.logIn(userId);
-    console.log('[RevenueCat] ✅ User identified');
-    console.log('[RevenueCat] App User ID:', customerInfo.originalAppUserId);
-    console.log('[RevenueCat] Active entitlements:', Object.keys(customerInfo.entitlements.active));
+    console.log('[RevenueCat] User identified');
     return customerInfo;
   } catch (error) {
     console.error('[RevenueCat] Identify user error:', error);
@@ -262,13 +293,13 @@ export const identifyUser = async (userId: string): Promise<CustomerInfo | null>
   }
 };
 
-export const logoutUser = async (): Promise<CustomerInfo | null> => {
-  if (!isConfigured) return null;
+export const logoutUser = async (): Promise<RevenueCatCustomerInfo | null> => {
+  if (!isConfigured || !Purchases) return null;
 
   try {
-    console.log('[RevenueCat] 👋 Logging out user...');
+    console.log('[RevenueCat] Logging out user...');
     const customerInfo = await Purchases.logOut();
-    console.log('[RevenueCat] ✅ User logged out, now anonymous');
+    console.log('[RevenueCat] User logged out');
     return customerInfo;
   } catch (error) {
     console.error('[RevenueCat] Logout error:', error);
@@ -278,11 +309,11 @@ export const logoutUser = async (): Promise<CustomerInfo | null> => {
 
 export const getCachedOfferings = () => cachedOfferings;
 
-export const findPackageByIdentifier = (identifier: string): PurchasesPackage | null => {
+export const findPackageByIdentifier = (identifier: string): any | null => {
   if (!cachedOfferings?.current) return null;
   
   return cachedOfferings.current.availablePackages.find(
-    pkg => pkg.identifier === identifier || pkg.product.identifier === identifier
+    (pkg: any) => pkg.identifier === identifier || pkg.product.identifier === identifier
   ) || null;
 };
 
