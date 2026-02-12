@@ -8,7 +8,7 @@ import { getUserChatHistory, saveUserChatHistory } from '@/lib/firebase';
 
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 
-// OpenAI API ключ
+// OpenAI API key
 const OPENAI_API_KEY = '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';
 
 type OpenAIContentPart = 
@@ -271,20 +271,20 @@ Respond in the same language as user's request.`;
     
     if (detectCancellation(userText)) {
       taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-      return '🚫 Отменено. Если захотите добавить задачу - просто скажите!';
+      return '🚫 Cancelled. Let me know if you want to add a task later!';
     }
 
     if (state.stage === 'asking_title') {
       state.collectedInfo.title = userText;
       state.stage = 'asking_details';
-      return `📝 Отлично! Задача: "${userText}"
+      return `📝 Great! Task: "${userText}"
 
-Теперь расскажите подробнее:
-• Сколько времени займёт? (например: 30 минут, 1 час)
-• Какой приоритет? (высокий/средний/низкий)
-• Есть ли дополнительные детали?
+Now tell me more:
+• How long will it take? (e.g., 30 minutes, 1 hour)
+• What's the priority? (high/medium/low)
+• Any additional details?
 
-Или просто напишите "готово" и я создам задачу с настройками по умолчанию.`;
+Or just type "done" and I'll create the task with default settings.`;
     }
 
     if (state.stage === 'asking_details') {
@@ -308,19 +308,19 @@ Respond in the same language as user's request.`;
       
       state.stage = 'confirming';
       
-      const title = state.collectedInfo.title || 'Новая задача';
+      const title = state.collectedInfo.title || 'New task';
       const priority = state.collectedInfo.priority || 'medium';
-      const duration = state.collectedInfo.duration || '30 минут';
+      const duration = state.collectedInfo.duration || '30 minutes';
       const priorityEmoji = priority === 'high' ? '🔴' : priority === 'low' ? '🟢' : '🟡';
       
-      return `✨ Создаю задачу:
+      return `✨ Creating task:
 
 📌 **${title}**
-${priorityEmoji} Приоритет: ${priority === 'high' ? 'Высокий' : priority === 'low' ? 'Низкий' : 'Средний'}
-⏱️ Время: ${duration}
+${priorityEmoji} Priority: ${priority === 'high' ? 'High' : priority === 'low' ? 'Low' : 'Medium'}
+⏱️ Duration: ${duration}
 ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : ''}
 
-Всё верно? Напишите "да" для подтверждения или "нет" для отмены.`;
+Look good? Type "yes" to confirm or "no" to cancel.`;
     }
 
     if (state.stage === 'confirming') {
@@ -328,7 +328,7 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
         
-        const fullRequest = `Название: ${state.collectedInfo.title}. ${state.collectedInfo.description || ''} Приоритет: ${state.collectedInfo.priority || 'medium'}. Время: ${state.collectedInfo.duration || '30 минут'}`;
+        const fullRequest = `Title: ${state.collectedInfo.title}. ${state.collectedInfo.description || ''} Priority: ${state.collectedInfo.priority || 'medium'}. Duration: ${state.collectedInfo.duration || '30 minutes'}`;
         
         const taskData = await generateTaskFromAI(fullRequest);
         
@@ -348,16 +348,16 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
             setShowTaskForm(true);
           }, 800);
           
-          return `✅ Отлично! Открываю форму добавления задачи...`;
+          return `✅ Great! Opening the task form...`;
         } else {
           const fallbackTaskData: GeneratedTaskData = {
-            title: state.collectedInfo.title || 'Новая задача',
+            title: state.collectedInfo.title || 'New task',
             description: state.collectedInfo.description || '',
-            duration: state.collectedInfo.duration || '30 минут',
+            duration: state.collectedInfo.duration || '30 minutes',
             priority: state.collectedInfo.priority || 'medium',
             difficulty: 'medium',
             estimatedTime: 30,
-            tips: ['Сфокусируйтесь на главном', 'Делайте перерывы'],
+            tips: ['Stay focused on the main goal', 'Take breaks when needed'],
             date: todayStr,
           };
           
@@ -369,11 +369,11 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
             setShowTaskForm(true);
           }, 800);
           
-          return `✅ Создаю задачу! Открываю форму...`;
+          return `✅ Creating task! Opening form...`;
         }
       } else {
         taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-        return '🚫 Отменено. Если захотите добавить задачу - просто скажите!';
+        return '🚫 Cancelled. Let me know if you want to add a task later!';
       }
     }
 
@@ -434,9 +434,9 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
           collectedInfo: {},
         };
         
-        const askMessage = `🎯 Отлично! Давайте создадим задачу.
+        const askMessage = `🎯 Great! Let's create a task.
 
-Что нужно сделать? Опишите задачу в нескольких словах.`;
+What needs to be done? Describe the task in a few words.`;
         
         setMessages(prev => {
           const updated = [...prev, { role: 'assistant' as const, content: askMessage }];
@@ -540,7 +540,7 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
     setTaskFormData(null);
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: '✅ Задача успешно добавлена в ваш план! Можете посмотреть её во вкладке Plan.' 
+      content: '✅ Task successfully added to your plan! You can view it in the Plan tab.' 
     }]);
   }, []);
 
@@ -552,10 +552,10 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
     const completedTasks = tasks.filter(t => t.completed);
     const pendingTasks = tasks.filter(t => !t.completed);
     
-    const analysisMessage = `📊 Анализирую ваши выполненные задачи...
+    const analysisMessage = `📊 Analyzing your completed tasks...
 
-✅ Выполнено: ${completedTasks.length} задач
-⏳ В процессе: ${pendingTasks.length} задач`;
+✅ Completed: ${completedTasks.length} tasks
+⏳ In progress: ${pendingTasks.length} tasks`;
     
     setMessages(prev => [...prev, { role: 'assistant', content: analysisMessage }]);
     
@@ -581,7 +581,7 @@ Based on their progress, suggest ONE new task that would help them continue thei
   "date": "${new Date().toISOString().split('T')[0]}"
 }
 
-Respond in Russian.`;
+Respond in English.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -619,7 +619,7 @@ Respond in Russian.`;
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `💡 На основе вашего прогресса рекомендую:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nОткрываю форму для добавления...` 
+        content: `💡 Based on your progress, I recommend:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nOpening the form...` 
       }]);
       
       setTimeout(() => {
@@ -631,7 +631,7 @@ Respond in Russian.`;
       console.error('[Chat] Analysis error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: '❌ Не удалось проанализировать задачи. Попробуйте ещё раз.' 
+        content: '❌ Failed to analyze tasks. Please try again.' 
       }]);
     } finally {
       setIsProcessing(false);
@@ -655,7 +655,7 @@ Respond in Russian.`;
     
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: `✏️ Редактирование задачи: **${task.title}**\n\nВы можете изменить параметры или перегенерировать задачу.` 
+      content: `✏️ Editing task: **${task.title}**\n\nYou can modify the parameters or regenerate the task.` 
     }]);
     
     setTaskFormData(taskData);
@@ -668,7 +668,7 @@ Respond in Russian.`;
     
     setMessages(prev => [...prev, { 
       role: 'assistant', 
-      content: '✨ Генерирую новую задачу на основе вашей цели...' 
+      content: '✨ Generating a new task based on your goal...' 
     }]);
     
     try {
@@ -693,7 +693,7 @@ Generate a NEW unique task that helps achieve this goal. Return ONLY valid JSON:
   "date": "${new Date().toISOString().split('T')[0]}"
 }
 
-Respond in Russian.`;
+Respond in English.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -731,7 +731,7 @@ Respond in Russian.`;
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `🎯 Предлагаю новую задачу:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nОткрываю форму для настройки...` 
+        content: `🎯 Here's a new task suggestion:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nOpening the form for customization...` 
       }]);
       
       setTimeout(() => {
@@ -743,19 +743,19 @@ Respond in Russian.`;
       console.error('[Chat] New task generation error:', error);
       
       const fallbackTask: GeneratedTaskData = {
-        title: 'Новая задача',
-        description: 'Опишите, что нужно сделать',
-        duration: '30 минут',
+        title: 'New task',
+        description: 'Describe what needs to be done',
+        duration: '30 minutes',
         priority: 'medium',
         difficulty: 'medium',
         estimatedTime: 30,
-        tips: ['Начните с малого', 'Сфокусируйтесь на главном'],
+        tips: ['Start small', 'Stay focused on the main goal'],
         date: new Date().toISOString().split('T')[0],
       };
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: '📝 Открываю форму для создания задачи...' 
+        content: '📝 Opening the task creation form...' 
       }]);
       
       setTimeout(() => {
@@ -767,7 +767,7 @@ Respond in Russian.`;
     }
   }, [goalStore.currentGoal, goalStore.dailyTasks]);
 
-  // Преобразование в UI формат
+  // Convert to UI format
   const uiMessages: ChatMessage[] = useMemo(() => {
     return messages
       .filter(m => m.role !== 'system')
