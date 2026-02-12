@@ -14,7 +14,14 @@ export default function Index() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
-  const { isAuthenticated, isLoading: authLoading, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading: authLoading,
+    needsLoginGate,
+    requiresFirstLogin,
+    welcomeOnboardingCompleted,
+    setWelcomeOnboardingCompleted,
+  } = useAuth();
   const { isInitialized: subInitialized } = useSubscription();
 
   useEffect(() => {
@@ -48,6 +55,17 @@ export default function Index() {
     initializeApp();
   }, [isClient]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !profile?.isCompleted || welcomeOnboardingCompleted) {
+      return;
+    }
+
+    console.log('[Index] Restoring welcome onboarding flag from Firebase profile');
+    setWelcomeOnboardingCompleted(true).catch((error) => {
+      console.warn('[Index] Failed to restore welcome onboarding flag:', error);
+    });
+  }, [isAuthenticated, profile?.isCompleted, setWelcomeOnboardingCompleted, welcomeOnboardingCompleted]);
+
   const isStillLoading = !isClient || !isReady || authLoading || setupLoading || !subInitialized;
   
   if (isStillLoading && !forceReady) {
@@ -59,13 +77,13 @@ export default function Index() {
     timeoutRef.current = null;
   }
 
+  if (!isAuthenticated || needsLoginGate || requiresFirstLogin) {
+    return <Redirect href="/auth" />;
+  }
+
   if (!welcomeOnboardingCompleted) {
     console.log('[Index] Redirecting to video-intro');
     return <Redirect href="/video-intro" />;
-  }
-
-  if (!isAuthenticated || needsLoginGate || requiresFirstLogin) {
-    return <Redirect href="/auth" />;
   }
 
   if (setupLoading) {
