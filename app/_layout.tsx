@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, Component, ReactNode, useState, memo } from "react";
+import React, { useEffect, Component, ReactNode, useState, memo, useCallback } from "react";
 import { StyleSheet, Text, View, LogBox, InteractionManager, TouchableOpacity } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { clearCorruptedStorage } from '@/utils/storage-helper';
 import { disableLogsInProduction } from '@/utils/performance';
 import { GoalProvider } from '@/hooks/use-goal-store';
 import { AuthProvider } from '@/hooks/use-auth-store';
@@ -18,17 +17,12 @@ import { JournalProvider } from '@/hooks/use-journal-store';
 import { FocusShieldProvider } from '@/hooks/use-focus-shield-store';
 import { ProgressProvider } from '@/hooks/use-progress';
 import { trpc, trpcReactClient } from '@/lib/trpc';
-
-import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
-
-import { FloatingDynamicIslandStreak } from '@/components/FloatingDynamicIslandStreak';
 import { StreakCelebrationProvider, useStreakCelebration } from '@/hooks/use-streak-celebration';
 import { RewardUnlockProvider, useRewardUnlock } from '@/hooks/use-reward-unlock';
 import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
 import { VideoSplashScreen } from '@/components/VideoSplashScreen';
 
-// Error Boundary to catch inspector and other development errors
 class ErrorBoundary extends Component<
   { children: ReactNode },
   { hasError: boolean; error?: Error }
@@ -39,14 +33,11 @@ class ErrorBoundary extends Component<
   }
 
   static getDerivedStateFromError(error: Error) {
-    // Update state so the next render will show the fallback UI
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error('ErrorBoundary caught an error:', error.message);
-    console.error('Error stack:', error.stack);
-    console.error('Error info:', errorInfo);
   }
 
   render() {
@@ -107,19 +98,47 @@ const queryClient = new QueryClient({
 
 export { queryClient };
 
+const LazyFloatingStreak = React.lazy(() => 
+  import('@/components/FloatingDynamicIslandStreak').then(m => ({ default: m.FloatingDynamicIslandStreak }))
+);
+
+const LazyGlobalNotificationsGate = React.lazy(() => 
+  import('@/components/GlobalNotificationsGate').then(m => ({ default: m.GlobalNotificationsGate }))
+);
+
 function StreakCelebrationOverlay() {
   const { isVisible, hideCelebration } = useStreakCelebration();
-  return <FloatingDynamicIslandStreak visible={isVisible} onDismiss={hideCelebration} />;
+  if (!isVisible) return null;
+  return (
+    <React.Suspense fallback={null}>
+      <LazyFloatingStreak visible={isVisible} onDismiss={hideCelebration} />
+    </React.Suspense>
+  );
 }
 
 function RewardUnlockOverlay() {
   const { modalVisible, pendingReward, closeModal } = useRewardUnlock();
+  if (!modalVisible) return null;
   return <RewardUnlockModal visible={modalVisible} reward={pendingReward} onClose={closeModal} />;
+}
+
+function DeferredNotificationsGate() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!ready) return null;
+  return (
+    <React.Suspense fallback={null}>
+      <LazyGlobalNotificationsGate />
+    </React.Suspense>
+  );
 }
 
 function RootLayoutNav() {
   useAppBackgroundInit();
-  
+
   return (
     <Stack 
       screenOptions={{ 
@@ -326,63 +345,79 @@ function RootLayoutNav() {
 
 const MemoizedRootLayoutNav = memo(RootLayoutNav);
 
-export default function RootLayout() {
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [showVideoSplash, setShowVideoSplash] = useState(true);
-  const [providersReady, setProvidersReady] = useState(false);
+function DeferredProviders({ children }: { children: ReactNode }) {
+  const [tier2Ready, setTier2Ready] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    
-    setIsHydrated(true);
-    SplashScreen.hideAsync().catch(() => {});
-    
-    requestAnimationFrame(() => {
-      if (mounted) setProvidersReady(true);
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setTier2Ready(true);
     });
-
-    clearCorruptedStorage().catch((error) => {
-      console.error('[RootLayout] Storage cleanup error:', error);
-    });
-    
-    return () => { mounted = false; };
+    return () => handle.cancel();
   }, []);
 
-  if (!isHydrated) {
-    return null;
+  if (!tier2Ready) {
+    return (
+      <ChatProvider>
+        <ManifestationProvider>
+          <JournalProvider>
+            <FocusShieldProvider>
+              {children}
+            </FocusShieldProvider>
+          </JournalProvider>
+        </ManifestationProvider>
+      </ChatProvider>
+    );
   }
+
+  return (
+    <ChatProvider>
+      <ManifestationProvider>
+        <JournalProvider>
+          <FocusShieldProvider>
+            <StreakCelebrationProvider>
+              <RewardUnlockProvider>
+                {children}
+                <StreakCelebrationOverlay />
+                <RewardUnlockOverlay />
+              </RewardUnlockProvider>
+            </StreakCelebrationProvider>
+          </FocusShieldProvider>
+        </JournalProvider>
+      </ManifestationProvider>
+    </ChatProvider>
+  );
+}
+
+export default function RootLayout() {
+  const [showVideoSplash, setShowVideoSplash] = useState(true);
+
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  const handleSplashFinish = useCallback(() => {
+    setShowVideoSplash(false);
+  }, []);
 
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
         {showVideoSplash && (
-          <VideoSplashScreen onFinish={() => setShowVideoSplash(false)} />
+          <VideoSplashScreen onFinish={handleSplashFinish} />
         )}
         <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
           <QueryClientProvider client={queryClient}>
             <SubscriptionProvider>
-              <GlobalNotificationsGate />
+              <DeferredNotificationsGate />
               <AuthProvider>
                 <FirstTimeSetupProvider>
                   <GoalProvider>
                     <ChallengeProvider>
                       <TimerProvider>
                         <ProgressProvider>
-                          <ChatProvider>
-                            <ManifestationProvider>
-                              <JournalProvider>
-                                <FocusShieldProvider>
-                                  <StreakCelebrationProvider>
-                                    <RewardUnlockProvider>
-                                      <MemoizedRootLayoutNav />
-                                      {providersReady && <StreakCelebrationOverlay />}
-                                      {providersReady && <RewardUnlockOverlay />}
-                                    </RewardUnlockProvider>
-                                  </StreakCelebrationProvider>
-                                </FocusShieldProvider>
-                              </JournalProvider>
-                            </ManifestationProvider>
-                          </ChatProvider>
+                          <DeferredProviders>
+                            <MemoizedRootLayoutNav />
+                          </DeferredProviders>
                         </ProgressProvider>
                       </TimerProvider>
                     </ChallengeProvider>

@@ -81,7 +81,6 @@ export default function TodayScreen() {
   
   const videoRefs = useRef<{ [key: string]: Video | null }>({});
   const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const [videoKey, setVideoKey] = useState(0);
 
   const isDeveloper = user?.email === 'developer@test.local';
 
@@ -270,7 +269,6 @@ export default function TodayScreen() {
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
-      setVideoKey(k => k + 1);
 
       const currentRewards = rewardsRef.current;
       let lastIdx = 0;
@@ -294,12 +292,10 @@ export default function TodayScreen() {
   );
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        console.log('[Home] App became active, refreshing videos');
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
         setIsScreenFocused(true);
-        setVideoKey(k => k + 1);
-      } else if (state === 'background') {
+      } else if (nextState === 'background') {
         setIsScreenFocused(false);
       }
     });
@@ -541,7 +537,7 @@ export default function TodayScreen() {
                   >
                     <View style={styles.orbVideoWrapper}>
                       <Video
-                        key={`${item.id}-${videoKey}`}
+                        key={item.id}
                         ref={setVideoRef(item.id)}
                         source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
                         style={styles.orbVideo}
@@ -549,6 +545,7 @@ export default function TodayScreen() {
                         shouldPlay={isScreenFocused}
                         isLooping
                         isMuted
+                        progressUpdateIntervalMillis={5000}
                       />
                     </View>
                     {!item.unlocked && (

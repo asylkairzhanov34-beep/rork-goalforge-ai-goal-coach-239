@@ -20,6 +20,7 @@ interface VideoSplashScreenProps {
 }
 
 const SPLASH_SHOWN_KEY = 'video_splash_shown_session';
+const MAX_SPLASH_DURATION = 8000;
 
 export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -30,21 +31,22 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
   const hasFinished = useRef(false);
 
   useEffect(() => {
-    const checkIfShouldShow = async () => {
-      try {
-        const shown = await AsyncStorage.getItem(SPLASH_SHOWN_KEY);
+    let mounted = true;
+    AsyncStorage.getItem(SPLASH_SHOWN_KEY)
+      .then((shown) => {
+        if (!mounted) return;
         if (shown) {
           setShouldShow(false);
-          setTimeout(onFinish, 100);
+          requestAnimationFrame(() => onFinish());
         } else {
-          await AsyncStorage.setItem(SPLASH_SHOWN_KEY, 'true');
+          AsyncStorage.setItem(SPLASH_SHOWN_KEY, 'true').catch(() => {});
           setShouldShow(true);
         }
-      } catch {
-        setShouldShow(true);
-      }
-    };
-    checkIfShouldShow();
+      })
+      .catch(() => {
+        if (mounted) setShouldShow(true);
+      });
+    return () => { mounted = false; };
   }, [onFinish]);
 
   useEffect(() => {
@@ -55,17 +57,26 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
     }).start();
   }, [scaleAnim]);
 
+  useEffect(() => {
+    if (shouldShow !== true) return;
+    const safety = setTimeout(() => {
+      console.warn('[VideoSplash] Max duration reached, forcing finish');
+      handleFinish();
+    }, MAX_SPLASH_DURATION);
+    return () => clearTimeout(safety);
+  }, [shouldShow]);
+
   const handleFinish = useCallback(() => {
     if (hasFinished.current) return;
     hasFinished.current = true;
 
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
 
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 400,
+      duration: 300,
       useNativeDriver: true,
     }).start(() => {
       onFinish();
@@ -73,27 +84,25 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
   }, [fadeAnim, onFinish]);
 
   const handleVideoStatus = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      if (!videoLoaded) {
-        setVideoLoaded(true);
-        console.log('[VideoSplash] Video loaded');
-      }
-      
-      if (status.didJustFinish) {
-        console.log('[VideoSplash] Video finished');
-        handleFinish();
-      }
+    if (!status.isLoaded) return;
+    
+    if (!videoLoaded) {
+      setVideoLoaded(true);
+    }
+    
+    if (status.didJustFinish) {
+      handleFinish();
     }
   }, [videoLoaded, handleFinish]);
 
   const handleVideoError = useCallback((error: string) => {
     console.error('[VideoSplash] Video error:', error);
-    setTimeout(handleFinish, 500);
+    handleFinish();
   }, [handleFinish]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const timer = setTimeout(handleFinish, 800);
+      const timer = setTimeout(handleFinish, 600);
       return () => clearTimeout(timer);
     }
   }, [handleFinish]);
@@ -137,6 +146,7 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
           shouldPlay
           isLooping={false}
           isMuted={true}
+          progressUpdateIntervalMillis={1000}
           onPlaybackStatusUpdate={handleVideoStatus}
           onError={(error: string) => handleVideoError(error)}
         />

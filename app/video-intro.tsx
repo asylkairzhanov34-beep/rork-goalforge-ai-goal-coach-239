@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
-const { width, height } = Dimensions.get('window');
+const { width: INIT_WIDTH, height: INIT_HEIGHT } = Dimensions.get('window');
 
 const VIDEO_URL = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769273122/0124_3_bdocck.mp4';
 
@@ -41,41 +41,17 @@ export default function VideoIntroScreen() {
     let interval: number;
     let style: Haptics.ImpactFeedbackStyle;
     
-    if (progress >= 0.95) {
-      interval = 40;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.9) {
-      interval = 50;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.85) {
-      interval = 60;
-      style = Haptics.ImpactFeedbackStyle.Heavy;
-    } else if (progress >= 0.8) {
-      interval = 80;
+    if (progress >= 0.9) {
+      interval = 300;
       style = Haptics.ImpactFeedbackStyle.Heavy;
     } else if (progress >= 0.7) {
-      interval = 100;
-      style = Haptics.ImpactFeedbackStyle.Medium;
-    } else if (progress >= 0.6) {
-      interval = 120;
-      style = Haptics.ImpactFeedbackStyle.Medium;
-    } else if (progress >= 0.5) {
-      interval = 140;
+      interval = 500;
       style = Haptics.ImpactFeedbackStyle.Medium;
     } else if (progress >= 0.4) {
-      interval = 160;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.3) {
-      interval = 180;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.2) {
-      interval = 200;
-      style = Haptics.ImpactFeedbackStyle.Light;
-    } else if (progress >= 0.1) {
-      interval = 220;
+      interval = 800;
       style = Haptics.ImpactFeedbackStyle.Light;
     } else {
-      interval = 250;
+      interval = 1200;
       style = Haptics.ImpactFeedbackStyle.Light;
     }
     
@@ -94,28 +70,28 @@ export default function VideoIntroScreen() {
   }, [fadeAnim]);
 
   const handleVideoLoad = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      if (!videoLoaded) {
-        setVideoLoaded(true);
-        console.log('[VideoIntro] Video loaded successfully');
+    if (!status.isLoaded) return;
+    
+    if (!videoLoaded) {
+      setVideoLoaded(true);
+      console.log('[VideoIntro] Video loaded successfully');
+    }
+    
+    if (status.durationMillis && status.durationMillis > 0) {
+      videoDuration.current = status.durationMillis;
+    }
+    
+    if (status.isPlaying && videoDuration.current > 0 && status.positionMillis && !videoFinished) {
+      const progress = status.positionMillis / videoDuration.current;
+      triggerProgressiveVibration(progress, true);
+    }
+    
+    if (status.didJustFinish && !videoFinished) {
+      setVideoFinished(true);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      
-      if (status.durationMillis && status.durationMillis > 0) {
-        videoDuration.current = status.durationMillis;
-      }
-      
-      if (status.isPlaying && videoDuration.current > 0 && status.positionMillis && !videoFinished) {
-        const progress = status.positionMillis / videoDuration.current;
-        triggerProgressiveVibration(progress, status.isPlaying);
-      }
-      
-      if (status.didJustFinish && !videoFinished) {
-        setVideoFinished(true);
-        if (Platform.OS !== 'web') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-        console.log('[VideoIntro] Video ended, vibration stopped');
-      }
+      console.log('[VideoIntro] Video ended');
     }
   }, [videoLoaded, videoFinished, triggerProgressiveVibration]);
 
@@ -171,6 +147,7 @@ export default function VideoIntroScreen() {
             shouldPlay
             isLooping={false}
             isMuted={false}
+            progressUpdateIntervalMillis={500}
             onPlaybackStatusUpdate={handleVideoLoad}
             onError={(error: string) => handleVideoError(error)}
           />
@@ -220,8 +197,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   video: {
-    width: width,
-    height: height,
+    width: INIT_WIDTH,
+    height: INIT_HEIGHT,
   },
   videoHidden: {
     opacity: 0,

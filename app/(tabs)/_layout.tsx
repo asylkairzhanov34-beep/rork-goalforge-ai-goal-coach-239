@@ -27,16 +27,23 @@ function TabBarIcon({ icon: Icon, focused }: { icon: any; focused: boolean }) {
   );
 }
 
+const MAX_TAB_BAR_WIDTH = 500;
+
 function TabBarBackground() {
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isTablet = screenWidth >= 768;
+  
+  const horizontalMargin = isTablet
+    ? Math.max((screenWidth - MAX_TAB_BAR_WIDTH) / 2, screenWidth * 0.04)
+    : screenWidth * 0.04;
   
   return (
     <View style={[
       styles.tabBarBackgroundContainer,
       {
-        left: screenWidth * 0.04,
-        right: screenWidth * 0.04,
+        left: horizontalMargin,
+        right: horizontalMargin,
         bottom: Math.max(insets.bottom, 20),
       }
     ]}>
@@ -57,6 +64,11 @@ function TabBarBackground() {
 export default function TabLayout() {
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const isTablet = screenWidth >= 768;
+  
+  const tabHorizontalPadding = isTablet
+    ? Math.max((screenWidth - MAX_TAB_BAR_WIDTH) / 2 + 16, screenWidth * 0.08)
+    : screenWidth * 0.08;
   
   return (
     <Tabs
@@ -68,7 +80,7 @@ export default function TabLayout() {
         tabBarStyle: [
           styles.tabBar,
           {
-            paddingHorizontal: screenWidth * 0.08,
+            paddingHorizontal: tabHorizontalPadding,
             bottom: 0,
             height: 80 + Math.max(insets.bottom, 20),
             paddingBottom: Math.max(insets.bottom, 20),

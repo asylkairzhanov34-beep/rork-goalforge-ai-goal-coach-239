@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Sparkles } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
+const { width: INIT_WIDTH, height: INIT_HEIGHT } = Dimensions.get('window');
 
 const VIDEO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/k1zzetp7zbzgwvqznsmbm';
 
@@ -103,6 +103,7 @@ export default function VideoIntro2Screen() {
             shouldPlay
             isLooping={false}
             isMuted={false}
+            progressUpdateIntervalMillis={500}
             onPlaybackStatusUpdate={handleVideoLoad}
             onError={(error: string) => handleVideoError(error)}
           />
@@ -152,8 +153,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   video: {
-    width: width,
-    height: height,
+    width: INIT_WIDTH,
+    height: INIT_HEIGHT,
   },
   videoHidden: {
     opacity: 0,

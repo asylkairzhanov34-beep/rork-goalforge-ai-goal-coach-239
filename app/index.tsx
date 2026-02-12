@@ -1,17 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Redirect } from 'expo-router';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
-const MAX_LOADING_TIMEOUT = 6000;
+const MAX_LOADING_TIMEOUT = 4000;
 
 export default function Index() {
-  const [isReady, setIsReady] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const [forceReady, setForceReady] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasLoggedRouting = useRef(false);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
@@ -26,90 +23,50 @@ export default function Index() {
   const { isInitialized: subInitialized } = useSubscription();
 
   useEffect(() => {
-    setIsClient(true);
-    
-    timeoutRef.current = setTimeout(() => {
-      console.warn('[Index] Loading timeout reached after 6s, forcing app to proceed');
+    const timeoutId = setTimeout(() => {
+      console.warn('[Index] Loading timeout reached, forcing proceed');
       setForceReady(true);
     }, MAX_LOADING_TIMEOUT);
     
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
+    return () => clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
-    if (!isClient) {
-      return;
-    }
-    const initializeApp = async () => {
-      try {
-        await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
-        setIsReady(true);
-      } catch (err) {
-        console.error('[Index] Init error:', err);
-        setIsReady(true);
-      }
-    };
-    initializeApp();
-  }, [isClient]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !profile?.isCompleted || welcomeOnboardingCompleted) {
-      return;
-    }
-
+    if (!isAuthenticated || !profile?.isCompleted || welcomeOnboardingCompleted) return;
     console.log('[Index] Restoring welcome onboarding flag from Firebase profile');
-    setWelcomeOnboardingCompleted(true).catch((error) => {
-      console.warn('[Index] Failed to restore welcome onboarding flag:', error);
-    });
+    setWelcomeOnboardingCompleted(true).catch(() => {});
   }, [isAuthenticated, profile?.isCompleted, setWelcomeOnboardingCompleted, welcomeOnboardingCompleted]);
 
-  if (!isClient || !isReady) {
+  const route = useMemo(() => {
+    if (authLoading && !forceReady) return 'loading';
+    if (!isAuthenticated || needsLoginGate || requiresFirstLogin) return 'auth';
+    if (!welcomeOnboardingCompleted) return 'video-intro';
+    if (setupLoading && !forceReady) return 'loading-setup';
+    if (!profile || !profile.nickname || !profile.isCompleted) return 'first-time-setup';
+    return 'home';
+  }, [authLoading, forceReady, isAuthenticated, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted, setupLoading, profile]);
+
+  if (route === 'loading' || route === 'loading-setup') {
     return <AppLoadingScreen testID="app-loading" />;
   }
 
-  if (authLoading && !forceReady) {
-    return <AppLoadingScreen testID="app-loading-auth" />;
-  }
-
-  if (timeoutRef.current && (!authLoading && !setupLoading)) {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-  }
-
-  if (!isAuthenticated || needsLoginGate || requiresFirstLogin) {
+  if (route === 'auth') {
     if (!hasLoggedRouting.current) {
-      console.log('[Index] Routing to /auth:', { isAuthenticated, needsLoginGate, requiresFirstLogin });
+      console.log('[Index] Routing to /auth');
       hasLoggedRouting.current = true;
     }
     return <Redirect href="/auth" />;
   }
 
-  if (!welcomeOnboardingCompleted) {
-    console.log('[Index] Redirecting to video-intro');
+  if (route === 'video-intro') {
     return <Redirect href="/video-intro" />;
   }
 
-  if (setupLoading && !forceReady) {
-    console.log('[Index] Waiting for setup profile to load from Firebase...');
-    return <AppLoadingScreen testID="app-loading-setup" />;
-  }
-
-  if (!profile || !profile.nickname || !profile.isCompleted) {
-    console.log('[Index] Redirecting to first-time-setup:', {
-      hasProfile: !!profile,
-      hasNickname: !!profile?.nickname,
-      isCompleted: profile?.isCompleted,
-      setupLoading,
-      forceReady,
-    });
+  if (route === 'first-time-setup') {
     return <Redirect href="/first-time-setup" />;
   }
 
-  console.log('[Index] ✅ All checks passed, routing to home');
+  console.log('[Index] All checks passed, routing to home');
   return <Redirect href="/(tabs)/home" />;
 }
 
