@@ -22,7 +22,7 @@ const AUTH_STORAGE_KEY = 'auth_user_firebase';
 const AUTH_LOGIN_GATE_KEY = 'auth_login_gate_v1';
 const FIRST_LAUNCH_KEY = 'app_first_launch_v1';
 const WELCOME_ONBOARDING_KEY = 'welcome_onboarding_completed_v1';
-const AUTH_INIT_TIMEOUT = 4000;
+const AUTH_INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 4000;
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const queryClient = useQueryClient();

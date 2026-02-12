@@ -45,7 +45,7 @@ interface FirebaseSubscriptionData {
   platform?: string;
 }
 
-const INIT_TIMEOUT = 5000;
+const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 5000;
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
   return Promise.race([
@@ -171,7 +171,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       try {
         const firebaseData = await withTimeout(
           loadSubscriptionFromFirebase(),
-          2000,
+          Platform.OS === 'web' ? 1000 : 2000,
           null
         );
         
@@ -181,15 +181,13 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           lastSyncedStatus.current = 'premium';
         }
 
-        const rcInitialized = await withTimeout(
-          initializeRevenueCat(),
-          3000,
-          false
-        );
+        const rcInitialized = Platform.OS === 'web'
+          ? false
+          : await withTimeout(initializeRevenueCat(), 3000, false);
         revenueCatInitialized.current = rcInitialized;
         
         if (!rcInitialized) {
-          console.warn('[Subscription] RevenueCat init failed or timed out');
+          console.warn('[Subscription] RevenueCat init failed or timed out or web');
           if (!firebaseData?.isPremium) {
             setStatus('free');
           }
@@ -208,9 +206,10 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           }
         }
 
+        const rcTimeout = Platform.OS === 'web' ? 1500 : 3000;
         const [info, offerings] = await Promise.all([
-          withTimeout(getCustomerInfo(), 3000, null),
-          withTimeout(getOfferings(), 3000, null),
+          withTimeout(getCustomerInfo(), rcTimeout, null),
+          withTimeout(getOfferings(), rcTimeout, null),
         ]);
 
         if (info) {

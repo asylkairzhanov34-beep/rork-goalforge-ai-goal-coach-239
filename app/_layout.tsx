@@ -328,24 +328,16 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
     
-    const prepareApp = async () => {
-      try {
-        await clearCorruptedStorage();
-      } catch (error) {
-        console.error('[RootLayout] Preparation error:', error);
-      } finally {
-        if (mounted) {
-          setIsHydrated(true);
-          SplashScreen.hideAsync().catch(() => {});
-          
-          requestAnimationFrame(() => {
-            if (mounted) setProvidersReady(true);
-          });
-        }
-      }
-    };
+    setIsHydrated(true);
+    SplashScreen.hideAsync().catch(() => {});
+    
+    requestAnimationFrame(() => {
+      if (mounted) setProvidersReady(true);
+    });
 
-    prepareApp();
+    clearCorruptedStorage().catch((error) => {
+      console.error('[RootLayout] Storage cleanup error:', error);
+    });
     
     return () => { mounted = false; };
   }, []);

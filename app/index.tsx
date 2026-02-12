@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
-const MAX_LOADING_TIMEOUT = 8000;
+const MAX_LOADING_TIMEOUT = 4000;
 
 export default function Index() {
   const [isReady, setIsReady] = useState(false);
@@ -66,7 +66,7 @@ export default function Index() {
     });
   }, [isAuthenticated, profile?.isCompleted, setWelcomeOnboardingCompleted, welcomeOnboardingCompleted]);
 
-  const isStillLoading = !isClient || !isReady || authLoading || setupLoading || !subInitialized;
+  const isStillLoading = !isClient || !isReady || authLoading || setupLoading;
   
   if (isStillLoading && !forceReady) {
     return <AppLoadingScreen testID="app-loading" />;

@@ -93,7 +93,7 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const timer = setTimeout(handleFinish, 2000);
+      const timer = setTimeout(handleFinish, 800);
       return () => clearTimeout(timer);
     }
   }, [handleFinish]);
