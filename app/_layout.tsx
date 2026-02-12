@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, Component, ReactNode, useState, memo } from "react";
-import { StyleSheet, Text, View, LogBox, InteractionManager } from "react-native";
+import { StyleSheet, Text, View, LogBox, InteractionManager, TouchableOpacity } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { clearCorruptedStorage } from '@/utils/storage-helper';
 import { disableLogsInProduction } from '@/utils/performance';
@@ -53,10 +53,16 @@ class ErrorBoundary extends Component<
     if (this.state.hasError && this.state.error) {
       return (
         <View style={errorStyles.container}>
-          <Text style={errorStyles.title}>Что-то пошло не так</Text>
+          <Text style={errorStyles.title}>Something went wrong</Text>
           <Text style={errorStyles.message}>
-            Перезапустите приложение
+            Please restart the application
           </Text>
+          <TouchableOpacity
+            style={errorStyles.retryButton}
+            onPress={() => this.setState({ hasError: false, error: undefined })}
+          >
+            <Text style={errorStyles.retryText}>Try Again</Text>
+          </TouchableOpacity>
           <Text style={errorStyles.errorDetail}>
             {this.state.error.message}
           </Text>
@@ -422,5 +428,17 @@ const errorStyles = StyleSheet.create({
     color: '#999',
     fontSize: 12,
     paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  retryText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#000',
   },
 });

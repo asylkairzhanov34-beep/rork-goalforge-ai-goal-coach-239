@@ -82,7 +82,7 @@ const slides: OnboardingSlide[] = [
   {
     id: '5',
     title: 'Start Your\nTransformation',
-    subtitle: 'Unlock the full power of GoalCoach AI and take control of your life today.',
+    subtitle: 'Unlock the full power of GoalForge AI and take control of your life today.',
     image: 'https://images.unsplash.com/photo-1492681290082-e932832941e6?w=800&q=80',
     features: [
       { icon: Brain, text: 'Unlimited AI planning' },

@@ -152,8 +152,8 @@ export default function ProfileScreen() {
     {
       icon: Info,
       title: 'About',
-      subtitle: 'Version 1.0.2',
-      onPress: () => Alert.alert('GoalCoach AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0.2'),
+      subtitle: 'Version 1.0.6',
+      onPress: () => Alert.alert('GoalForge AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0.6'),
       iconColor: '#9CA3AF',
     },
   ];
@@ -471,7 +471,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {(__DEV__ || Constants?.appOwnership === 'expo' || Constants?.executionEnvironment === 'storeClient') && (
+          {__DEV__ && (
             <TouchableOpacity
               style={styles.devEntry}
               onPress={() => router.push('/dev-subscription-tools')}

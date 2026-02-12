@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -8,8 +8,10 @@ import {
   Switch,
   Alert,
   Linking,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { 
@@ -116,6 +118,64 @@ export default function SettingsScreen() {
   const [autoStartTimer, setAutoStartTimer] = useState(false);
   const [dailyReminder, setDailyReminder] = useState(true);
   const [weeklyReport, setWeeklyReport] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@app_settings');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (typeof parsed.soundEnabled === 'boolean') setSoundEnabled(parsed.soundEnabled);
+          if (typeof parsed.vibrationEnabled === 'boolean') setVibrationEnabled(parsed.vibrationEnabled);
+          if (typeof parsed.autoStartTimer === 'boolean') setAutoStartTimer(parsed.autoStartTimer);
+          if (typeof parsed.dailyReminder === 'boolean') setDailyReminder(parsed.dailyReminder);
+          if (typeof parsed.weeklyReport === 'boolean') setWeeklyReport(parsed.weeklyReport);
+        }
+      } catch (e) {
+        console.warn('[Settings] Failed to load settings:', e);
+      } finally {
+        setSettingsLoaded(true);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const persistSetting = useCallback(async (key: string, value: boolean) => {
+    try {
+      const stored = await AsyncStorage.getItem('@app_settings');
+      const current = stored ? JSON.parse(stored) : {};
+      current[key] = value;
+      await AsyncStorage.setItem('@app_settings', JSON.stringify(current));
+    } catch (e) {
+      console.warn('[Settings] Failed to save setting:', e);
+    }
+  }, []);
+
+  const handleSoundChange = useCallback((v: boolean) => {
+    setSoundEnabled(v);
+    persistSetting('soundEnabled', v);
+  }, [persistSetting]);
+
+  const handleVibrationChange = useCallback((v: boolean) => {
+    setVibrationEnabled(v);
+    persistSetting('vibrationEnabled', v);
+  }, [persistSetting]);
+
+  const handleAutoStartChange = useCallback((v: boolean) => {
+    setAutoStartTimer(v);
+    persistSetting('autoStartTimer', v);
+  }, [persistSetting]);
+
+  const handleDailyReminderChange = useCallback((v: boolean) => {
+    setDailyReminder(v);
+    persistSetting('dailyReminder', v);
+  }, [persistSetting]);
+
+  const handleWeeklyReportChange = useCallback((v: boolean) => {
+    setWeeklyReport(v);
+    persistSetting('weeklyReport', v);
+  }, [persistSetting]);
 
   const handleBack = () => {
     router.back();
@@ -174,14 +234,14 @@ export default function SettingsScreen() {
   };
 
   const handleContactSupport = () => {
-    Linking.openURL('mailto:goalforge.dev1@gmail.com?subject=GoalCoach Support');
+    Linking.openURL('mailto:goalforge.dev1@gmail.com?subject=GoalForge Support');
   };
 
   const handleRateApp = () => {
     const storeUrl = Platform.select({
-      ios: 'https://apps.apple.com/app/goalcoach/id123456789',
-      android: 'https://play.google.com/store/apps/details?id=com.goalcoach.app',
-      default: 'https://goalcoach.app'
+      ios: 'https://apps.apple.com/account/subscriptions',
+      android: 'https://play.google.com/store/apps/details?id=app.goalforge-ai-goal-coach',
+      default: 'https://apps.apple.com'
     });
     
     Alert.alert(
@@ -334,14 +394,14 @@ export default function SettingsScreen() {
               title="Sound Effects"
               subtitle="Sounds in timer and app"
               value={soundEnabled}
-              onValueChange={setSoundEnabled}
+              onValueChange={handleSoundChange}
             />
             <SettingItem
               icon={Vibrate}
               title="Vibration"
               subtitle="Haptic feedback"
               value={vibrationEnabled}
-              onValueChange={setVibrationEnabled}
+              onValueChange={handleVibrationChange}
             />
             <SettingItem
               icon={Bell}
@@ -359,14 +419,14 @@ export default function SettingsScreen() {
               title="Auto Start"
               subtitle="Automatically start next session"
               value={autoStartTimer}
-              onValueChange={setAutoStartTimer}
+              onValueChange={handleAutoStartChange}
             />
             <SettingItem
               icon={Bell}
               title="Daily Reminder"
               subtitle="Remind about focus sessions"
               value={dailyReminder}
-              onValueChange={setDailyReminder}
+              onValueChange={handleDailyReminderChange}
             />
           </View>
 
@@ -377,7 +437,7 @@ export default function SettingsScreen() {
               title="Weekly Report"
               subtitle="Receive summary every week"
               value={weeklyReport}
-              onValueChange={setWeeklyReport}
+              onValueChange={handleWeeklyReportChange}
             />
           </View>
 
@@ -419,16 +479,7 @@ export default function SettingsScreen() {
                 iconColor="#EF4444"
               />
             )}
-            {__DEV__ && (
-              <SettingItem
-                icon={Shield}
-                title="Developer Tools"
-                subtitle="Debug subscription state"
-                onPress={handleOpenDevTools}
-                showArrow
-                iconColor="#8B5CF6"
-              />
-            )}
+
           </View>
 
 
@@ -454,7 +505,7 @@ export default function SettingsScreen() {
               icon={HelpCircle}
               title="FAQ"
               subtitle="Frequently asked questions"
-              onPress={() => Alert.alert('FAQ', 'This section will be available soon')}
+              onPress={() => Linking.openURL('mailto:goalforge.dev1@gmail.com?subject=GoalForge FAQ')}
               showArrow
               iconColor="#8B5CF6"
             />
@@ -503,9 +554,9 @@ export default function SettingsScreen() {
           </View>
 
           <View style={styles.appInfo}>
-            <Text style={styles.appName}>GoalCoach AI</Text>
+            <Text style={styles.appName}>GoalForge AI</Text>
             <Text style={styles.appVersion}>Version 1.0.6</Text>
-            <Text style={styles.appCopyright}>© 2024 GoalCoach. All rights reserved.</Text>
+            <Text style={styles.appCopyright}>© 2025 GoalForge. All rights reserved.</Text>
           </View>
         </ScrollView>
       </View>

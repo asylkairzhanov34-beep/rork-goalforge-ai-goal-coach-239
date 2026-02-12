@@ -159,7 +159,7 @@ export default function VideoIntroScreen() {
         {videoError || Platform.OS === 'web' ? (
           <View style={styles.videoErrorContainer}>
             <Sparkles size={64} color="#F59E0B" />
-            <Text style={styles.videoErrorTitle}>GoalCoach AI</Text>
+            <Text style={styles.videoErrorTitle}>GoalForge AI</Text>
             <Text style={styles.videoErrorText}>Welcome!</Text>
           </View>
         ) : (

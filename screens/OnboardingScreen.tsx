@@ -76,7 +76,7 @@ export function OnboardingScreen() {
               >
                 <Target size={32} color="#FFFFFF" />
               </LinearGradient>
-              <Text style={styles.appName}>GoalCoach AI</Text>
+              <Text style={styles.appName}>GoalForge AI</Text>
             </View>
 
             <View style={styles.content}>
