@@ -217,7 +217,7 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
         schema: GeneratedPlanSchema,
       });
 
-      const tasks: ChallengeTask[] = result.tasks.map((t, idx) => ({
+      const tasks: ChallengeTask[] = result.tasks.map((t: any, idx: number) => ({
         id: `task_${Date.now()}_${idx}`,
         title: t.title,
         description: t.description,
