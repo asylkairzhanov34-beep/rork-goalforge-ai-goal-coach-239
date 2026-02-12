@@ -32,8 +32,17 @@ export type RevenueCatOfferings = {
 
 let Purchases: any = null;
 let LOG_LEVEL: any = null;
+let isExpoGo = false;
 
 if (Platform.OS !== 'web') {
+  try {
+    const Constants = require('expo-constants').default;
+    isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+    console.log('[RevenueCat] Running in Expo Go:', isExpoGo);
+  } catch (e) {
+    console.log('[RevenueCat] Could not detect Expo Go status');
+  }
+  
   try {
     const mod = require('react-native-purchases');
     Purchases = mod.default || mod;
@@ -57,6 +66,11 @@ function getPrimaryApiKey(): { key: string | undefined; type: 'test' | 'ios' | '
     return { key: TEST_KEY, type: 'test' };
   }
   
+  if (isExpoGo) {
+    console.log('[RevenueCat] Expo Go detected - using Test Store API key');
+    return { key: TEST_KEY, type: 'test' };
+  }
+  
   if (Platform.OS === 'ios' && IOS_KEY) {
     return { key: IOS_KEY, type: 'ios' };
   }
@@ -77,13 +91,40 @@ const configureWithKey = async (apiKey: string, keyType: 'test' | 'ios' | 'andro
     if (LOG_LEVEL) {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
+    
+    if (isExpoGo && keyType !== 'test') {
+      console.warn('[RevenueCat] Expo Go requires Test Store API key, switching...');
+      if (TEST_KEY) {
+        Purchases.configure({ apiKey: TEST_KEY });
+        isConfigured = true;
+        currentApiKeyType = 'test';
+        console.log('[RevenueCat] Configured with TEST key (Expo Go)');
+        return true;
+      }
+      return false;
+    }
+    
     Purchases.configure({ apiKey });
     isConfigured = true;
     currentApiKeyType = keyType;
     console.log(`[RevenueCat] Configured with ${keyType.toUpperCase()} key`);
     return true;
-  } catch (error) {
-    console.error(`[RevenueCat] Configuration error (${keyType}):`, error);
+  } catch (error: any) {
+    console.error(`[RevenueCat] Configuration error (${keyType}):`, error?.message || error);
+    
+    if (isExpoGo && TEST_KEY && keyType !== 'test') {
+      console.log('[RevenueCat] Retrying with Test Store key...');
+      try {
+        Purchases.configure({ apiKey: TEST_KEY });
+        isConfigured = true;
+        currentApiKeyType = 'test';
+        console.log('[RevenueCat] Configured with TEST key after fallback');
+        return true;
+      } catch (retryError) {
+        console.error('[RevenueCat] Test Store fallback also failed:', retryError);
+      }
+    }
+    
     return false;
   }
 };

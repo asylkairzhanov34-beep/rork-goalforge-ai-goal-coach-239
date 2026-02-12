@@ -102,9 +102,7 @@ const LazyFloatingStreak = React.lazy(() =>
   import('@/components/FloatingDynamicIslandStreak').then(m => ({ default: m.FloatingDynamicIslandStreak }))
 );
 
-const LazyGlobalNotificationsGate = React.lazy(() => 
-  import('@/components/GlobalNotificationsGate').then(m => ({ default: m.GlobalNotificationsGate }))
-);
+import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
 
 function StreakCelebrationOverlay() {
   const { isVisible, hideCelebration } = useStreakCelebration();
@@ -129,11 +127,7 @@ function DeferredNotificationsGate() {
     return () => clearTimeout(timer);
   }, []);
   if (!ready) return null;
-  return (
-    <React.Suspense fallback={null}>
-      <LazyGlobalNotificationsGate />
-    </React.Suspense>
-  );
+  return <GlobalNotificationsGate />;
 }
 
 function RootLayoutNav() {
