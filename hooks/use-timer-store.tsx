@@ -7,6 +7,8 @@ import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
 import { useNotifications } from './use-notifications';
 import { SoundId, DEFAULT_SOUND_ID } from '@/constants/sounds';
 import { SoundManager } from '@/utils/SoundManager';
+import { useAuth } from '@/hooks/use-auth-store';
+import { getUserTimerSessions, saveUserTimerSessions } from '@/lib/firebase';
 
 const LiveActivityModule = NativeModules.LiveActivityModule;
 
@@ -72,7 +74,17 @@ const TIMER_DURATIONS = {
   longBreak: 15 * 60,
 };
 
+const getTimerStorageKeys = (userId: string) => ({
+  SESSIONS: `timerSessions_${userId}`,
+  SOUND: `notificationSound_${userId}`,
+});
+
 export const [TimerProvider, useTimer] = createContextHook(() => {
+  const { user } = useAuth();
+  const userId = user?.id || 'default';
+  const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+  const TIMER_KEYS = getTimerStorageKeys(userId);
+
   const [state, setState] = useState<TimerState>({
     isRunning: false,
     isPaused: false,
@@ -704,13 +716,40 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
       await setupNotificationCategories();
 
-      const stored = await safeStorageGet<TimerSession[]>('timerSessions', []);
-      const sessions = stored.map((session: any) => ({
-        ...session,
-        completedAt: session.completedAt ? new Date(session.completedAt) : undefined
-      }));
+      let sessions: TimerSession[] = [];
+
+      if (isRealUser) {
+        try {
+          const firebaseSessions = await getUserTimerSessions(userId);
+          if (firebaseSessions && firebaseSessions.length > 0) {
+            console.log('[TimerStore] Loaded sessions from Firebase:', firebaseSessions.length);
+            sessions = firebaseSessions.map((session: any) => ({
+              ...session,
+              completedAt: session.completedAt ? new Date(session.completedAt) : undefined
+            }));
+            await safeStorageSet(TIMER_KEYS.SESSIONS, firebaseSessions);
+          }
+        } catch (error) {
+          console.warn('[TimerStore] Firebase load failed, falling back to local:', error);
+        }
+      }
+
+      if (sessions.length === 0) {
+        const stored = await safeStorageGet<TimerSession[]>(TIMER_KEYS.SESSIONS, []);
+        sessions = stored.map((session: any) => ({
+          ...session,
+          completedAt: session.completedAt ? new Date(session.completedAt) : undefined
+        }));
+
+        if (isRealUser && sessions.length > 0) {
+          console.log('[TimerStore] Syncing local sessions to Firebase...');
+          saveUserTimerSessions(userId, stored).catch(e =>
+            console.warn('[TimerStore] Background sync failed:', e)
+          );
+        }
+      }
       
-      const storedSound = await safeStorageGet<SoundId>('notificationSound', DEFAULT_SOUND_ID);
+      const storedSound = await safeStorageGet<SoundId>(TIMER_KEYS.SOUND, DEFAULT_SOUND_ID);
       console.log('[TimerStore] Loaded sound:', storedSound);
       
       setState(prev => ({ 
@@ -870,9 +909,19 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
   useEffect(() => {
     if (state.sessions.length > 0) {
-      safeStorageSet('timerSessions', state.sessions);
+      const serialized = state.sessions.map(s => ({
+        ...s,
+        completedAt: s.completedAt instanceof Date ? s.completedAt.toISOString() : s.completedAt,
+      }));
+      safeStorageSet(TIMER_KEYS.SESSIONS, serialized);
+
+      if (isRealUser) {
+        saveUserTimerSessions(userId, serialized).catch(e =>
+          console.warn('[TimerStore] Firebase session sync failed:', e)
+        );
+      }
     }
-  }, [state.sessions]);
+  }, [state.sessions, TIMER_KEYS.SESSIONS, isRealUser, userId]);
 
 
 
@@ -1013,7 +1062,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       ...prev,
       notificationSound: sound,
     }));
-    safeStorageSet('notificationSound', sound);
+    safeStorageSet(TIMER_KEYS.SOUND, sound);
   }, []);
 
   const setCustomDuration = useCallback((seconds: number) => {

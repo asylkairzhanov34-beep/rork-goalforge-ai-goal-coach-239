@@ -1,9 +1,12 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useProgress } from '@/hooks/use-progress';
+import { useAuth } from '@/hooks/use-auth-store';
 import { ChatMessage, ChatAttachment } from '@/types/chat';
+import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
+import { getUserChatHistory, saveUserChatHistory } from '@/lib/firebase';
 
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 
 // OpenAI API ключ
 const OPENAI_API_KEY = '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';
@@ -51,7 +54,10 @@ interface TaskCreationState {
   };
 }
 
+const getChatStorageKey = (userId: string) => `chat_history_${userId}`;
+
 export const [ChatProvider, useChat] = createContextHook(() => {
+  const { user } = useAuth();
   const goalStore = useGoalStore();
   const progress = useProgress();
   const [messages, setMessages] = useState<OpenAIMessage[]>([]);
@@ -59,11 +65,69 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   const [chatError, setChatError] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskFormData, setTaskFormData] = useState<GeneratedTaskData | null>(null);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const taskCreationState = useRef<TaskCreationState>({
     isActive: false,
     stage: null,
     collectedInfo: {},
   });
+
+  const userId = user?.id || 'default';
+  const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+  const chatStorageKey = getChatStorageKey(userId);
+
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        console.log('[Chat] Loading chat history for user:', userId);
+
+        if (isRealUser) {
+          try {
+            const firebaseMessages = await getUserChatHistory(userId);
+            if (firebaseMessages && firebaseMessages.length > 0) {
+              console.log('[Chat] Loaded from Firebase:', firebaseMessages.length);
+              setMessages(firebaseMessages);
+              await safeStorageSet(chatStorageKey, firebaseMessages);
+              setChatLoaded(true);
+              return;
+            }
+          } catch (error) {
+            console.warn('[Chat] Firebase chat load failed:', error);
+          }
+        }
+
+        const stored = await safeStorageGet<OpenAIMessage[]>(chatStorageKey, []);
+        if (stored.length > 0) {
+          console.log('[Chat] Loaded from local:', stored.length);
+          setMessages(stored);
+
+          if (isRealUser) {
+            saveUserChatHistory(userId, stored).catch(e =>
+              console.warn('[Chat] Background chat sync failed:', e)
+            );
+          }
+        }
+      } catch (error) {
+        console.warn('[Chat] Error loading chat history:', error);
+      } finally {
+        setChatLoaded(true);
+      }
+    };
+
+    loadChatHistory();
+  }, [userId]);
+
+  const persistMessages = useCallback((newMessages: OpenAIMessage[]) => {
+    const toSave = newMessages.filter(m => m.role !== 'system').slice(-50);
+    safeStorageSet(chatStorageKey, toSave).catch(e =>
+      console.warn('[Chat] Local chat save failed:', e)
+    );
+    if (isRealUser) {
+      saveUserChatHistory(userId, toSave).catch(e =>
+        console.warn('[Chat] Firebase chat save failed:', e)
+      );
+    }
+  }, [chatStorageKey, isRealUser, userId]);
 
   const detectTaskCreationIntent = useCallback((text: string): boolean => {
     const lowerText = text.toLowerCase();
@@ -350,7 +414,11 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
         console.log('[Chat] Processing task creation conversation, stage:', taskCreationState.current.stage);
         const response = await processTaskCreationConversation(trimmed);
         if (response) {
-          setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+          setMessages(prev => {
+            const updated = [...prev, { role: 'assistant' as const, content: response }];
+            persistMessages(updated);
+            return updated;
+          });
           return;
         }
       }
@@ -370,7 +438,11 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
 
 Что нужно сделать? Опишите задачу в нескольких словах.`;
         
-        setMessages(prev => [...prev, { role: 'assistant', content: askMessage }]);
+        setMessages(prev => {
+          const updated = [...prev, { role: 'assistant' as const, content: askMessage }];
+          persistMessages(updated);
+          return updated;
+        });
         return;
       }
 
@@ -428,7 +500,11 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
       }
 
       console.log('[Chat] Response received successfully');
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantContent }]);
+      setMessages(prev => {
+        const updated = [...prev, { role: 'assistant' as const, content: assistantContent }];
+        persistMessages(updated);
+        return updated;
+      });
 
     } catch (error: any) {
       console.error('[Chat] Error:', error);
@@ -448,7 +524,11 @@ ${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : 
     setMessages([]);
     setChatError(null);
     taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-  }, []);
+    safeStorageSet(chatStorageKey, []).catch(() => {});
+    if (isRealUser) {
+      saveUserChatHistory(userId, []).catch(() => {});
+    }
+  }, [chatStorageKey, isRealUser, userId]);
 
   const closeTaskForm = useCallback(() => {
     setShowTaskForm(false);

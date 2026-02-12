@@ -1,28 +1,75 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { generateText } from '@rork-ai/toolkit-sdk';
 import { JournalEntry, DAILY_PROMPTS } from '@/types/journal';
+import { useAuth } from '@/hooks/use-auth-store';
+import { getUserJournal, saveUserJournal } from '@/lib/firebase';
 
-const STORAGE_KEY = 'journal_entries';
+const getStorageKey = (userId: string) => `journal_entries_${userId}`;
 
 export const [JournalProvider, useJournal] = createContextHook(() => {
+  const { user } = useAuth();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  const userId = user?.id || 'default';
+  const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (prevUserIdRef.current === undefined) {
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+    if (prevUserIdRef.current !== currentUserId) {
+      console.log('[JournalStore] User changed, resetting');
+      setEntries([]);
+      setIsLoading(true);
+      prevUserIdRef.current = currentUserId;
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     loadEntries();
-  }, []);
+  }, [userId]);
 
   const loadEntries = async () => {
+    setIsLoading(true);
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log('[JournalStore] Loading entries for user:', userId);
+
+      if (isRealUser) {
+        try {
+          const firebaseEntries = await getUserJournal(userId);
+          if (firebaseEntries && firebaseEntries.length > 0) {
+            console.log('[JournalStore] Loaded from Firebase:', firebaseEntries.length);
+            setEntries(firebaseEntries);
+            await AsyncStorage.setItem(getStorageKey(userId), JSON.stringify(firebaseEntries));
+            return;
+          }
+        } catch (error) {
+          console.warn('[JournalStore] Firebase load failed, falling back to local:', error);
+        }
+      }
+
+      const stored = await AsyncStorage.getItem(getStorageKey(userId));
       if (stored) {
-        setEntries(JSON.parse(stored));
+        const localEntries = JSON.parse(stored);
+        console.log('[JournalStore] Loaded from local:', localEntries.length);
+        setEntries(localEntries);
+
+        if (isRealUser && localEntries.length > 0) {
+          console.log('[JournalStore] Syncing local entries to Firebase...');
+          saveUserJournal(userId, localEntries).catch(e =>
+            console.warn('[JournalStore] Background sync failed:', e)
+          );
+        }
       }
     } catch (error) {
-      console.log('Error loading journal entries:', error);
+      console.log('[JournalStore] Error loading journal entries:', error);
     } finally {
       setIsLoading(false);
     }
@@ -30,10 +77,16 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
 
   const saveEntries = async (newEntries: JournalEntry[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newEntries));
+      await AsyncStorage.setItem(getStorageKey(userId), JSON.stringify(newEntries));
       setEntries(newEntries);
+
+      if (isRealUser) {
+        saveUserJournal(userId, newEntries).catch(e =>
+          console.warn('[JournalStore] Firebase save failed:', e)
+        );
+      }
     } catch (error) {
-      console.log('Error saving journal entries:', error);
+      console.log('[JournalStore] Error saving journal entries:', error);
     }
   };
 
@@ -76,7 +129,7 @@ Provide a short, personalized insight (like "Your motivation is up 20%!" or "I n
 
       return insight || "Great job reflecting today! 🌟";
     } catch (error) {
-      console.log('Error generating AI insight:', error);
+      console.log('[JournalStore] Error generating AI insight:', error);
       return "Thanks for sharing! Keep up the reflection habit! ✨";
     }
   };

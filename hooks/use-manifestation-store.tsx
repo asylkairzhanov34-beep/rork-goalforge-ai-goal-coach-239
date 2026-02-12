@@ -1,13 +1,15 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ManifestationSession, ManifestationSettings, ManifestationStats } from '@/types/manifestation';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
+import { useAuth } from '@/hooks/use-auth-store';
+import { getUserManifestations, saveUserManifestations } from '@/lib/firebase';
 
-const STORAGE_KEYS = {
-  MANIFESTATION_SESSIONS: 'manifestation_sessions',
-  MANIFESTATION_SETTINGS: 'manifestation_settings',
-};
+const getStorageKeys = (userId: string) => ({
+  SESSIONS: `manifestation_sessions_${userId}`,
+  SETTINGS: `manifestation_settings_${userId}`,
+});
 
 const DEFAULT_SETTINGS: ManifestationSettings = {
   sessionDuration: 3,
@@ -19,27 +21,100 @@ const DEFAULT_SETTINGS: ManifestationSettings = {
 };
 
 export const [ManifestationProvider, useManifestationStore] = createContextHook(() => {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sessions, setSessions] = useState<ManifestationSession[]>([]);
   const [settings, setSettings] = useState<ManifestationSettings>(DEFAULT_SETTINGS);
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
-  // Load sessions
+  const userId = user?.id || 'default';
+  const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+  const STORAGE_KEYS = getStorageKeys(userId);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (prevUserIdRef.current === undefined) {
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+    if (prevUserIdRef.current !== currentUserId) {
+      console.log('[ManifestationStore] User changed, resetting');
+      setSessions([]);
+      setSettings(DEFAULT_SETTINGS);
+      prevUserIdRef.current = currentUserId;
+    }
+  }, [user?.id]);
+
+  const syncToFirebase = useCallback((newSessions: ManifestationSession[], newSettings: ManifestationSettings) => {
+    if (isRealUser) {
+      const serializedSessions = newSessions.map(s => ({
+        ...s,
+        completedAt: s.completedAt instanceof Date ? s.completedAt.toISOString() : s.completedAt,
+      }));
+      saveUserManifestations(userId, { sessions: serializedSessions, settings: newSettings }).catch(e =>
+        console.warn('[ManifestationStore] Firebase sync failed:', e)
+      );
+    }
+  }, [isRealUser, userId]);
+
   const sessionsQuery = useQuery({
-    queryKey: ['manifestation-sessions'],
+    queryKey: ['manifestation-sessions', userId],
     queryFn: async () => {
-      const data = await safeStorageGet(STORAGE_KEYS.MANIFESTATION_SESSIONS, []);
-      return data.map((session: any) => ({
+      console.log('[ManifestationStore] Loading sessions for user:', userId);
+
+      if (isRealUser) {
+        try {
+          const firebaseData = await getUserManifestations(userId);
+          if (firebaseData && firebaseData.sessions.length > 0) {
+            console.log('[ManifestationStore] Loaded from Firebase:', firebaseData.sessions.length);
+            const parsed = firebaseData.sessions.map((s: any) => ({
+              ...s,
+              completedAt: new Date(s.completedAt),
+            }));
+            await safeStorageSet(STORAGE_KEYS.SESSIONS, firebaseData.sessions);
+            if (firebaseData.settings) {
+              await safeStorageSet(STORAGE_KEYS.SETTINGS, firebaseData.settings);
+            }
+            return parsed;
+          }
+        } catch (error) {
+          console.warn('[ManifestationStore] Firebase load failed:', error);
+        }
+      }
+
+      const data = await safeStorageGet(STORAGE_KEYS.SESSIONS, []);
+      const parsed = data.map((session: any) => ({
         ...session,
         completedAt: new Date(session.completedAt)
       }));
+
+      if (isRealUser && parsed.length > 0) {
+        const localSettings = await safeStorageGet(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+        saveUserManifestations(userId, { sessions: data, settings: localSettings }).catch(e =>
+          console.warn('[ManifestationStore] Background sync failed:', e)
+        );
+      }
+
+      return parsed;
     },
   });
 
-  // Load settings
   const settingsQuery = useQuery({
-    queryKey: ['manifestation-settings'],
+    queryKey: ['manifestation-settings', userId],
     queryFn: async () => {
-      return await safeStorageGet(STORAGE_KEYS.MANIFESTATION_SETTINGS, DEFAULT_SETTINGS);
+      if (isRealUser) {
+        try {
+          const firebaseData = await getUserManifestations(userId);
+          if (firebaseData?.settings) {
+            console.log('[ManifestationStore] Settings loaded from Firebase');
+            await safeStorageSet(STORAGE_KEYS.SETTINGS, firebaseData.settings);
+            return firebaseData.settings as ManifestationSettings;
+          }
+        } catch (error) {
+          console.warn('[ManifestationStore] Firebase settings load failed:', error);
+        }
+      }
+      return await safeStorageGet(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
     },
   });
 
@@ -55,25 +130,27 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
     }
   }, [settingsQuery.data]);
 
-  // Save sessions mutation
   const saveSessionsMutation = useMutation({
-    mutationFn: async (sessions: ManifestationSession[]) => {
-      await safeStorageSet(STORAGE_KEYS.MANIFESTATION_SESSIONS, sessions);
-      return sessions;
+    mutationFn: async (newSessions: ManifestationSession[]) => {
+      const serialized = newSessions.map(s => ({
+        ...s,
+        completedAt: s.completedAt instanceof Date ? s.completedAt.toISOString() : s.completedAt,
+      }));
+      await safeStorageSet(STORAGE_KEYS.SESSIONS, serialized);
+      return newSessions;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manifestation-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['manifestation-sessions', userId] });
     },
   });
 
-  // Save settings mutation
   const saveSettingsMutation = useMutation({
-    mutationFn: async (settings: ManifestationSettings) => {
-      await safeStorageSet(STORAGE_KEYS.MANIFESTATION_SETTINGS, settings);
-      return settings;
+    mutationFn: async (newSettings: ManifestationSettings) => {
+      await safeStorageSet(STORAGE_KEYS.SETTINGS, newSettings);
+      return newSettings;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manifestation-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['manifestation-settings', userId] });
     },
   });
 
@@ -86,12 +163,14 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
     const updatedSessions = [...sessions, newSession];
     setSessions(updatedSessions);
     saveSessionsMutation.mutate(updatedSessions);
+    syncToFirebase(updatedSessions, settings);
   };
 
   const updateSettings = (newSettings: Partial<ManifestationSettings>) => {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
     saveSettingsMutation.mutate(updatedSettings);
+    syncToFirebase(sessions, updatedSettings);
   };
 
   const generateAffirmations = (goalTitle: string, goalDescription: string): string[] => {
@@ -103,7 +182,6 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
       'My actions naturally lead me to success and happiness',
     ];
     
-    // Personalized affirmations based on goal
     if (goalTitle.toLowerCase().includes('weight') || goalTitle.toLowerCase().includes('lose') || goalTitle.toLowerCase().includes('fit')) {
       baseAffirmations.push(
         'I feel lightness in my body and move with energy every day',
@@ -149,13 +227,11 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
     
     const totalTime = sessions.reduce((total, s) => total + s.duration, 0);
     
-    // Calculate mood improvement
     const sessionsWithMood = sessions.filter(s => s.moodBefore && s.moodAfter);
     const averageMoodImprovement = sessionsWithMood.length > 0
       ? sessionsWithMood.reduce((total, s) => total + (s.moodAfter! - s.moodBefore!), 0) / sessionsWithMood.length
       : 0;
     
-    // Calculate streak
     let currentStreak = 0;
     let bestStreak = 0;
     let tempStreak = 0;
@@ -206,4 +282,3 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
     getTodaySessions,
   };
 });
-

@@ -605,4 +605,255 @@ function removeUndefinedValues(obj: any): any {
   return obj;
 }
 
+export async function saveUserJournal(userId: string, entries: any[]): Promise<void> {
+  console.log('[Firebase] Saving journal entries:', userId, entries.length);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const cleanedEntries = removeUndefinedValues(entries);
+    await setDoc(userRef, {
+      journalEntries: cleanedEntries,
+      journalUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Journal entries saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save journal:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') {
+      console.error('[Firebase] ⚠️ PERMISSION DENIED - Journal NOT saved!');
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function getUserJournal(userId: string): Promise<any[]> {
+  console.log('[Firebase] Getting journal entries:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists() && docSnap.data().journalEntries) {
+      console.log('[Firebase] Journal entries found:', docSnap.data().journalEntries.length);
+      return docSnap.data().journalEntries;
+    }
+    console.log('[Firebase] No journal entries found');
+    return [];
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get journal:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return [];
+    throw error;
+  }
+}
+
+export async function saveUserChallenges(userId: string, data: { challenges: any[]; stats: any }): Promise<void> {
+  console.log('[Firebase] Saving challenges:', userId, data.challenges.length);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const cleaned = removeUndefinedValues(data);
+    await setDoc(userRef, {
+      challenges: cleaned.challenges,
+      challengeStats: cleaned.stats,
+      challengesUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Challenges saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save challenges:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return;
+    throw error;
+  }
+}
+
+export async function getUserChallenges(userId: string): Promise<{ challenges: any[]; stats: any } | null> {
+  console.log('[Firebase] Getting challenges:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.challenges || data.challengeStats) {
+        console.log('[Firebase] Challenges found:', data.challenges?.length || 0);
+        return {
+          challenges: data.challenges || [],
+          stats: data.challengeStats || null,
+        };
+      }
+    }
+    console.log('[Firebase] No challenges found');
+    return null;
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get challenges:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return null;
+    throw error;
+  }
+}
+
+export async function saveUserManifestations(userId: string, data: { sessions: any[]; settings: any }): Promise<void> {
+  console.log('[Firebase] Saving manifestations:', userId, data.sessions.length);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const cleaned = removeUndefinedValues(data);
+    await setDoc(userRef, {
+      manifestationSessions: cleaned.sessions,
+      manifestationSettings: cleaned.settings,
+      manifestationsUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Manifestations saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save manifestations:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return;
+    throw error;
+  }
+}
+
+export async function getUserManifestations(userId: string): Promise<{ sessions: any[]; settings: any } | null> {
+  console.log('[Firebase] Getting manifestations:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.manifestationSessions || data.manifestationSettings) {
+        console.log('[Firebase] Manifestations found:', data.manifestationSessions?.length || 0);
+        return {
+          sessions: data.manifestationSessions || [],
+          settings: data.manifestationSettings || null,
+        };
+      }
+    }
+    console.log('[Firebase] No manifestations found');
+    return null;
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get manifestations:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return null;
+    throw error;
+  }
+}
+
+export async function saveUserFocusShield(userId: string, data: { settings: any; stats: any; sessions: any[]; logs: any[] }): Promise<void> {
+  console.log('[Firebase] Saving focus shield:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const cleaned = removeUndefinedValues(data);
+    await setDoc(userRef, {
+      focusShieldSettings: cleaned.settings,
+      focusShieldStats: cleaned.stats,
+      focusShieldSessions: cleaned.sessions,
+      focusShieldLogs: cleaned.logs,
+      focusShieldUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Focus shield saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save focus shield:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return;
+    throw error;
+  }
+}
+
+export async function getUserFocusShield(userId: string): Promise<{ settings: any; stats: any; sessions: any[]; logs: any[] } | null> {
+  console.log('[Firebase] Getting focus shield:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.focusShieldSettings || data.focusShieldSessions) {
+        console.log('[Firebase] Focus shield found');
+        return {
+          settings: data.focusShieldSettings || null,
+          stats: data.focusShieldStats || null,
+          sessions: data.focusShieldSessions || [],
+          logs: data.focusShieldLogs || [],
+        };
+      }
+    }
+    console.log('[Firebase] No focus shield data found');
+    return null;
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get focus shield:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return null;
+    throw error;
+  }
+}
+
+export async function saveUserTimerSessions(userId: string, sessions: any[]): Promise<void> {
+  console.log('[Firebase] Saving timer sessions:', userId, sessions.length);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const cleanedSessions = removeUndefinedValues(sessions);
+    await setDoc(userRef, {
+      timerSessions: cleanedSessions,
+      timerUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Timer sessions saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save timer sessions:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return;
+    throw error;
+  }
+}
+
+export async function getUserTimerSessions(userId: string): Promise<any[]> {
+  console.log('[Firebase] Getting timer sessions:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists() && docSnap.data().timerSessions) {
+      console.log('[Firebase] Timer sessions found:', docSnap.data().timerSessions.length);
+      return docSnap.data().timerSessions;
+    }
+    console.log('[Firebase] No timer sessions found');
+    return [];
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get timer sessions:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return [];
+    throw error;
+  }
+}
+
+export async function saveUserChatHistory(userId: string, messages: any[]): Promise<void> {
+  console.log('[Firebase] Saving chat history:', userId, messages.length);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const last50 = messages.slice(-50);
+    const cleaned = removeUndefinedValues(last50);
+    await setDoc(userRef, {
+      chatHistory: cleaned,
+      chatUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Chat history saved successfully');
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to save chat history:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return;
+    throw error;
+  }
+}
+
+export async function getUserChatHistory(userId: string): Promise<any[]> {
+  console.log('[Firebase] Getting chat history:', userId);
+  try {
+    const firestore = getFirebaseDB();
+    const userRef = doc(firestore, 'users', userId);
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists() && docSnap.data().chatHistory) {
+      console.log('[Firebase] Chat history found:', docSnap.data().chatHistory.length);
+      return docSnap.data().chatHistory;
+    }
+    console.log('[Firebase] No chat history found');
+    return [];
+  } catch (error: any) {
+    console.error('[Firebase] FAILED to get chat history:', error?.code, error?.message);
+    if (error?.code === 'permission-denied') return [];
+    throw error;
+  }
+}
+
 export type { FirebaseUser, Timestamp };

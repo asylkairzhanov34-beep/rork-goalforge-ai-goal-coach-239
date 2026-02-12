@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
 import { generateObject } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
+import { getUserChallenges, saveUserChallenges } from '@/lib/firebase';
 
 const getStorageKeys = (userId: string) => ({
   ACTIVE_CHALLENGES: `active_challenges_${userId}`,
@@ -47,7 +48,9 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   const [activeChallenges, setActiveChallenges] = useState<ActiveChallenge[]>([]);
   const [stats, setStats] = useState<ChallengeStats>(DEFAULT_STATS);
 
-  const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
+  const userId = user?.id || 'default';
+  const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+  const STORAGE_KEYS = getStorageKeys(userId);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -65,11 +68,35 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   }, [user?.id]);
 
   const challengesQuery = useQuery({
-    queryKey: ['activeChallenges', user?.id, STORAGE_KEYS.ACTIVE_CHALLENGES],
+    queryKey: ['activeChallenges', userId, STORAGE_KEYS.ACTIVE_CHALLENGES],
     queryFn: async () => {
       if (!user?.id) return [];
-      console.log('[ChallengeStore] Loading active challenges for user:', user.id);
-      return await safeStorageGet<ActiveChallenge[]>(STORAGE_KEYS.ACTIVE_CHALLENGES, []);
+      console.log('[ChallengeStore] Loading challenges for user:', userId);
+
+      if (isRealUser) {
+        try {
+          const firebaseData = await getUserChallenges(userId);
+          if (firebaseData && firebaseData.challenges.length > 0) {
+            console.log('[ChallengeStore] Loaded from Firebase:', firebaseData.challenges.length);
+            await safeStorageSet(STORAGE_KEYS.ACTIVE_CHALLENGES, firebaseData.challenges);
+            if (firebaseData.stats) {
+              await safeStorageSet(STORAGE_KEYS.CHALLENGE_STATS, firebaseData.stats);
+            }
+            return firebaseData.challenges;
+          }
+        } catch (error) {
+          console.warn('[ChallengeStore] Firebase load failed, falling back to local:', error);
+        }
+      }
+
+      const local = await safeStorageGet<ActiveChallenge[]>(STORAGE_KEYS.ACTIVE_CHALLENGES, []);
+      if (isRealUser && local.length > 0) {
+        const localStats = await safeStorageGet<ChallengeStats>(STORAGE_KEYS.CHALLENGE_STATS, DEFAULT_STATS);
+        saveUserChallenges(userId, { challenges: local, stats: localStats }).catch(e =>
+          console.warn('[ChallengeStore] Background sync failed:', e)
+        );
+      }
+      return local;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -77,10 +104,24 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   });
 
   const statsQuery = useQuery({
-    queryKey: ['challengeStats', user?.id, STORAGE_KEYS.CHALLENGE_STATS],
+    queryKey: ['challengeStats', userId, STORAGE_KEYS.CHALLENGE_STATS],
     queryFn: async () => {
       if (!user?.id) return DEFAULT_STATS;
-      console.log('[ChallengeStore] Loading challenge stats for user:', user.id);
+      console.log('[ChallengeStore] Loading challenge stats for user:', userId);
+
+      if (isRealUser) {
+        try {
+          const firebaseData = await getUserChallenges(userId);
+          if (firebaseData?.stats) {
+            console.log('[ChallengeStore] Stats loaded from Firebase');
+            await safeStorageSet(STORAGE_KEYS.CHALLENGE_STATS, firebaseData.stats);
+            return firebaseData.stats as ChallengeStats;
+          }
+        } catch (error) {
+          console.warn('[ChallengeStore] Firebase stats load failed:', error);
+        }
+      }
+
       return await safeStorageGet<ChallengeStats>(STORAGE_KEYS.CHALLENGE_STATS, DEFAULT_STATS);
     },
     staleTime: 5 * 60 * 1000,
@@ -100,6 +141,14 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
     }
   }, [statsQuery.data]);
 
+  const syncToFirebase = useCallback((challenges: ActiveChallenge[], newStats: ChallengeStats) => {
+    if (isRealUser) {
+      saveUserChallenges(userId, { challenges, stats: newStats }).catch(e =>
+        console.warn('[ChallengeStore] Firebase sync failed:', e)
+      );
+    }
+  }, [isRealUser, userId]);
+
   const { mutateAsync: saveChallenges } = useMutation({
     mutationFn: async (challenges: ActiveChallenge[]) => {
       if (!user?.id) throw new Error('User not authenticated');
@@ -108,7 +157,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
       return challenges;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activeChallenges', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['activeChallenges', userId] });
     },
   });
 
@@ -120,7 +169,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
       return newStats;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['challengeStats', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['challengeStats', userId] });
     },
   });
 
@@ -246,8 +295,10 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
     setStats(newStats);
     await saveStatsAsync(newStats);
 
+    syncToFirebase(updatedChallenges, newStats);
+
     return newChallenge;
-  }, [activeChallenges, stats, user?.id, generatePersonalizedPlan, saveChallenges, saveStatsAsync]);
+  }, [activeChallenges, stats, user?.id, generatePersonalizedPlan, saveChallenges, saveStatsAsync, syncToFirebase]);
 
   const toggleTaskCompletion = useCallback(async (
     challengeId: string,
@@ -295,7 +346,8 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
 
     setActiveChallenges(updatedChallenges);
     await saveChallenges(updatedChallenges);
-  }, [activeChallenges, saveChallenges]);
+    syncToFirebase(updatedChallenges, stats);
+  }, [activeChallenges, saveChallenges, stats, syncToFirebase]);
 
   const completeDay = useCallback(async (challengeId: string, dayNumber: number) => {
     const updatedChallenges = activeChallenges.map(challenge => {
@@ -340,8 +392,9 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
     await saveChallenges(updatedChallenges);
 
     const completedChallenge = updatedChallenges.find(c => c.id === challengeId);
+    let newStats = stats;
     if (completedChallenge?.status === 'completed') {
-      const newStats = {
+      newStats = {
         ...stats,
         totalChallengesCompleted: stats.totalChallengesCompleted + 1,
         totalDaysCompleted: stats.totalDaysCompleted + completedChallenge.totalDays,
@@ -351,7 +404,9 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
       setStats(newStats);
       await saveStatsAsync(newStats);
     }
-  }, [activeChallenges, stats, saveChallenges, saveStatsAsync]);
+
+    syncToFirebase(updatedChallenges, newStats);
+  }, [activeChallenges, stats, saveChallenges, saveStatsAsync, syncToFirebase]);
 
   const failChallenge = useCallback(async (challengeId: string) => {
     const updatedChallenges = activeChallenges.map(challenge => {
@@ -374,7 +429,8 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
     };
     setStats(newStats);
     await saveStatsAsync(newStats);
-  }, [activeChallenges, stats, saveChallenges, saveStatsAsync]);
+    syncToFirebase(updatedChallenges, newStats);
+  }, [activeChallenges, stats, saveChallenges, saveStatsAsync, syncToFirebase]);
 
   const restartChallenge = useCallback(async (challengeId: string) => {
     const challenge = activeChallenges.find(c => c.id === challengeId);
@@ -420,13 +476,15 @@ Generate 4-6 daily tasks adapted to this user's level and constraints. Each task
 
     setActiveChallenges(updatedChallenges);
     await saveChallenges(updatedChallenges);
-  }, [activeChallenges, saveChallenges]);
+    syncToFirebase(updatedChallenges, stats);
+  }, [activeChallenges, saveChallenges, stats, syncToFirebase]);
 
   const deleteChallenge = useCallback(async (challengeId: string) => {
     const updatedChallenges = activeChallenges.filter(c => c.id !== challengeId);
     setActiveChallenges(updatedChallenges);
     await saveChallenges(updatedChallenges);
-  }, [activeChallenges, saveChallenges]);
+    syncToFirebase(updatedChallenges, stats);
+  }, [activeChallenges, saveChallenges, stats, syncToFirebase]);
 
   const getActiveChallenge = useCallback((): ActiveChallenge | null => {
     return activeChallenges.find(c => c.status === 'active') || null;
