@@ -42,6 +42,8 @@ const GeneratedPlanSchema = z.object({
   motivationalMessage: z.string(),
 });
 
+type GeneratedPlan = z.infer<typeof GeneratedPlanSchema>;
+
 export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -194,7 +196,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
     console.log('[ChallengeStore] Generating personalized plan for:', templateId);
 
     try {
-      const result = await generateObject({
+      const rawResult = await generateObject({
         messages: [{
           role: 'user',
           content: `Generate a personalized daily task plan for the "${template.name}" challenge.
@@ -214,10 +216,12 @@ User Customization:
 
 Generate 4-6 daily tasks adapted to this user's level and constraints. Each task should have a title, description, estimated duration in minutes, and order. Also provide 3 helpful tips and a motivational message.`
         }],
-        schema: GeneratedPlanSchema,
-      });
+        schema: GeneratedPlanSchema as any,
+      }) as GeneratedPlan;
 
-      const tasks: ChallengeTask[] = result.tasks.map((t: any, idx: number) => ({
+      const result = rawResult;
+
+      const tasks: ChallengeTask[] = result.tasks.map((t: { title: string; description: string; duration: number; order: number }, idx: number) => ({
         id: `task_${Date.now()}_${idx}`,
         title: t.title,
         description: t.description,
