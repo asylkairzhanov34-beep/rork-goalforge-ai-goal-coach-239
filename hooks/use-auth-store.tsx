@@ -120,6 +120,32 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const gateSeen = await safeStorageGet<boolean>(AUTH_LOGIN_GATE_KEY, false);
         setNeedsLoginGate(!gateSeen);
 
+        try {
+          console.log('[Auth] Checking Firebase for existing user data on auth restore...');
+          const existingProfile = await getUserProfile(firebaseUser.uid);
+          
+          if (existingProfile?.firstTimeSetup?.isCompleted) {
+            console.log('[Auth] ✅ Returning user detected on auth restore - restoring local flags');
+            await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+            setWelcomeOnboardingCompletedState(true);
+            await safeStorageSet(FIRST_LAUNCH_KEY, true);
+            await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
+            setNeedsLoginGate(false);
+            setRequiresFirstLogin(false);
+            console.log('[Auth] Local flags restored from Firebase data on auth state change');
+          } else if (existingProfile?.onboardingCompleted) {
+            console.log('[Auth] ✅ User has onboardingCompleted flag - restoring welcome onboarding');
+            await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+            setWelcomeOnboardingCompletedState(true);
+            await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
+            setNeedsLoginGate(false);
+          } else {
+            console.log('[Auth] No completed profile found in Firebase for this user');
+          }
+        } catch (profileCheckError) {
+          console.warn('[Auth] Failed to check profile on auth restore (non-fatal):', profileCheckError);
+        }
+
         setAuthState({
           user,
           isLoading: false,
