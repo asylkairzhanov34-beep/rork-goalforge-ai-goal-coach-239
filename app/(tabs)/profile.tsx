@@ -161,42 +161,36 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'Are you sure? This action is irreversible. All your data, including subscription and progress, will be deleted.',
+      'Are you sure? This action is irreversible. All your data, including subscription and progress, will be permanently deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Delete', 
           style: 'destructive', 
-          onPress: async () => {
-            try {
-              console.log('[Profile] Starting account deletion...');
-              
-              if (resetGoal) {
-                try {
-                  await resetGoal();
-                  console.log('[Profile] Goal data reset');
-                } catch (e) {
-                  console.log('[Profile] No goal to reset or error:', e);
+          onPress: () => {
+            Alert.alert(
+              'Final Confirmation',
+              'This cannot be undone. Delete your account and all data?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      console.log('[Profile] Starting account deletion...');
+                      await deleteAccount();
+                      console.log('[Profile] Account deletion complete');
+                      router.replace('/auth');
+                    } catch (error) {
+                      console.error('[Profile] Delete account error:', error);
+                      const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
+                      Alert.alert('Error', errorMessage);
+                    }
+                  }
                 }
-              }
-              
-              const deleted = await deleteAccount();
-              console.log('[Profile] Account deletion result:', deleted);
-              
-              if (!deleted) {
-                await logout();
-              }
-              
-              setTimeout(() => {
-                router.replace('/auth');
-              }, 100);
-              
-              Alert.alert('Success', 'Account deleted. Please sign in again.');
-            } catch (error) {
-              console.error('[Profile] Delete account error:', error);
-              const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
-              Alert.alert('Error', errorMessage);
-            }
+              ]
+            );
           }
         }
       ]

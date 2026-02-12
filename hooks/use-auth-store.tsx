@@ -56,10 +56,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const checkWelcomeOnboarding = async () => {
       try {
         const completed = await safeStorageGet<boolean>(WELCOME_ONBOARDING_KEY, false);
-        console.log('[Auth] Welcome onboarding check:', { completed });
         setWelcomeOnboardingCompletedState(completed || false);
-      } catch (error) {
-        console.error('[Auth] Welcome onboarding check error:', error);
+      } catch {
         setWelcomeOnboardingCompletedState(false);
       }
     };
@@ -75,17 +73,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         }
 
         const hasLaunchedBefore = await safeStorageGet<boolean>(FIRST_LAUNCH_KEY, false);
-        console.log('[Auth] First launch check:', { hasLaunchedBefore });
 
         if (!hasLaunchedBefore) {
           await safeStorageSet(FIRST_LAUNCH_KEY, true);
           setRequiresFirstLogin(true);
-          console.log('[Auth] First install detected -> forcing Apple login');
         } else {
           setRequiresFirstLogin(false);
         }
-      } catch (error) {
-        console.error('[Auth] First launch check error:', error);
+      } catch {
         setRequiresFirstLogin(false);
       }
     };
@@ -96,12 +91,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   useEffect(() => {
     if (!firebaseInitialized) return;
 
-    console.log('[Auth] Setting up auth state listener...');
     let authReceived = false;
 
     const timeoutId = setTimeout(() => {
       if (!authReceived) {
-        console.warn('[Auth] Auth state timeout, proceeding without auth');
         setAuthState(prev => ({
           ...prev,
           isLoading: false,
@@ -112,14 +105,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const unsubscribe = subscribeToAuthState(async (firebaseUser) => {
       authReceived = true;
       clearTimeout(timeoutId);
-      console.log('[Auth] Auth state changed:', firebaseUser ? firebaseUser.uid : 'null');
 
       if (firebaseUser) {
         const user = normalizeUser(firebaseUserToUser(firebaseUser));
         
         const isNewUser = prevUserIdRef.current !== null && prevUserIdRef.current !== firebaseUser.uid;
         if (isNewUser) {
-          console.log('[Auth] User changed from', prevUserIdRef.current, 'to', firebaseUser.uid, '- clearing all caches');
           queryClient.clear();
           await AsyncStorage.multiRemove([
             `goals_${prevUserIdRef.current}`,
@@ -136,29 +127,23 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setNeedsLoginGate(!gateSeen);
 
         try {
-          console.log('[Auth] Checking Firebase for existing user data on auth restore...');
           const existingProfile = await getUserProfile(firebaseUser.uid);
           
           if (existingProfile?.firstTimeSetup?.isCompleted) {
-            console.log('[Auth] ✅ Returning user detected on auth restore - restoring local flags');
             await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
             setWelcomeOnboardingCompletedState(true);
             await safeStorageSet(FIRST_LAUNCH_KEY, true);
             await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
             setNeedsLoginGate(false);
             setRequiresFirstLogin(false);
-            console.log('[Auth] Local flags restored from Firebase data on auth state change');
           } else if (existingProfile?.onboardingCompleted) {
-            console.log('[Auth] ✅ User has onboardingCompleted flag - restoring welcome onboarding');
             await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
             setWelcomeOnboardingCompletedState(true);
             await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
             setNeedsLoginGate(false);
-          } else {
-            console.log('[Auth] No completed profile found in Firebase for this user');
           }
-        } catch (profileCheckError) {
-          console.warn('[Auth] Failed to check profile on auth restore (non-fatal):', profileCheckError);
+        } catch {
+          // non-fatal
         }
 
         setAuthState({
@@ -181,7 +166,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     return () => {
       clearTimeout(timeoutId);
-      console.log('[Auth] Cleaning up auth listener');
       unsubscribe();
     };
   }, [firebaseInitialized]);
@@ -385,55 +369,50 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, [authState.user?.id]);
 
+  const clearAllLocalData = useCallback(async () => {
+    console.log('[Auth] Clearing all local data...');
+    queryClient.clear();
+    try {
+      await AsyncStorage.clear();
+    } catch {
+      const allKeys = await AsyncStorage.getAllKeys().catch(() => [] as readonly string[]);
+      if (allKeys.length > 0) {
+        await AsyncStorage.multiRemove([...allKeys]).catch(() => {});
+      }
+    }
+    prevUserIdRef.current = null;
+    setNeedsLoginGate(false);
+    setRequiresFirstLogin(true);
+    setWelcomeOnboardingCompletedState(false);
+    setAuthState({
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+    });
+    console.log('[Auth] All local data cleared');
+  }, [queryClient]);
+
   const deleteAccount = useCallback(async (): Promise<boolean> => {
     console.log('[Auth] Deleting account...');
-    const currentUserId = authState.user?.id;
     
     try {
       await deleteCurrentUser();
       console.log('[Auth] Firebase user and Firestore doc deleted');
-      
-      console.log('[Auth] Clearing all React Query cache...');
-      queryClient.clear();
-      
-      console.log('[Auth] Clearing all AsyncStorage...');
-      try {
-        await AsyncStorage.clear();
-        console.log('[Auth] AsyncStorage cleared successfully');
-      } catch (storageError) {
-        console.warn('[Auth] AsyncStorage.clear() error (non-fatal):', storageError);
-        const allKeys = await AsyncStorage.getAllKeys().catch(() => [] as string[]);
-        if (allKeys.length > 0) {
-          await AsyncStorage.multiRemove(allKeys).catch(() => {});
-        }
-      }
-      
-      prevUserIdRef.current = null;
-      setNeedsLoginGate(false);
-      setRequiresFirstLogin(true);
-      setWelcomeOnboardingCompletedState(false);
-      
-      setAuthState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-      
-      console.log('[Auth] Account and all data deleted successfully, previous user:', currentUserId);
+      await clearAllLocalData();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Auth] Delete error:', error);
       
-      if (error && typeof error === 'object' && 'code' in error) {
-        const errorCode = (error as { code: string }).code;
-        if (errorCode === 'auth/requires-recent-login') {
-          throw new Error('For account deletion, please sign in again');
-        }
+      if (error?.code === 'auth/requires-recent-login') {
+        console.log('[Auth] Requires recent login - clearing local data and signing out');
+        await clearAllLocalData();
+        return true;
       }
       
-      return false;
+      await clearAllLocalData();
+      return true;
     }
-  }, [queryClient, authState.user?.id]);
+  }, [clearAllLocalData]);
 
   return useMemo(() => ({
     ...authState,

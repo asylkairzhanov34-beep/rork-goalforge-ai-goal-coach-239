@@ -113,34 +113,23 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return DEFAULT_PROFILE;
       
-      console.log('[GoalStore] Loading profile for user:', user.id);
-      
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseProfile = await getUserFullProfile(user.id);
           if (firebaseProfile) {
-            console.log('[GoalStore] ✅ Profile loaded from Firebase');
             await safeStorageSet(STORAGE_KEYS.PROFILE, firebaseProfile);
             return firebaseProfile;
-          } else {
-            console.log('[GoalStore] No Firebase profile found - new user');
           }
-        } catch (error) {
-          console.warn('[GoalStore] Firebase profile fetch failed, trying local:', error);
+        } catch {
+          // fallback to local
         }
       }
       
       const localProfile = await safeStorageGet(STORAGE_KEYS.PROFILE, null);
-      if (localProfile) {
-        console.log('[GoalStore] Profile loaded from local storage');
-        return localProfile;
-      }
-      
-      console.log('[GoalStore] No profile found, using default');
-      return DEFAULT_PROFILE;
+      return localProfile || DEFAULT_PROFILE;
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     enabled: !!user?.id,
     refetchOnMount: 'always',
   });
@@ -150,46 +139,37 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      console.log('[GoalStore] Loading goals for user:', user.id);
-      
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseGoals = await getUserGoals(user.id);
           if (firebaseGoals && firebaseGoals.length > 0) {
-            console.log('[GoalStore] ✅ Goals loaded from Firebase:', firebaseGoals.length);
             await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
             return firebaseGoals;
           } else {
-            console.log('[GoalStore] No goals in Firebase - new user or empty');
             await safeStorageSet(STORAGE_KEYS.GOALS, []);
             return [];
           }
-        } catch (error) {
-          console.warn('[GoalStore] Firebase goals fetch failed, trying local:', error);
+        } catch {
+          // fallback to local
         }
       }
       
       const localGoals = await safeStorageGet<Goal[] | null>(STORAGE_KEYS.GOALS, null);
       if (localGoals && localGoals.length > 0) {
-        console.log('[GoalStore] Goals loaded from local storage:', localGoals.length);
         if (!user.id.startsWith('dev_guest_')) {
           InteractionManager.runAfterInteractions(async () => {
             try {
               await saveUserGoals(user.id, localGoals);
-              console.log('[GoalStore] Local goals synced to Firebase');
-            } catch (e) {
-              console.error('[GoalStore] Failed to sync local goals to Firebase:', e);
-            }
+            } catch {}
           });
         }
         return localGoals;
       }
       
-      console.log('[GoalStore] No goals found');
       return [];
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     enabled: !!user?.id,
     refetchOnMount: 'always',
   });
@@ -199,46 +179,37 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      console.log('[GoalStore] Loading tasks for user:', user.id);
-      
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseTasks = await getUserTasks(user.id);
           if (firebaseTasks && firebaseTasks.length > 0) {
-            console.log('[GoalStore] ✅ Tasks loaded from Firebase:', firebaseTasks.length);
             await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
             return firebaseTasks;
           } else {
-            console.log('[GoalStore] No tasks in Firebase - new user or empty');
             await safeStorageSet(STORAGE_KEYS.TASKS, []);
             return [];
           }
-        } catch (error) {
-          console.warn('[GoalStore] Firebase tasks fetch failed, trying local:', error);
+        } catch {
+          // fallback to local
         }
       }
       
       const localTasks = await safeStorageGet<DailyTask[] | null>(STORAGE_KEYS.TASKS, null);
       if (localTasks && localTasks.length > 0) {
-        console.log('[GoalStore] Tasks loaded from local storage:', localTasks.length);
         if (!user.id.startsWith('dev_guest_')) {
           InteractionManager.runAfterInteractions(async () => {
             try {
               await saveUserTasks(user.id, localTasks);
-              console.log('[GoalStore] Local tasks synced to Firebase');
-            } catch (e) {
-              console.error('[GoalStore] Failed to sync local tasks to Firebase:', e);
-            }
+            } catch {}
           });
         }
         return localTasks;
       }
       
-      console.log('[GoalStore] No tasks found');
       return [];
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     enabled: !!user?.id,
     refetchOnMount: 'always',
   });
@@ -247,8 +218,6 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryKey: ['pomodoro', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      
-      console.log('[GoalStore] Loading pomodoro sessions for user:', user.id);
       
       const parseSessions = (sessions: any[]) => sessions.map((session: any) => ({
         ...session,
@@ -259,30 +228,26 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
         try {
           const firebaseSessions = await getUserPomodoroSessions(user.id);
           if (firebaseSessions && firebaseSessions.length > 0) {
-            console.log('[GoalStore] ✅ Pomodoro sessions loaded from Firebase:', firebaseSessions.length);
             const sessions = parseSessions(firebaseSessions);
             await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, sessions);
             return sessions;
           } else {
-            console.log('[GoalStore] No pomodoro in Firebase - new user or empty');
             return [];
           }
-        } catch (error) {
-          console.warn('[GoalStore] Firebase pomodoro fetch failed, trying local:', error);
+        } catch {
+          // fallback to local
         }
       }
       
       const localSessions = await safeStorageGet<PomodoroSession[] | null>(STORAGE_KEYS.POMODORO_SESSIONS, null);
       if (localSessions && localSessions.length > 0) {
-        console.log('[GoalStore] Pomodoro sessions loaded from local storage:', localSessions.length);
         return parseSessions(localSessions);
       }
       
-      console.log('[GoalStore] No pomodoro sessions found');
       return [];
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     enabled: !!user?.id,
     refetchOnMount: 'always',
   });
@@ -378,15 +343,11 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const saveProfileMutation = useMutation({
     mutationFn: async (newProfile: UserProfile) => {
       if (!user?.id) throw new Error('User not authenticated');
-      console.log('[GoalStore] Saving profile to Firebase and local storage');
       await safeStorageSet(STORAGE_KEYS.PROFILE, newProfile);
-      await saveUserFullProfile(user.id, newProfile).catch((err: Error) => {
-        console.error('[GoalStore] Failed to save profile to Firebase:', err);
-      });
+      if (!user.id.startsWith('dev_guest_')) {
+        await saveUserFullProfile(user.id, newProfile).catch(() => {});
+      }
       return newProfile;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });
 
@@ -448,46 +409,34 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const saveTasksMutation = useMutation({
     mutationFn: async (tasks: DailyTask[]) => {
       if (!user?.id) throw new Error('User not authenticated');
-      console.log('[GoalStore] Saving tasks to Firebase and local storage');
       await safeStorageSet(STORAGE_KEYS.TASKS, tasks);
-      await saveUserTasks(user.id, tasks).catch((err: Error) => {
-        console.error('[GoalStore] Failed to save tasks to Firebase:', err);
-      });
+      if (!user.id.startsWith('dev_guest_')) {
+        await saveUserTasks(user.id, tasks).catch(() => {});
+      }
       return tasks;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
     },
   });
 
   const savePomodoroMutation = useMutation({
     mutationFn: async (sessions: PomodoroSession[]) => {
       if (!user?.id) throw new Error('User not authenticated');
-      console.log('[GoalStore] Saving pomodoro sessions to Firebase and local storage');
       await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, sessions);
-      await saveUserPomodoroSessions(user.id, sessions).catch((err: Error) => {
-        console.error('[GoalStore] Failed to save pomodoro sessions to Firebase:', err);
-      });
+      if (!user.id.startsWith('dev_guest_')) {
+        await saveUserPomodoroSessions(user.id, sessions).catch(() => {});
+      }
       return sessions;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pomodoro', user?.id] });
     },
   });
 
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: string) => {
       if (!user?.id) throw new Error('User not authenticated');
-      console.log('[GoalStore] Deleting task from Firebase and local storage');
       const updated = dailyTasks.filter(t => t.id !== taskId);
       await safeStorageSet(STORAGE_KEYS.TASKS, updated);
-      await saveUserTasks(user.id, updated).catch((err: Error) => {
-        console.error('[GoalStore] Failed to delete task from Firebase:', err);
-      });
+      if (!user.id.startsWith('dev_guest_')) {
+        await saveUserTasks(user.id, updated).catch(() => {});
+      }
       return updated;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
     },
   });
 
@@ -666,16 +615,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       const total = todayTasks.length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      console.log('[GoalStore] Progress for day:', {
-        period,
-        todayKey,
-        completed,
-        total,
-        percentage,
-        allTaskDates: goalTasks.map((t) => ({ id: t.id, date: getTaskLocalDateKey(t), completed: t.completed })),
-      });
-
-      return { completed, total, percentage };
+        return { completed, total, percentage };
     }
 
     if (period === 'week') {
@@ -693,17 +633,6 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       const total = weekTasks.length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      console.log('[GoalStore] Progress for week:', {
-        period,
-        weekStartKey,
-        weekEndKey,
-        completed,
-        total,
-        percentage,
-        rangeStart: range.start.toISOString(),
-        rangeEnd: range.end.toISOString(),
-      });
-
       return { completed, total, percentage };
     }
 
@@ -720,17 +649,6 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     const completed = monthTasks.filter((t) => t.completed).length;
     const total = monthTasks.length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    console.log('[GoalStore] Progress for month:', {
-      period,
-      monthStartKey,
-      monthEndKey,
-      completed,
-      total,
-      percentage,
-      rangeStart: range.start.toISOString(),
-      rangeEnd: range.end.toISOString(),
-    });
 
     return { completed, total, percentage };
   };

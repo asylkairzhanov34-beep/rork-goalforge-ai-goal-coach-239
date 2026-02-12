@@ -140,20 +140,30 @@ export async function deleteCurrentUser(): Promise<void> {
   const firebaseAuth = getFirebaseAuth();
   const user = firebaseAuth.currentUser;
   
-  if (user) {
-    // Delete user document from Firestore
-    try {
-      await deleteUserProfile(user.uid);
-      console.log('[Firebase] User profile deleted from Firestore');
-    } catch (error) {
-      console.error('[Firebase] Failed to delete user profile:', error);
-    }
-    
-    // Delete Firebase Auth user
+  if (!user) {
+    console.log('[Firebase] No user to delete');
+    return;
+  }
+
+  const uid = user.uid;
+
+  try {
+    await deleteUserProfile(uid);
+    console.log('[Firebase] User profile deleted from Firestore');
+  } catch (error) {
+    console.warn('[Firebase] Failed to delete user profile (non-fatal):', error);
+  }
+
+  try {
     await deleteUser(user);
     console.log('[Firebase] User deleted from Firebase Auth');
-  } else {
-    console.log('[Firebase] No user to delete');
+  } catch (error: any) {
+    if (error?.code === 'auth/requires-recent-login') {
+      console.warn('[Firebase] Requires recent login for deletion - signing out instead');
+      await firebaseSignOut(firebaseAuth);
+      throw error;
+    }
+    throw error;
   }
 }
 
@@ -168,7 +178,6 @@ export function subscribeToAuthState(callback: (user: FirebaseUser | null) => vo
 }
 
 export async function saveUserProfile(userId: string, data: any): Promise<void> {
-  console.log('[Firebase] Saving user profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -179,8 +188,6 @@ export async function saveUserProfile(userId: string, data: any): Promise<void> 
       ...cleanedData,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] User profile saved');
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
       console.warn('[Firebase] Permission denied saving profile - using local storage only');
@@ -191,7 +198,6 @@ export async function saveUserProfile(userId: string, data: any): Promise<void> 
 }
 
 export async function getUserProfile(userId: string): Promise<any | null> {
-  console.log('[Firebase] Getting user profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -199,11 +205,9 @@ export async function getUserProfile(userId: string): Promise<any | null> {
     const docSnap = await getDoc(userRef);
     
     if (docSnap.exists()) {
-      console.log('[Firebase] User profile found');
       return docSnap.data();
     }
     
-    console.log('[Firebase] User profile not found');
     return null;
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
@@ -215,7 +219,6 @@ export async function getUserProfile(userId: string): Promise<any | null> {
 }
 
 export async function updateUserProfile(userId: string, data: any): Promise<void> {
-  console.log('[Firebase] Updating user profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -229,7 +232,6 @@ export async function updateUserProfile(userId: string, data: any): Promise<void
       });
     } catch (updateError: any) {
       if (updateError?.code === 'not-found') {
-        console.log('[Firebase] Document not found, creating new one');
         await setDoc(userRef, {
           ...cleanedData,
           updatedAt: serverTimestamp(),
@@ -238,8 +240,6 @@ export async function updateUserProfile(userId: string, data: any): Promise<void
         throw updateError;
       }
     }
-    
-    console.log('[Firebase] User profile updated');
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
       console.warn('[Firebase] Permission denied updating profile - using local storage only');
@@ -250,13 +250,11 @@ export async function updateUserProfile(userId: string, data: any): Promise<void
 }
 
 export async function deleteUserProfile(userId: string): Promise<void> {
-  console.log('[Firebase] Deleting user profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
     
     await deleteDoc(userRef);
-    console.log('[Firebase] User profile deleted');
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
       console.warn('[Firebase] Permission denied deleting profile - skipping');
@@ -267,31 +265,22 @@ export async function deleteUserProfile(userId: string): Promise<void> {
 }
 
 export async function saveUserGoals(userId: string, goals: any[]): Promise<void> {
-  console.log('[Firebase] Saving goals:', userId, goals.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const cleanedGoals = removeUndefinedValues(goals);
-    
     await setDoc(userRef, {
       goals: cleanedGoals,
       goalsUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] Goals saved successfully');
     firebaseSyncStatus.lastSyncSuccess = true;
     firebaseSyncStatus.lastSyncTime = Date.now();
     firebaseSyncStatus.lastError = null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save goals:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
-    firebaseSyncStatus.lastError = error?.code === 'permission-denied' 
-      ? 'Firestore rules not configured - data NOT saved to cloud' 
-      : (error?.message || 'Unknown error');
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Goals are NOT being saved to Firebase!');
-      console.error('[Firebase] ⚠️ Configure Firestore Security Rules in Firebase Console');
+      console.warn('[Firebase] Permission denied saving goals');
       return;
     }
     throw error;
@@ -299,32 +288,22 @@ export async function saveUserGoals(userId: string, goals: any[]): Promise<void>
 }
 
 export async function getUserGoals(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting goals:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const docSnap = await getDoc(userRef);
-    
     if (docSnap.exists() && docSnap.data().goals) {
-      console.log('[Firebase] Goals found:', docSnap.data().goals.length);
       firebaseSyncStatus.lastSyncSuccess = true;
       firebaseSyncStatus.lastSyncTime = Date.now();
       firebaseSyncStatus.lastError = null;
       return docSnap.data().goals;
     }
-    
-    console.log('[Firebase] No goals found in Firestore for user:', userId);
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get goals:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
-    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
-      ? 'Firestore rules not configured - cannot read data from cloud'
-      : (error?.message || 'Unknown error');
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read goals from Firebase!');
-      console.error('[Firebase] ⚠️ Configure Firestore Security Rules in Firebase Console');
+      console.warn('[Firebase] Permission denied reading goals');
       return [];
     }
     throw error;
@@ -332,30 +311,22 @@ export async function getUserGoals(userId: string): Promise<any[]> {
 }
 
 export async function saveUserTasks(userId: string, tasks: any[]): Promise<void> {
-  console.log('[Firebase] Saving tasks:', userId, tasks.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const cleanedTasks = removeUndefinedValues(tasks);
-    
     await setDoc(userRef, {
       tasks: cleanedTasks,
       tasksUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] Tasks saved successfully');
     firebaseSyncStatus.lastSyncSuccess = true;
     firebaseSyncStatus.lastSyncTime = Date.now();
     firebaseSyncStatus.lastError = null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save tasks:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
-    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
-      ? 'Firestore rules not configured - data NOT saved to cloud'
-      : (error?.message || 'Unknown error');
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Tasks are NOT being saved to Firebase!');
+      console.warn('[Firebase] Permission denied saving tasks');
       return;
     }
     throw error;
@@ -363,31 +334,22 @@ export async function saveUserTasks(userId: string, tasks: any[]): Promise<void>
 }
 
 export async function getUserTasks(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting tasks:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const docSnap = await getDoc(userRef);
-    
     if (docSnap.exists() && docSnap.data().tasks) {
-      console.log('[Firebase] Tasks found:', docSnap.data().tasks.length);
       firebaseSyncStatus.lastSyncSuccess = true;
       firebaseSyncStatus.lastSyncTime = Date.now();
       firebaseSyncStatus.lastError = null;
       return docSnap.data().tasks;
     }
-    
-    console.log('[Firebase] No tasks found in Firestore for user:', userId);
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get tasks:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
-    firebaseSyncStatus.lastError = error?.code === 'permission-denied'
-      ? 'Firestore rules not configured - cannot read data from cloud'
-      : (error?.message || 'Unknown error');
+    firebaseSyncStatus.lastError = error?.message || 'Unknown error';
     if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read tasks from Firebase!');
+      console.warn('[Firebase] Permission denied reading tasks');
       return [];
     }
     throw error;
@@ -395,75 +357,51 @@ export async function getUserTasks(userId: string): Promise<any[]> {
 }
 
 export async function saveUserPomodoroSessions(userId: string, sessions: any[]): Promise<void> {
-  console.log('[Firebase] Saving pomodoro sessions:', userId, sessions.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const cleanedSessions = removeUndefinedValues(sessions);
-    
     await setDoc(userRef, {
       pomodoroSessions: cleanedSessions,
       pomodoroUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] Pomodoro sessions saved successfully');
     firebaseSyncStatus.lastSyncSuccess = true;
     firebaseSyncStatus.lastSyncTime = Date.now();
     firebaseSyncStatus.lastError = null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save pomodoro sessions:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
     firebaseSyncStatus.lastError = error?.message || 'Unknown error';
-    if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Pomodoro sessions NOT saved!');
-      return;
-    }
+    if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserPomodoroSessions(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting pomodoro sessions:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const docSnap = await getDoc(userRef);
-    
     if (docSnap.exists() && docSnap.data().pomodoroSessions) {
-      console.log('[Firebase] Pomodoro sessions found:', docSnap.data().pomodoroSessions.length);
       return docSnap.data().pomodoroSessions;
     }
-    
-    console.log('[Firebase] No pomodoro sessions found');
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get pomodoro sessions:', error?.code, error?.message);
     firebaseSyncStatus.lastSyncSuccess = false;
     firebaseSyncStatus.lastError = error?.message || 'Unknown error';
-    if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Cannot read pomodoro sessions!');
-      return [];
-    }
+    if (error?.code === 'permission-denied') return [];
     throw error;
   }
 }
 
 export async function saveUserFullProfile(userId: string, profile: any): Promise<void> {
-  console.log('[Firebase] Saving full profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const cleanedProfile = removeUndefinedValues(profile);
-    
     await setDoc(userRef, {
       profile: cleanedProfile,
       profileUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] Full profile saved');
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
       console.warn('[Firebase] Permission denied saving full profile - using local storage only');
@@ -474,19 +412,13 @@ export async function saveUserFullProfile(userId: string, profile: any): Promise
 }
 
 export async function getUserFullProfile(userId: string): Promise<any | null> {
-  console.log('[Firebase] Getting full profile:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const docSnap = await getDoc(userRef);
-    
     if (docSnap.exists() && docSnap.data().profile) {
-      console.log('[Firebase] Full profile found');
       return docSnap.data().profile;
     }
-    
-    console.log('[Firebase] No full profile found');
     return null;
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
@@ -498,19 +430,14 @@ export async function getUserFullProfile(userId: string): Promise<any | null> {
 }
 
 export async function saveUserSubscription(userId: string, subscriptionData: any): Promise<void> {
-  console.log('[Firebase] Saving subscription data:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const cleanedData = removeUndefinedValues(subscriptionData);
-    
     await setDoc(userRef, {
       subscription: cleanedData,
       subscriptionUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    
-    console.log('[Firebase] Subscription data saved');
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
       console.warn('[Firebase] Permission denied saving subscription - using local storage only');
@@ -521,19 +448,13 @@ export async function saveUserSubscription(userId: string, subscriptionData: any
 }
 
 export async function getUserSubscription(userId: string): Promise<any | null> {
-  console.log('[Firebase] Getting subscription data:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
-    
     const docSnap = await getDoc(userRef);
-    
     if (docSnap.exists() && docSnap.data().subscription) {
-      console.log('[Firebase] Subscription data found');
       return docSnap.data().subscription;
     }
-    
-    console.log('[Firebase] No subscription data found');
     return null;
   } catch (error: any) {
     if (error?.code === 'permission-denied') {
@@ -606,7 +527,6 @@ function removeUndefinedValues(obj: any): any {
 }
 
 export async function saveUserJournal(userId: string, entries: any[]): Promise<void> {
-  console.log('[Firebase] Saving journal entries:', userId, entries.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -615,38 +535,28 @@ export async function saveUserJournal(userId: string, entries: any[]): Promise<v
       journalEntries: cleanedEntries,
       journalUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Journal entries saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save journal:', error?.code, error?.message);
-    if (error?.code === 'permission-denied') {
-      console.error('[Firebase] ⚠️ PERMISSION DENIED - Journal NOT saved!');
-      return;
-    }
+    if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserJournal(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting journal entries:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
     const docSnap = await getDoc(userRef);
     if (docSnap.exists() && docSnap.data().journalEntries) {
-      console.log('[Firebase] Journal entries found:', docSnap.data().journalEntries.length);
       return docSnap.data().journalEntries;
     }
-    console.log('[Firebase] No journal entries found');
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get journal:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return [];
     throw error;
   }
 }
 
 export async function saveUserChallenges(userId: string, data: { challenges: any[]; stats: any }): Promise<void> {
-  console.log('[Firebase] Saving challenges:', userId, data.challenges.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -656,16 +566,13 @@ export async function saveUserChallenges(userId: string, data: { challenges: any
       challengeStats: cleaned.stats,
       challengesUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Challenges saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save challenges:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserChallenges(userId: string): Promise<{ challenges: any[]; stats: any } | null> {
-  console.log('[Firebase] Getting challenges:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -673,24 +580,20 @@ export async function getUserChallenges(userId: string): Promise<{ challenges: a
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.challenges || data.challengeStats) {
-        console.log('[Firebase] Challenges found:', data.challenges?.length || 0);
         return {
           challenges: data.challenges || [],
           stats: data.challengeStats || null,
         };
       }
     }
-    console.log('[Firebase] No challenges found');
     return null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get challenges:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return null;
     throw error;
   }
 }
 
 export async function saveUserManifestations(userId: string, data: { sessions: any[]; settings: any }): Promise<void> {
-  console.log('[Firebase] Saving manifestations:', userId, data.sessions.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -700,16 +603,13 @@ export async function saveUserManifestations(userId: string, data: { sessions: a
       manifestationSettings: cleaned.settings,
       manifestationsUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Manifestations saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save manifestations:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserManifestations(userId: string): Promise<{ sessions: any[]; settings: any } | null> {
-  console.log('[Firebase] Getting manifestations:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -717,24 +617,20 @@ export async function getUserManifestations(userId: string): Promise<{ sessions:
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.manifestationSessions || data.manifestationSettings) {
-        console.log('[Firebase] Manifestations found:', data.manifestationSessions?.length || 0);
         return {
           sessions: data.manifestationSessions || [],
           settings: data.manifestationSettings || null,
         };
       }
     }
-    console.log('[Firebase] No manifestations found');
     return null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get manifestations:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return null;
     throw error;
   }
 }
 
 export async function saveUserFocusShield(userId: string, data: { settings: any; stats: any; sessions: any[]; logs: any[] }): Promise<void> {
-  console.log('[Firebase] Saving focus shield:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -746,16 +642,13 @@ export async function saveUserFocusShield(userId: string, data: { settings: any;
       focusShieldLogs: cleaned.logs,
       focusShieldUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Focus shield saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save focus shield:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserFocusShield(userId: string): Promise<{ settings: any; stats: any; sessions: any[]; logs: any[] } | null> {
-  console.log('[Firebase] Getting focus shield:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -763,7 +656,6 @@ export async function getUserFocusShield(userId: string): Promise<{ settings: an
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.focusShieldSettings || data.focusShieldSessions) {
-        console.log('[Firebase] Focus shield found');
         return {
           settings: data.focusShieldSettings || null,
           stats: data.focusShieldStats || null,
@@ -772,17 +664,14 @@ export async function getUserFocusShield(userId: string): Promise<{ settings: an
         };
       }
     }
-    console.log('[Firebase] No focus shield data found');
     return null;
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get focus shield:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return null;
     throw error;
   }
 }
 
 export async function saveUserTimerSessions(userId: string, sessions: any[]): Promise<void> {
-  console.log('[Firebase] Saving timer sessions:', userId, sessions.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -791,35 +680,28 @@ export async function saveUserTimerSessions(userId: string, sessions: any[]): Pr
       timerSessions: cleanedSessions,
       timerUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Timer sessions saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save timer sessions:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserTimerSessions(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting timer sessions:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
     const docSnap = await getDoc(userRef);
     if (docSnap.exists() && docSnap.data().timerSessions) {
-      console.log('[Firebase] Timer sessions found:', docSnap.data().timerSessions.length);
       return docSnap.data().timerSessions;
     }
-    console.log('[Firebase] No timer sessions found');
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get timer sessions:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return [];
     throw error;
   }
 }
 
 export async function saveUserChatHistory(userId: string, messages: any[]): Promise<void> {
-  console.log('[Firebase] Saving chat history:', userId, messages.length);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
@@ -829,28 +711,22 @@ export async function saveUserChatHistory(userId: string, messages: any[]): Prom
       chatHistory: cleaned,
       chatUpdatedAt: serverTimestamp(),
     }, { merge: true });
-    console.log('[Firebase] Chat history saved successfully');
   } catch (error: any) {
-    console.error('[Firebase] FAILED to save chat history:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return;
     throw error;
   }
 }
 
 export async function getUserChatHistory(userId: string): Promise<any[]> {
-  console.log('[Firebase] Getting chat history:', userId);
   try {
     const firestore = getFirebaseDB();
     const userRef = doc(firestore, 'users', userId);
     const docSnap = await getDoc(userRef);
     if (docSnap.exists() && docSnap.data().chatHistory) {
-      console.log('[Firebase] Chat history found:', docSnap.data().chatHistory.length);
       return docSnap.data().chatHistory;
     }
-    console.log('[Firebase] No chat history found');
     return [];
   } catch (error: any) {
-    console.error('[Firebase] FAILED to get chat history:', error?.code, error?.message);
     if (error?.code === 'permission-denied') return [];
     throw error;
   }

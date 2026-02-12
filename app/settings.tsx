@@ -30,7 +30,8 @@ import {
   CreditCard,
   Crown,
   ExternalLink,
-  Cloud
+  Cloud,
+  Trash2
 } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
@@ -107,7 +108,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { updateProfile } = useFirstTimeSetup();
   const store = useGoalStore();
-  const { logout, user } = useAuth();
+  const { logout, user, deleteAccount } = useAuth();
   const subscription = useSubscription();
   
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -270,6 +271,41 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure? This action is irreversible. All your data will be permanently deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Final Confirmation',
+              'This cannot be undone. Delete your account and all data?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deleteAccount();
+                      router.replace('/auth');
+                    } catch (error) {
+                      const msg = error instanceof Error ? error.message : 'Failed to delete account';
+                      Alert.alert('Error', msg);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <GradientBackground>
@@ -436,7 +472,14 @@ export default function SettingsScreen() {
                   showArrow
                   iconColor="#F59E0B"
                 />
-  
+                <SettingItem
+                  icon={Trash2}
+                  title="Delete Account"
+                  subtitle="Permanently delete all data"
+                  onPress={handleDeleteAccount}
+                  showArrow
+                  iconColor="#EF4444"
+                />
               </View>
             </>
           )}
