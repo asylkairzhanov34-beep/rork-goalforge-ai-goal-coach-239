@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { InteractionManager } from 'react-native';
 import { Goal, DailyTask, UserProfile, PomodoroSession, PomodoroStats, TaskFeedback } from '@/types/goal';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
@@ -69,7 +69,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       return;
     }
     if (prevUserIdRef.current !== currentUserId) {
-      console.log('[GoalStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting local state');
+      console.log('[GoalStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting local state and forcing refetch');
       setCurrentGoal(null);
       setDailyTasks([]);
       setPomodoroSessions([]);
@@ -78,9 +78,15 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       setFirebaseSyncOk(null);
       setFirebaseSyncError(null);
       streakCheckedRef.current = null;
+      
+      queryClient.removeQueries({ queryKey: ['profile'] });
+      queryClient.removeQueries({ queryKey: ['goals'] });
+      queryClient.removeQueries({ queryKey: ['tasks'] });
+      queryClient.removeQueries({ queryKey: ['pomodoro'] });
+      
       prevUserIdRef.current = currentUserId;
     }
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
 
   useEffect(() => {
     if (!user?.id || user.id.startsWith('dev_guest_')) return;
@@ -103,13 +109,12 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   }, [user?.id]);
 
   const profileQuery = useQuery({
-    queryKey: ['profile', user?.id, STORAGE_KEYS.PROFILE],
+    queryKey: ['profile', user?.id],
     queryFn: async () => {
       if (!user?.id) return DEFAULT_PROFILE;
       
       console.log('[GoalStore] Loading profile for user:', user.id);
       
-      // Always try Firebase first for authenticated users (not dev guests)
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseProfile = await getUserFullProfile(user.id);
@@ -117,13 +122,14 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
             console.log('[GoalStore] ✅ Profile loaded from Firebase');
             await safeStorageSet(STORAGE_KEYS.PROFILE, firebaseProfile);
             return firebaseProfile;
+          } else {
+            console.log('[GoalStore] No Firebase profile found - new user');
           }
         } catch (error) {
           console.warn('[GoalStore] Firebase profile fetch failed, trying local:', error);
         }
       }
       
-      // Fallback to local storage
       const localProfile = await safeStorageGet(STORAGE_KEYS.PROFILE, null);
       if (localProfile) {
         console.log('[GoalStore] Profile loaded from local storage');
@@ -133,19 +139,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       console.log('[GoalStore] No profile found, using default');
       return DEFAULT_PROFILE;
     },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   const goalsQuery = useQuery({
-    queryKey: ['goals', user?.id, STORAGE_KEYS.GOALS],
+    queryKey: ['goals', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
       console.log('[GoalStore] Loading goals for user:', user.id);
       
-      // Always try Firebase first for authenticated users (not dev guests)
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseGoals = await getUserGoals(user.id);
@@ -153,17 +159,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
             console.log('[GoalStore] ✅ Goals loaded from Firebase:', firebaseGoals.length);
             await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
             return firebaseGoals;
+          } else {
+            console.log('[GoalStore] No goals in Firebase - new user or empty');
+            await safeStorageSet(STORAGE_KEYS.GOALS, []);
+            return [];
           }
         } catch (error) {
           console.warn('[GoalStore] Firebase goals fetch failed, trying local:', error);
         }
       }
       
-      // Fallback to local storage
       const localGoals = await safeStorageGet<Goal[] | null>(STORAGE_KEYS.GOALS, null);
       if (localGoals && localGoals.length > 0) {
         console.log('[GoalStore] Goals loaded from local storage:', localGoals.length);
-        // Sync local to Firebase in background if we have data locally but not in Firebase
         if (!user.id.startsWith('dev_guest_')) {
           InteractionManager.runAfterInteractions(async () => {
             try {
@@ -180,19 +188,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       console.log('[GoalStore] No goals found');
       return [];
     },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   const tasksQuery = useQuery({
-    queryKey: ['tasks', user?.id, STORAGE_KEYS.TASKS],
+    queryKey: ['tasks', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
       console.log('[GoalStore] Loading tasks for user:', user.id);
       
-      // Always try Firebase first for authenticated users (not dev guests)
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseTasks = await getUserTasks(user.id);
@@ -200,17 +208,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
             console.log('[GoalStore] ✅ Tasks loaded from Firebase:', firebaseTasks.length);
             await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
             return firebaseTasks;
+          } else {
+            console.log('[GoalStore] No tasks in Firebase - new user or empty');
+            await safeStorageSet(STORAGE_KEYS.TASKS, []);
+            return [];
           }
         } catch (error) {
           console.warn('[GoalStore] Firebase tasks fetch failed, trying local:', error);
         }
       }
       
-      // Fallback to local storage
       const localTasks = await safeStorageGet<DailyTask[] | null>(STORAGE_KEYS.TASKS, null);
       if (localTasks && localTasks.length > 0) {
         console.log('[GoalStore] Tasks loaded from local storage:', localTasks.length);
-        // Sync local to Firebase in background
         if (!user.id.startsWith('dev_guest_')) {
           InteractionManager.runAfterInteractions(async () => {
             try {
@@ -227,13 +237,14 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       console.log('[GoalStore] No tasks found');
       return [];
     },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   const pomodoroQuery = useQuery({
-    queryKey: ['pomodoro', user?.id, STORAGE_KEYS.POMODORO_SESSIONS],
+    queryKey: ['pomodoro', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
@@ -244,7 +255,6 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
         completedAt: session.completedAt ? new Date(session.completedAt) : undefined
       }));
       
-      // Always try Firebase first for authenticated users (not dev guests)
       if (!user.id.startsWith('dev_guest_')) {
         try {
           const firebaseSessions = await getUserPomodoroSessions(user.id);
@@ -253,13 +263,15 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
             const sessions = parseSessions(firebaseSessions);
             await safeStorageSet(STORAGE_KEYS.POMODORO_SESSIONS, sessions);
             return sessions;
+          } else {
+            console.log('[GoalStore] No pomodoro in Firebase - new user or empty');
+            return [];
           }
         } catch (error) {
           console.warn('[GoalStore] Firebase pomodoro fetch failed, trying local:', error);
         }
       }
       
-      // Fallback to local storage
       const localSessions = await safeStorageGet<PomodoroSession[] | null>(STORAGE_KEYS.POMODORO_SESSIONS, null);
       if (localSessions && localSessions.length > 0) {
         console.log('[GoalStore] Pomodoro sessions loaded from local storage:', localSessions.length);
@@ -269,9 +281,10 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       console.log('[GoalStore] No pomodoro sessions found');
       return [];
     },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {

@@ -30,9 +30,11 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
 
   useEffect(() => {
     const currentId = user?.id;
-    if (prevUserIdRef.current !== currentId && currentId) {
-      console.log('[FirstTimeSetupProvider] User ID changed to', currentId, '- setting loading state');
-      setState(prev => ({ ...prev, isLoading: true }));
+    const prevId = prevUserIdRef.current;
+    
+    if (prevId !== undefined && prevId !== currentId && currentId) {
+      console.log('[FirstTimeSetupProvider] User ID changed from', prevId, 'to', currentId, '- forcing fresh load');
+      setState({ profile: null, currentStep: 0, isLoading: true });
     }
     prevUserIdRef.current = currentId;
   }, [user?.id]);
@@ -100,11 +102,11 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
     setState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      console.log('[FirstTimeSetupProvider] Loading profile...');
+      console.log('[FirstTimeSetupProvider] Loading profile for user:', user?.id);
 
       let stored: FirstTimeProfile | null = null;
 
-      if (user?.id) {
+      if (user?.id && !user.id.startsWith('dev_guest_')) {
         console.log('[FirstTimeSetupProvider] Loading from Firebase for user:', user.id);
         
         try {
@@ -119,19 +121,17 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
               await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(stored));
             }
           } else {
-            console.log('[FirstTimeSetupProvider] No Firebase profile found for user:', user.id);
+            console.log('[FirstTimeSetupProvider] No Firebase profile found - new user, clearing local cache');
+            await safeStorageSet(FIRST_TIME_SETUP_KEY, null);
+            stored = null;
           }
         } catch (firebaseError) {
           console.warn('[FirstTimeSetupProvider] Firebase load failed:', firebaseError);
-        }
-
-        if (!stored) {
-          console.log('[FirstTimeSetupProvider] Trying local storage fallback');
           const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
           stored = deserializeProfile(local);
         }
-      } else {
-        console.log('[FirstTimeSetupProvider] No user, loading from local storage');
+      } else if (user?.id) {
+        console.log('[FirstTimeSetupProvider] Dev guest, loading from local storage');
         const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
         stored = deserializeProfile(local);
       }

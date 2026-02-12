@@ -60,15 +60,17 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
       return;
     }
     if (prevUserIdRef.current !== currentUserId) {
-      console.log('[ChallengeStore] User changed, resetting local state');
+      console.log('[ChallengeStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting state');
       setActiveChallenges([]);
       setStats(DEFAULT_STATS);
+      queryClient.removeQueries({ queryKey: ['activeChallenges'] });
+      queryClient.removeQueries({ queryKey: ['challengeStats'] });
       prevUserIdRef.current = currentUserId;
     }
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
 
   const challengesQuery = useQuery({
-    queryKey: ['activeChallenges', userId, STORAGE_KEYS.ACTIVE_CHALLENGES],
+    queryKey: ['activeChallenges', userId],
     queryFn: async () => {
       if (!user?.id) return [];
       console.log('[ChallengeStore] Loading challenges for user:', userId);
@@ -83,6 +85,10 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
               await safeStorageSet(STORAGE_KEYS.CHALLENGE_STATS, firebaseData.stats);
             }
             return firebaseData.challenges;
+          } else {
+            console.log('[ChallengeStore] No challenges in Firebase - new user');
+            await safeStorageSet(STORAGE_KEYS.ACTIVE_CHALLENGES, []);
+            return [];
           }
         } catch (error) {
           console.warn('[ChallengeStore] Firebase load failed, falling back to local:', error);
@@ -98,13 +104,14 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
       }
       return local;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   const statsQuery = useQuery({
-    queryKey: ['challengeStats', userId, STORAGE_KEYS.CHALLENGE_STATS],
+    queryKey: ['challengeStats', userId],
     queryFn: async () => {
       if (!user?.id) return DEFAULT_STATS;
       console.log('[ChallengeStore] Loading challenge stats for user:', userId);
@@ -116,6 +123,9 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
             console.log('[ChallengeStore] Stats loaded from Firebase');
             await safeStorageSet(STORAGE_KEYS.CHALLENGE_STATS, firebaseData.stats);
             return firebaseData.stats as ChallengeStats;
+          } else {
+            console.log('[ChallengeStore] No stats in Firebase - new user');
+            return DEFAULT_STATS;
           }
         } catch (error) {
           console.warn('[ChallengeStore] Firebase stats load failed:', error);
@@ -124,9 +134,10 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
 
       return await safeStorageGet<ChallengeStats>(STORAGE_KEYS.CHALLENGE_STATS, DEFAULT_STATS);
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     enabled: !!user?.id,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {

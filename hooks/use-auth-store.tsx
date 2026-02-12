@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
@@ -36,6 +36,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [needsLoginGate, setNeedsLoginGate] = useState<boolean>(false);
   const [requiresFirstLogin, setRequiresFirstLogin] = useState<boolean>(false);
   const [welcomeOnboardingCompleted, setWelcomeOnboardingCompletedState] = useState<boolean>(false);
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     console.log('[Auth] Initializing Firebase...');
@@ -115,6 +116,20 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (firebaseUser) {
         const user = normalizeUser(firebaseUserToUser(firebaseUser));
+        
+        const isNewUser = prevUserIdRef.current !== null && prevUserIdRef.current !== firebaseUser.uid;
+        if (isNewUser) {
+          console.log('[Auth] User changed from', prevUserIdRef.current, 'to', firebaseUser.uid, '- clearing all caches');
+          queryClient.clear();
+          await AsyncStorage.multiRemove([
+            `goals_${prevUserIdRef.current}`,
+            `daily_tasks_${prevUserIdRef.current}`,
+            `first_time_setup_${prevUserIdRef.current}`,
+            `user_profile_${prevUserIdRef.current}`,
+          ]).catch(() => {});
+        }
+        prevUserIdRef.current = firebaseUser.uid;
+        
         safeStorageSet(AUTH_STORAGE_KEY, user).catch(() => {});
 
         const gateSeen = await safeStorageGet<boolean>(AUTH_LOGIN_GATE_KEY, false);
@@ -372,6 +387,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const deleteAccount = useCallback(async (): Promise<boolean> => {
     console.log('[Auth] Deleting account...');
+    const currentUserId = authState.user?.id;
     
     try {
       await deleteCurrentUser();
@@ -392,6 +408,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         }
       }
       
+      prevUserIdRef.current = null;
       setNeedsLoginGate(false);
       setRequiresFirstLogin(true);
       setWelcomeOnboardingCompletedState(false);
@@ -402,7 +419,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         isAuthenticated: false,
       });
       
-      console.log('[Auth] Account and all data deleted successfully');
+      console.log('[Auth] Account and all data deleted successfully, previous user:', currentUserId);
       return true;
     } catch (error) {
       console.error('[Auth] Delete error:', error);
@@ -416,7 +433,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       
       return false;
     }
-  }, [queryClient]);
+  }, [queryClient, authState.user?.id]);
 
   return useMemo(() => ({
     ...authState,

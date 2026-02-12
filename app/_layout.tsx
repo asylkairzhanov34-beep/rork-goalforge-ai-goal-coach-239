@@ -85,10 +85,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 10 * 60 * 1000,
-      gcTime: 15 * 60 * 1000,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,
+      refetchOnMount: 'always',
       refetchOnReconnect: false,
       networkMode: 'offlineFirst',
     },
@@ -98,6 +98,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+export { queryClient };
 
 function StreakCelebrationOverlay() {
   const { isVisible, hideCelebration } = useStreakCelebration();
@@ -324,22 +326,28 @@ export default function RootLayout() {
   const [providersReady, setProvidersReady] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+    
     const prepareApp = async () => {
       try {
         await clearCorruptedStorage();
       } catch (error) {
         console.error('[RootLayout] Preparation error:', error);
       } finally {
-        setIsHydrated(true);
-        SplashScreen.hideAsync().catch(() => {});
-        
-        InteractionManager.runAfterInteractions(() => {
-          setProvidersReady(true);
-        });
+        if (mounted) {
+          setIsHydrated(true);
+          SplashScreen.hideAsync().catch(() => {});
+          
+          requestAnimationFrame(() => {
+            if (mounted) setProvidersReady(true);
+          });
+        }
       }
     };
 
     prepareApp();
+    
+    return () => { mounted = false; };
   }, []);
 
   if (!isHydrated) {

@@ -25,7 +25,7 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
       return;
     }
     if (prevUserIdRef.current !== currentUserId) {
-      console.log('[JournalStore] User changed, resetting');
+      console.log('[JournalStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting');
       setEntries([]);
       setIsLoading(true);
       prevUserIdRef.current = currentUserId;
@@ -48,6 +48,13 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
             console.log('[JournalStore] Loaded from Firebase:', firebaseEntries.length);
             setEntries(firebaseEntries);
             await AsyncStorage.setItem(getStorageKey(userId), JSON.stringify(firebaseEntries));
+            setIsLoading(false);
+            return;
+          } else {
+            console.log('[JournalStore] No entries in Firebase - new user');
+            setEntries([]);
+            await AsyncStorage.removeItem(getStorageKey(userId));
+            setIsLoading(false);
             return;
           }
         } catch (error) {
@@ -67,9 +74,12 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
             console.warn('[JournalStore] Background sync failed:', e)
           );
         }
+      } else {
+        setEntries([]);
       }
     } catch (error) {
       console.log('[JournalStore] Error loading journal entries:', error);
+      setEntries([]);
     } finally {
       setIsLoading(false);
     }
