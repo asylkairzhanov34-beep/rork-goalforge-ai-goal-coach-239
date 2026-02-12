@@ -270,31 +270,60 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       try {
-        console.log('[Auth] Checking for existing user data in Firebase...');
+        console.log('[Auth] ======= CHECKING EXISTING USER DATA IN FIREBASE =======');
         const existingProfile = await getUserProfile(firebaseUser.uid);
         
-        console.log('[Auth] Existing profile result:', {
+        console.log('[Auth] Firebase profile check result:', JSON.stringify({
           exists: !!existingProfile,
           hasSetup: !!existingProfile?.firstTimeSetup,
           isCompleted: existingProfile?.firstTimeSetup?.isCompleted,
           hasNickname: !!existingProfile?.firstTimeSetup?.nickname,
+          nickname: existingProfile?.firstTimeSetup?.nickname,
+          hasGoals: !!existingProfile?.goals,
+          goalsCount: existingProfile?.goals?.length || 0,
+          hasTasks: !!existingProfile?.tasks,
+          tasksCount: existingProfile?.tasks?.length || 0,
           syncWorking: firebaseSyncStatus.isWorking,
-        });
+        }, null, 2));
         
         if (existingProfile?.firstTimeSetup?.isCompleted) {
-          console.log('[Auth] ✅ Returning user detected - restoring local flags');
+          console.log('[Auth] ✅ RETURNING USER DETECTED - restoring all data');
+          
+          // Restore onboarding flags
           await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
           setWelcomeOnboardingCompletedState(true);
           await safeStorageSet(FIRST_LAUNCH_KEY, true);
           setRequiresFirstLogin(false);
           
+          // Cache profile setup to local storage
           if (existingProfile.firstTimeSetup.nickname) {
             const setupKey = `first_time_setup_${firebaseUser.uid}`;
             await safeStorageSet(setupKey, existingProfile.firstTimeSetup);
-            console.log('[Auth] ✅ Cached Firebase profile to local storage for key:', setupKey);
+            console.log('[Auth] ✅ Cached profile setup to local storage');
           }
           
-          console.log('[Auth] ✅ Local flags restored from Firebase data');
+          // Cache goals to local storage
+          if (existingProfile.goals && existingProfile.goals.length > 0) {
+            const goalsKey = `goals_${firebaseUser.uid}`;
+            await safeStorageSet(goalsKey, existingProfile.goals);
+            console.log('[Auth] ✅ Cached', existingProfile.goals.length, 'goals to local storage');
+          }
+          
+          // Cache tasks to local storage
+          if (existingProfile.tasks && existingProfile.tasks.length > 0) {
+            const tasksKey = `daily_tasks_${firebaseUser.uid}`;
+            await safeStorageSet(tasksKey, existingProfile.tasks);
+            console.log('[Auth] ✅ Cached', existingProfile.tasks.length, 'tasks to local storage');
+          }
+          
+          // Cache profile to local storage
+          if (existingProfile.profile) {
+            const profileKey = `user_profile_${firebaseUser.uid}`;
+            await safeStorageSet(profileKey, existingProfile.profile);
+            console.log('[Auth] ✅ Cached user profile to local storage');
+          }
+          
+          console.log('[Auth] ✅ All Firebase data restored to local cache');
         } else if (existingProfile?.onboardingCompleted) {
           console.log('[Auth] Partial profile found (onboarding completed but setup incomplete)');
           await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
@@ -302,10 +331,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           await safeStorageSet(FIRST_LAUNCH_KEY, true);
           setRequiresFirstLogin(false);
         } else {
-          console.log('[Auth] New user or incomplete setup - no flags to restore');
+          console.log('[Auth] New user or incomplete setup - no data to restore');
         }
-      } catch (profileCheckError) {
-        console.error('[Auth] ❌ Failed to check existing profile:', profileCheckError);
+        
+        console.log('[Auth] ======= USER DATA CHECK COMPLETE =======');
+      } catch (profileCheckError: any) {
+        console.error('[Auth] ❌ Failed to check existing profile:', profileCheckError?.message || profileCheckError);
       }
 
       await markLoginGateSeen();

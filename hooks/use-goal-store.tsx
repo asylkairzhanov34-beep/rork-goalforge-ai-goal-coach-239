@@ -139,33 +139,56 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
+      console.log('[GoalStore] ======= LOADING GOALS =======');
+      console.log('[GoalStore] User ID:', user.id);
+      console.log('[GoalStore] Is real user:', !user.id.startsWith('dev_guest_'));
+      
       if (!user.id.startsWith('dev_guest_')) {
         try {
+          console.log('[GoalStore] Step 1: Fetching goals from Firebase...');
           const firebaseGoals = await getUserGoals(user.id);
+          
+          console.log('[GoalStore] Firebase goals response:', {
+            found: !!firebaseGoals,
+            count: firebaseGoals?.length || 0,
+          });
+          
           if (firebaseGoals && firebaseGoals.length > 0) {
+            console.log('[GoalStore] ✅ Goals loaded from Firebase:', firebaseGoals.length);
+            firebaseGoals.forEach((g: Goal, i: number) => {
+              console.log(`[GoalStore] - Goal ${i + 1}: ${g.title} (active: ${g.isActive})`);
+            });
             await safeStorageSet(STORAGE_KEYS.GOALS, firebaseGoals);
             return firebaseGoals;
           } else {
-            await safeStorageSet(STORAGE_KEYS.GOALS, []);
-            return [];
+            console.log('[GoalStore] No goals in Firebase, checking local cache...');
           }
-        } catch {
-          // fallback to local
+        } catch (error: any) {
+          console.error('[GoalStore] Firebase goals fetch failed:', error?.message || error);
         }
       }
       
+      console.log('[GoalStore] Step 2: Checking local storage...');
       const localGoals = await safeStorageGet<Goal[] | null>(STORAGE_KEYS.GOALS, null);
+      
       if (localGoals && localGoals.length > 0) {
+        console.log('[GoalStore] ✅ Found local goals:', localGoals.length);
+        
         if (!user.id.startsWith('dev_guest_')) {
+          console.log('[GoalStore] ⬆️ Syncing local goals to Firebase...');
           InteractionManager.runAfterInteractions(async () => {
             try {
               await saveUserGoals(user.id, localGoals);
-            } catch {}
+              console.log('[GoalStore] ✅ Local goals synced to Firebase');
+            } catch (syncError: any) {
+              console.error('[GoalStore] Failed to sync goals to Firebase:', syncError?.message);
+            }
           });
         }
         return localGoals;
       }
       
+      console.log('[GoalStore] No goals found anywhere - user needs to create first goal');
       return [];
     },
     staleTime: 3 * 60 * 1000,
@@ -179,33 +202,42 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     queryFn: async () => {
       if (!user?.id) return [];
       
+      console.log('[GoalStore] ======= LOADING TASKS =======');
+      
       if (!user.id.startsWith('dev_guest_')) {
         try {
+          console.log('[GoalStore] Fetching tasks from Firebase...');
           const firebaseTasks = await getUserTasks(user.id);
+          
           if (firebaseTasks && firebaseTasks.length > 0) {
+            console.log('[GoalStore] ✅ Tasks loaded from Firebase:', firebaseTasks.length);
             await safeStorageSet(STORAGE_KEYS.TASKS, firebaseTasks);
             return firebaseTasks;
           } else {
-            await safeStorageSet(STORAGE_KEYS.TASKS, []);
-            return [];
+            console.log('[GoalStore] No tasks in Firebase');
           }
-        } catch {
-          // fallback to local
+        } catch (error: any) {
+          console.error('[GoalStore] Firebase tasks fetch failed:', error?.message || error);
         }
       }
       
       const localTasks = await safeStorageGet<DailyTask[] | null>(STORAGE_KEYS.TASKS, null);
       if (localTasks && localTasks.length > 0) {
+        console.log('[GoalStore] ✅ Found local tasks:', localTasks.length);
         if (!user.id.startsWith('dev_guest_')) {
           InteractionManager.runAfterInteractions(async () => {
             try {
               await saveUserTasks(user.id, localTasks);
-            } catch {}
+              console.log('[GoalStore] ✅ Local tasks synced to Firebase');
+            } catch (syncError: any) {
+              console.error('[GoalStore] Failed to sync tasks:', syncError?.message);
+            }
           });
         }
         return localTasks;
       }
       
+      console.log('[GoalStore] No tasks found');
       return [];
     },
     staleTime: 3 * 60 * 1000,
@@ -473,6 +505,10 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     goalData: Omit<Goal, 'id' | 'createdAt' | 'isActive' | 'completedTasksCount' | 'totalTasksCount'>,
     tasks: Omit<DailyTask, 'id' | 'goalId' | 'completed' | 'completedAt'>[]
   ) => {
+    console.log('[GoalStore] ======= CREATING NEW GOAL =======');
+    console.log('[GoalStore] Goal title:', goalData.title);
+    console.log('[GoalStore] Tasks count:', tasks.length);
+    
     const goalId = Date.now().toString();
     const newGoal: Goal = {
       ...goalData,
@@ -498,16 +534,40 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     setCurrentGoal(newGoal);
     setDailyTasks(newTasks);
     
-    console.log('[GoalStore] Creating new goal and syncing to Firebase');
+    // Step 1: Save to local storage
+    console.log('[GoalStore] Step 1: Saving to local storage...');
     await safeStorageSet(STORAGE_KEYS.GOALS, allGoals);
-    await saveUserGoals(user?.id || 'default', allGoals).catch((err: Error) => {
-      console.error('[GoalStore] Failed to sync goals to Firebase:', err);
-    });
-    await saveTasksMutation.mutateAsync(newTasks);
+    await safeStorageSet(STORAGE_KEYS.TASKS, newTasks);
+    console.log('[GoalStore] ✅ Local storage saved');
+    
+    // Step 2: Save to Firebase
+    if (user?.id && !user.id.startsWith('dev_guest_')) {
+      console.log('[GoalStore] Step 2: Syncing to Firebase...');
+      try {
+        await saveUserGoals(user.id, allGoals);
+        console.log('[GoalStore] ✅ Goals synced to Firebase');
+        
+        await saveUserTasks(user.id, newTasks);
+        console.log('[GoalStore] ✅ Tasks synced to Firebase');
+        
+        // Verify
+        const verification = await getUserGoals(user.id);
+        if (verification && verification.length > 0) {
+          console.log('[GoalStore] ✅ Firebase verification passed - goals persisted');
+        } else {
+          console.warn('[GoalStore] ⚠️ Firebase verification failed');
+        }
+      } catch (err: any) {
+        console.error('[GoalStore] ❌ Firebase sync failed:', err?.message || err);
+      }
+    }
     
     queryClient.invalidateQueries({ queryKey: ['goals', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] });
     
     updateProfile({ currentGoalId: goalId });
+    
+    console.log('[GoalStore] ======= GOAL CREATED SUCCESSFULLY =======');
   };
 
   const toggleTaskCompletion = async (taskId: string) => {

@@ -7,7 +7,7 @@ import {
 } from '@/types/first-time-setup';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
 import { useAuth } from '@/hooks/use-auth-store';
-import { saveUserProfile, getUserProfile, updateUserProfile, firebaseSyncStatus } from '@/lib/firebase';
+import { saveUserProfile, getUserProfile, updateUserProfile, firebaseSyncStatus, testFirestoreConnection } from '@/lib/firebase';
 
 const getFirstTimeSetupKey = (userId: string) => `first_time_setup_${userId}`;
 
@@ -99,20 +99,50 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
   }, []);
 
   const loadProfileFromFirebase = useCallback(async (userId: string, retryCount = 0): Promise<FirstTimeProfile | null> => {
-    const MAX_RETRIES = 2;
-    const RETRY_DELAY = 800;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000;
 
     try {
-      console.log(`[FirstTimeSetupProvider] Firebase load attempt ${retryCount + 1}/${MAX_RETRIES + 1} for user: ${userId}`);
+      console.log(`[FirstTimeSetupProvider] ======= Firebase load attempt ${retryCount + 1}/${MAX_RETRIES + 1} for user: ${userId} =======`);
+      
+      // First test connection if this is first attempt
+      if (retryCount === 0) {
+        const connectionTest = await testFirestoreConnection(userId);
+        if (!connectionTest.success) {
+          console.error('[FirstTimeSetupProvider] ❌ Firestore connection test failed:', connectionTest.error);
+          if (connectionTest.permissionDenied) {
+            console.error('[FirstTimeSetupProvider] ⚠️ PERMISSION DENIED - data will NOT sync to cloud!');
+          }
+        } else {
+          console.log('[FirstTimeSetupProvider] ✅ Firestore connection OK');
+        }
+      }
+      
       const firebaseProfile = await getUserProfile(userId);
+      
+      console.log('[FirstTimeSetupProvider] Firebase response:', {
+        hasProfile: !!firebaseProfile,
+        hasFirstTimeSetup: !!firebaseProfile?.firstTimeSetup,
+        isCompleted: firebaseProfile?.firstTimeSetup?.isCompleted,
+        nickname: firebaseProfile?.firstTimeSetup?.nickname,
+        hasGoals: !!firebaseProfile?.goals,
+        goalsCount: firebaseProfile?.goals?.length || 0,
+      });
 
       if (firebaseProfile?.firstTimeSetup) {
-        console.log('[FirstTimeSetupProvider] ✅ Firebase profile found, isCompleted:', firebaseProfile.firstTimeSetup.isCompleted);
+        console.log('[FirstTimeSetupProvider] ✅ Firebase profile found!');
+        console.log('[FirstTimeSetupProvider] - isCompleted:', firebaseProfile.firstTimeSetup.isCompleted);
+        console.log('[FirstTimeSetupProvider] - nickname:', firebaseProfile.firstTimeSetup.nickname);
+        console.log('[FirstTimeSetupProvider] - primaryGoal:', firebaseProfile.firstTimeSetup.primaryGoal);
+        
         const profile = deserializeProfile(firebaseProfile.firstTimeSetup);
         if (profile) {
+          console.log('[FirstTimeSetupProvider] ✅ Profile deserialized successfully, caching locally');
           await safeStorageSet(FIRST_TIME_SETUP_KEY, serializeProfile(profile));
+          return profile;
+        } else {
+          console.warn('[FirstTimeSetupProvider] ⚠️ Failed to deserialize Firebase profile');
         }
-        return profile;
       }
 
       if (firebaseSyncStatus.permissionDenied) {
@@ -120,10 +150,10 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
         return null;
       }
 
-      console.log('[FirstTimeSetupProvider] No Firebase profile found for user:', userId);
+      console.log('[FirstTimeSetupProvider] No firstTimeSetup in Firebase for user:', userId);
       return null;
-    } catch (firebaseError) {
-      console.warn(`[FirstTimeSetupProvider] Firebase load attempt ${retryCount + 1} failed:`, firebaseError);
+    } catch (firebaseError: any) {
+      console.error(`[FirstTimeSetupProvider] Firebase load attempt ${retryCount + 1} failed:`, firebaseError?.message || firebaseError);
 
       if (retryCount < MAX_RETRIES) {
         console.log(`[FirstTimeSetupProvider] Retrying in ${RETRY_DELAY}ms...`);
@@ -131,7 +161,7 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
         return loadProfileFromFirebase(userId, retryCount + 1);
       }
 
-      console.error('[FirstTimeSetupProvider] All Firebase retries exhausted, using local cache');
+      console.error('[FirstTimeSetupProvider] ❌ All Firebase retries exhausted, using local cache');
       return null;
     }
   }, [FIRST_TIME_SETUP_KEY, deserializeProfile, serializeProfile]);
@@ -140,48 +170,76 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
     setState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      console.log('[FirstTimeSetupProvider] Loading profile for user:', user?.id);
+      console.log('[FirstTimeSetupProvider] ======= LOADING PROFILE =======');
+      console.log('[FirstTimeSetupProvider] User ID:', user?.id);
+      console.log('[FirstTimeSetupProvider] Is real user:', user?.id && !user.id.startsWith('dev_guest_'));
 
       let stored: FirstTimeProfile | null = null;
 
       if (user?.id && !user.id.startsWith('dev_guest_')) {
+        // PRIORITY 1: Try Firebase first (source of truth for real users)
+        console.log('[FirstTimeSetupProvider] Step 1: Loading from Firebase...');
         stored = await loadProfileFromFirebase(user.id);
 
+        // PRIORITY 2: If Firebase has nothing, check local cache
         if (!stored) {
-          console.log('[FirstTimeSetupProvider] Firebase returned nothing, checking local cache...');
+          console.log('[FirstTimeSetupProvider] Step 2: Firebase empty, checking local cache...');
           const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
           stored = deserializeProfile(local);
 
           if (stored) {
-            console.log('[FirstTimeSetupProvider] ✅ Found profile in local cache, isCompleted:', stored.isCompleted);
+            console.log('[FirstTimeSetupProvider] ✅ Found profile in local cache');
+            console.log('[FirstTimeSetupProvider] - isCompleted:', stored.isCompleted);
+            console.log('[FirstTimeSetupProvider] - nickname:', stored.nickname);
+            
+            // Sync local cache to Firebase if we have completed profile locally but not in Firebase
+            if (stored.isCompleted && stored.nickname) {
+              console.log('[FirstTimeSetupProvider] ⬆️ Syncing local profile to Firebase...');
+              try {
+                await saveUserProfile(user.id, {
+                  firstTimeSetup: serializeProfile(stored),
+                  displayName: stored.nickname,
+                  onboardingCompleted: true,
+                });
+                console.log('[FirstTimeSetupProvider] ✅ Local profile synced to Firebase');
+              } catch (syncError) {
+                console.warn('[FirstTimeSetupProvider] Failed to sync local to Firebase:', syncError);
+              }
+            }
           } else {
-            console.log('[FirstTimeSetupProvider] No local cache either - new user');
+            console.log('[FirstTimeSetupProvider] No local cache either - this is a NEW user');
           }
         }
       } else if (user?.id) {
-        console.log('[FirstTimeSetupProvider] Dev guest, loading from local storage');
+        console.log('[FirstTimeSetupProvider] Dev guest mode, loading from local storage only');
         const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null);
         stored = deserializeProfile(local);
       }
 
-      console.log('[FirstTimeSetupProvider] Final profile result:', stored ? `Yes (completed: ${stored.isCompleted}, nickname: ${stored.nickname})` : 'No profile');
+      console.log('[FirstTimeSetupProvider] ======= PROFILE LOAD COMPLETE =======');
+      console.log('[FirstTimeSetupProvider] Result:', stored ? 'FOUND' : 'NOT FOUND');
+      if (stored) {
+        console.log('[FirstTimeSetupProvider] - nickname:', stored.nickname);
+        console.log('[FirstTimeSetupProvider] - isCompleted:', stored.isCompleted);
+        console.log('[FirstTimeSetupProvider] - primaryGoal:', stored.primaryGoal);
+      }
 
       setState({
         profile: stored,
-        currentStep: 0,
+        currentStep: stored?.isCompleted ? 3 : 0,
         isLoading: false,
       });
-    } catch (error) {
-      console.error('[FirstTimeSetupProvider] Error loading profile:', error);
+    } catch (error: any) {
+      console.error('[FirstTimeSetupProvider] ❌ Error loading profile:', error?.message || error);
       const local = await safeStorageGet<FirstTimeProfileSerialized | null>(FIRST_TIME_SETUP_KEY, null).catch(() => null);
       const fallback = local ? deserializeProfile(local) : null;
       setState({
         profile: fallback,
-        currentStep: 0,
+        currentStep: fallback?.isCompleted ? 3 : 0,
         isLoading: false,
       });
     }
-  }, [FIRST_TIME_SETUP_KEY, deserializeProfile, loadProfileFromFirebase, user?.id]);
+  }, [FIRST_TIME_SETUP_KEY, deserializeProfile, loadProfileFromFirebase, serializeProfile, user?.id]);
 
   const updateProfile = useCallback(
     async (updates: Partial<FirstTimeProfile>) => {
@@ -247,16 +305,23 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
       return {
         ...prev,
         profile: completed,
+        currentStep: 3,
       };
     });
 
     if (completed) {
       const serialized = serializeProfile(completed);
-      console.log('[FirstTimeSetupProvider] Persisting completed setup to storage');
+      console.log('[FirstTimeSetupProvider] ======= COMPLETING SETUP =======');
+      console.log('[FirstTimeSetupProvider] Nickname:', (completed as FirstTimeProfile).nickname);
+      console.log('[FirstTimeSetupProvider] Primary Goal:', (completed as FirstTimeProfile).primaryGoal);
+      
+      // Save to local storage first
+      console.log('[FirstTimeSetupProvider] Step 1: Saving to local storage...');
       await safeStorageSet(FIRST_TIME_SETUP_KEY, serialized);
+      console.log('[FirstTimeSetupProvider] ✅ Local storage saved');
 
-      if (user?.id) {
-        console.log('[FirstTimeSetupProvider] Saving completed setup to Firebase');
+      if (user?.id && !user.id.startsWith('dev_guest_')) {
+        console.log('[FirstTimeSetupProvider] Step 2: Saving to Firebase...');
         
         let existingCreatedAt: string | null = null;
         try {
@@ -268,16 +333,35 @@ export const [FirstTimeSetupProvider, useFirstTimeSetup] = createContextHook(() 
           console.warn('[FirstTimeSetupProvider] Could not check existing createdAt:', e);
         }
         
-        await saveUserProfile(user.id, {
+        const firebaseData = {
           firstTimeSetup: serialized,
           email: user.email,
           displayName: (completed as FirstTimeProfile).nickname,
           createdAt: existingCreatedAt || new Date().toISOString(),
           onboardingCompleted: true,
-        }).catch((error) => {
-          console.error('[FirstTimeSetupProvider] Failed to save to Firebase:', error);
-        });
+          setupCompletedAt: new Date().toISOString(),
+        };
+        
+        console.log('[FirstTimeSetupProvider] Firebase data to save:', JSON.stringify(firebaseData, null, 2));
+        
+        try {
+          await saveUserProfile(user.id, firebaseData);
+          console.log('[FirstTimeSetupProvider] ✅ Firebase save successful!');
+          
+          // Verify the save
+          const verification = await getUserProfile(user.id);
+          if (verification?.firstTimeSetup?.isCompleted) {
+            console.log('[FirstTimeSetupProvider] ✅ Firebase verification passed - data is persisted');
+          } else {
+            console.warn('[FirstTimeSetupProvider] ⚠️ Firebase verification failed - data may not be persisted');
+          }
+        } catch (error: any) {
+          console.error('[FirstTimeSetupProvider] ❌ Firebase save failed:', error?.message || error);
+          console.error('[FirstTimeSetupProvider] ⚠️ Data is only stored locally - will be lost on app deletion!');
+        }
       }
+      
+      console.log('[FirstTimeSetupProvider] ======= SETUP COMPLETE =======');
     } else {
       console.warn('[FirstTimeSetupProvider] completeSetup: no profile available after setState');
     }
