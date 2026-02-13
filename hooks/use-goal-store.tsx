@@ -57,7 +57,8 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [activeChallengesForStreak, setActiveChallengesForStreak] = useState<ActiveChallengeForStreak[]>([]);
 
-  const STORAGE_KEYS = getStorageKeys(user?.id || 'default');
+  const userId = user?.id || 'default';
+  const STORAGE_KEYS = getStorageKeys(userId);
   const [firebaseSyncOk, setFirebaseSyncOk] = useState<boolean | null>(null);
   const [firebaseSyncError, setFirebaseSyncError] = useState<string | null>(null);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
@@ -109,7 +110,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   }, [user?.id]);
 
   const profileQuery = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile', userId, STORAGE_KEYS.PROFILE],
     queryFn: async () => {
       if (!user?.id) return DEFAULT_PROFILE;
       
@@ -135,7 +136,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   });
 
   const goalsQuery = useQuery({
-    queryKey: ['goals', user?.id],
+    queryKey: ['goals', userId, STORAGE_KEYS.GOALS],
     queryFn: async () => {
       if (!user?.id) return [];
       
@@ -198,7 +199,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   });
 
   const tasksQuery = useQuery({
-    queryKey: ['tasks', user?.id],
+    queryKey: ['tasks', userId, STORAGE_KEYS.TASKS],
     queryFn: async () => {
       if (!user?.id) return [];
       
@@ -247,7 +248,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   });
 
   const pomodoroQuery = useQuery({
-    queryKey: ['pomodoro', user?.id],
+    queryKey: ['pomodoro', userId, STORAGE_KEYS.POMODORO_SESSIONS],
     queryFn: async () => {
       if (!user?.id) return [];
       

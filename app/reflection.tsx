@@ -87,7 +87,7 @@ export default function ReflectionScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleSubmit = async () => {
     if (!text.trim()) return;
@@ -167,7 +167,7 @@ export default function ReflectionScreen() {
               <View style={styles.promptIconContainer}>
                 <BookOpen size={28} color={theme.colors.primary} />
               </View>
-              <Text style={styles.promptLabel}>Today's Prompt</Text>
+              <Text style={styles.promptLabel}>Today’s Prompt</Text>
               <Text style={styles.promptText}>{todayPrompt}</Text>
             </View>
           </Animated.View>

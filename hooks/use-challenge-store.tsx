@@ -72,7 +72,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   }, [user?.id, queryClient]);
 
   const challengesQuery = useQuery({
-    queryKey: ['activeChallenges', userId],
+    queryKey: ['activeChallenges', userId, isRealUser, STORAGE_KEYS.ACTIVE_CHALLENGES],
     queryFn: async () => {
       if (!user?.id) return [];
       console.log('[ChallengeStore] Loading challenges for user:', userId);
@@ -113,7 +113,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
   });
 
   const statsQuery = useQuery({
-    queryKey: ['challengeStats', userId],
+    queryKey: ['challengeStats', userId, isRealUser, STORAGE_KEYS.CHALLENGE_STATS],
     queryFn: async () => {
       if (!user?.id) return DEFAULT_STATS;
       console.log('[ChallengeStore] Loading challenge stats for user:', userId);

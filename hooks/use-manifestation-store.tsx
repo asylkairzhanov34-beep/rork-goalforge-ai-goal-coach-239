@@ -58,7 +58,7 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
   }, [isRealUser, userId]);
 
   const sessionsQuery = useQuery({
-    queryKey: ['manifestation-sessions', userId],
+    queryKey: ['manifestation-sessions', userId, isRealUser, STORAGE_KEYS.SESSIONS],
     queryFn: async () => {
       console.log('[ManifestationStore] Loading sessions for user:', userId);
 
@@ -100,7 +100,7 @@ export const [ManifestationProvider, useManifestationStore] = createContextHook(
   });
 
   const settingsQuery = useQuery({
-    queryKey: ['manifestation-settings', userId],
+    queryKey: ['manifestation-settings', userId, isRealUser, STORAGE_KEYS.SETTINGS],
     queryFn: async () => {
       if (isRealUser) {
         try {
