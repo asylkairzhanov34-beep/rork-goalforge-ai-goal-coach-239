@@ -3,20 +3,12 @@ import { useGoalStore } from '@/hooks/use-goal-store';
 import { useProgress } from '@/hooks/use-progress';
 import { useAuth } from '@/hooks/use-auth-store';
 import { ChatMessage, ChatAttachment } from '@/types/chat';
-import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
+import { safeStorageSet } from '@/utils/storage-helper';
 import { getUserChatHistory, saveUserChatHistory } from '@/lib/firebase';
-import { generateText } from '@rork-ai/toolkit-sdk';
+import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
+import * as z from 'zod/v4';
 
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
-
-type OpenAIContentPart = 
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string } };
-
-interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string | OpenAIContentPart[];
-}
 
 export interface MessageWithAttachments {
   text: string;
@@ -40,433 +32,335 @@ let pendingTaskData: GeneratedTaskData | null = null;
 export const getPendingTaskData = () => pendingTaskData;
 export const clearPendingTaskData = () => { pendingTaskData = null; };
 
-interface TaskCreationState {
-  isActive: boolean;
-  stage: 'asking_title' | 'asking_details' | 'confirming' | null;
-  collectedInfo: {
-    title?: string;
-    description?: string;
-    duration?: string;
-    priority?: 'high' | 'medium' | 'low';
-    date?: string;
-  };
-}
-
-const getChatStorageKey = (userId: string) => `chat_history_${userId}`;
+const getChatStorageKey = (userId: string) => `chat_history_v2_${userId}`;
 
 export const [ChatProvider, useChat] = createContextHook(() => {
   const { user } = useAuth();
   const goalStore = useGoalStore();
   const progress = useProgress();
-  const [messages, setMessages] = useState<OpenAIMessage[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskFormData, setTaskFormData] = useState<GeneratedTaskData | null>(null);
-  const [chatLoaded, setChatLoaded] = useState(false);
-  const taskCreationState = useRef<TaskCreationState>({
-    isActive: false,
-    stage: null,
-    collectedInfo: {},
-  });
+  const taskFormQueue = useRef<GeneratedTaskData | null>(null);
 
   const userId = user?.id || 'default';
   const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
   const chatStorageKey = getChatStorageKey(userId);
 
-  useEffect(() => {
-    const loadChatHistory = async () => {
-      try {
-        console.log('[Chat] Loading chat history for user:', userId);
+  const goalStoreRef = useRef(goalStore);
+  goalStoreRef.current = goalStore;
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
-        if (isRealUser) {
-          try {
-            const firebaseMessages = await getUserChatHistory(userId);
-            if (firebaseMessages && firebaseMessages.length > 0) {
-              console.log('[Chat] Loaded from Firebase:', firebaseMessages.length);
-              setMessages(firebaseMessages);
-              await safeStorageSet(chatStorageKey, firebaseMessages);
-              setChatLoaded(true);
-              return;
-            }
-          } catch (error) {
-            console.warn('[Chat] Firebase chat load failed:', error);
-          }
-        }
-
-        const stored = await safeStorageGet<OpenAIMessage[]>(chatStorageKey, []);
-        if (stored.length > 0) {
-          console.log('[Chat] Loaded from local:', stored.length);
-          setMessages(stored);
-
-          if (isRealUser) {
-            saveUserChatHistory(userId, stored).catch(e =>
-              console.warn('[Chat] Background chat sync failed:', e)
-            );
-          }
-        }
-      } catch (error) {
-        console.warn('[Chat] Error loading chat history:', error);
-      } finally {
-        setChatLoaded(true);
-      }
-    };
-
-    loadChatHistory();
-  }, [userId]);
-
-  const persistMessages = useCallback((newMessages: OpenAIMessage[]) => {
-    const toSave = newMessages.filter(m => m.role !== 'system').slice(-50);
-    safeStorageSet(chatStorageKey, toSave).catch(e =>
-      console.warn('[Chat] Local chat save failed:', e)
-    );
-    if (isRealUser) {
-      saveUserChatHistory(userId, toSave).catch(e =>
-        console.warn('[Chat] Firebase chat save failed:', e)
-      );
-    }
-  }, [chatStorageKey, isRealUser, userId]);
-
-  const detectTaskCreationIntent = useCallback((text: string): boolean => {
-    const lowerText = text.toLowerCase();
-    const taskKeywords = [
-      'add task', 'create task', 'new task', 'добавь задачу', 'создай задачу',
-      'добавить задачу', 'создать задачу', 'новая задача', 'запланируй',
-      'schedule', 'plan task', 'add to plan', 'добавь в план', 'remind me to',
-      'напомни мне', 'нужно сделать', 'need to do', 'want to do', 'хочу сделать',
-      'задача', 'task'
-    ];
-    return taskKeywords.some(keyword => lowerText.includes(keyword));
-  }, []);
-
-  const detectConfirmation = useCallback((text: string): boolean => {
-    const lowerText = text.toLowerCase();
-    const confirmWords = ['да', 'yes', 'ок', 'ok', 'окей', 'okay', 'давай', 'go', 'sure', 'конечно', 'добавь', 'создай', 'подтверждаю', 'confirm', 'добавить', 'сохранить', 'save'];
-    return confirmWords.some(word => lowerText.includes(word));
-  }, []);
-
-  const detectCancellation = useCallback((text: string): boolean => {
-    const lowerText = text.toLowerCase();
-    const cancelWords = ['нет', 'no', 'отмена', 'cancel', 'стоп', 'stop', 'не надо', 'отменить', 'назад', 'back'];
-    return cancelWords.some(word => lowerText.includes(word));
-  }, []);
-
-  const parseTaskJSON = useCallback((text: string): GeneratedTaskData | null => {
-    try {
-      let content = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const startIdx = content.indexOf('{');
-      const endIdx = content.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx !== -1) {
-        content = content.substring(startIdx, endIdx + 1);
-      }
-      return JSON.parse(content) as GeneratedTaskData;
-    } catch {
-      console.error('[Chat] Failed to parse task JSON from:', text.substring(0, 100));
-      return null;
-    }
-  }, []);
-
-  const generateTaskFromAI = useCallback(async (userRequest: string): Promise<GeneratedTaskData | null> => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    try {
-      const result = await generateText({
-        messages: [
-          { role: 'user', content: `Generate a task based on this request: "${userRequest}". Today's date is ${todayStr}. Respond in the same language as the request. Return ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string like "30 minutes"), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date ("${todayStr}").` }
-        ],
-      });
-      console.log('[Chat] Generated task text:', result);
-      return parseTaskJSON(result);
-    } catch (error) {
-      console.error('[Chat] Task generation error:', error);
-      return null;
-    }
-  }, [parseTaskJSON]);
-
-  const buildSystemPrompt = useCallback(() => {
+  const getSystemPrompt = useCallback(() => {
     const tasks = goalStore.dailyTasks || [];
     const currentGoal = goalStore.currentGoal;
     const today = new Date().toISOString().split('T')[0];
-    
+
     const todayTasks = tasks.filter(t => t.date?.startsWith(today));
     const completedToday = todayTasks.filter(t => t.completed).length;
-    
+
     const currentStreak = progress?.currentStreak ?? 0;
     const bestStreak = progress?.bestStreak ?? 0;
     const totalCompletedTasks = progress?.totalCompletedTasks ?? tasks.filter(t => t.completed).length;
     const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
-    
-    let prompt = `You are GoalForge AI - a friendly productivity coach with FULL task management access. Today: ${today}.\n\n`;
-    prompt += `CAPABILITIES:\n`;
-    prompt += `- You CAN create, manage, and organize tasks for the user\n`;
-    prompt += `- When user asks to add a task, confirm you're creating it and describe what you're adding\n`;
-    prompt += `- Provide motivation, advice, and analyze progress\n`;
-    prompt += `- Be concise and helpful (2-4 sentences max)\n`;
-    prompt += `- Use a friendly, encouraging tone\n`;
-    prompt += `- IMPORTANT: Respond in the same language as the user\n\n`;
-    
+
+    let prompt = `You are GoalForge AI — a friendly, concise productivity coach. Today: ${today}.\n\n`;
+    prompt += `RULES:\n`;
+    prompt += `- You have FULL access to the user's tasks via tools. Use them proactively.\n`;
+    prompt += `- When user asks to create/add/generate a task, use the createTask tool immediately. Do NOT ask follow-up questions unless the request is truly ambiguous.\n`;
+    prompt += `- When user asks to see tasks, use listTasks tool.\n`;
+    prompt += `- When user asks to complete a task, use completeTask tool.\n`;
+    prompt += `- When user asks to delete a task, use deleteTask tool.\n`;
+    prompt += `- Be concise (2-4 sentences). Use a friendly, encouraging tone.\n`;
+    prompt += `- IMPORTANT: Always respond in the SAME language as the user's message.\n`;
+    prompt += `- When creating a task, pick sensible defaults for any missing fields.\n\n`;
+
     if (currentGoal) {
       prompt += `User's goal: "${currentGoal.title}"\n`;
       if (currentGoal.endDate) {
         prompt += `Deadline: ${currentGoal.endDate}\n`;
       }
     }
-    
-    prompt += `\nStats: ${totalCompletedTasks} tasks completed, Focus time: ${focusTimeDisplay}`;
+
+    prompt += `\nStats: ${totalCompletedTasks} tasks completed, Focus: ${focusTimeDisplay}`;
     if (currentStreak > 0) {
-      prompt += `, ${currentStreak} day streak (best: ${bestStreak})`;
+      prompt += `, ${currentStreak}-day streak (best: ${bestStreak})`;
     }
     prompt += `\n`;
-    
+
     if (todayTasks.length > 0) {
-      prompt += `\nToday (${completedToday}/${todayTasks.length} completed):\n`;
-      todayTasks.slice(0, 5).forEach((t) => {
-        prompt += `${t.completed ? '✓' : '○'} ${t.title}\n`;
+      prompt += `\nToday (${completedToday}/${todayTasks.length} done):\n`;
+      todayTasks.slice(0, 8).forEach((t) => {
+        prompt += `${t.completed ? '✓' : '○'} ${t.title} [id:${t.id}]\n`;
       });
-      if (todayTasks.length > 5) {
-        prompt += `... and ${todayTasks.length - 5} more tasks\n`;
+      if (todayTasks.length > 8) {
+        prompt += `... +${todayTasks.length - 8} more\n`;
       }
     } else {
       prompt += `\nNo tasks for today.\n`;
     }
-    
+
     return prompt;
   }, [goalStore.dailyTasks, goalStore.currentGoal, progress?.currentStreak, progress?.bestStreak, progress?.totalCompletedTasks, progress?.focusTimeDisplay]);
 
-  const processTaskCreationConversation = useCallback(async (userText: string): Promise<string | null> => {
-    const state = taskCreationState.current;
-    const lowerText = userText.toLowerCase();
-    
-    if (detectCancellation(userText)) {
-      taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-      return '🚫 Cancelled. Let me know if you want to add a task later!';
-    }
+  const createTaskSchema = z.object({
+    title: z.string().describe('Short task title, max 60 chars'),
+    description: z.string().describe('Task description').optional(),
+    duration: z.string().describe('Duration string like "30 minutes" or "1 hour"').optional(),
+    priority: z.enum(['high', 'medium', 'low']).describe('Task priority').optional(),
+    difficulty: z.enum(['easy', 'medium', 'hard']).describe('Task difficulty').optional(),
+    estimatedTime: z.number().describe('Estimated time in minutes').optional(),
+    tips: z.array(z.string()).describe('1-2 helpful tips').optional(),
+  });
 
-    if (state.stage === 'asking_title') {
-      state.collectedInfo.title = userText;
-      state.stage = 'asking_details';
-      return `📝 Great! Task: "${userText}"
+  const filterSchema = z.object({
+    filter: z.enum(['all', 'today', 'completed', 'pending']).describe('Filter tasks').optional(),
+  });
 
-Now tell me more:
-• How long will it take? (e.g., 30 minutes, 1 hour)
-• What's the priority? (high/medium/low)
-• Any additional details?
+  const taskIdSchema = z.object({
+    taskId: z.string().describe('The task ID').optional(),
+    taskTitle: z.string().describe('Task title to search for if ID is unknown').optional(),
+  });
 
-Or just type "done" and I'll create the task with default settings.`;
-    }
+  const emptySchema = z.object({});
 
-    if (state.stage === 'asking_details') {
-      const readyWords = ['готово', 'done', 'ready', 'создай', 'добавь', 'ок', 'ok', 'давай'];
-      const isReady = readyWords.some(w => lowerText.includes(w));
-      
-      if (!isReady) {
-        state.collectedInfo.description = userText;
-        
-        if (lowerText.includes('высок') || lowerText.includes('high') || lowerText.includes('важн') || lowerText.includes('срочн')) {
-          state.collectedInfo.priority = 'high';
-        } else if (lowerText.includes('низк') || lowerText.includes('low') || lowerText.includes('не срочн')) {
-          state.collectedInfo.priority = 'low';
-        }
-        
-        const timeMatch = userText.match(/(\d+)\s*(мин|час|hour|min)/i);
-        if (timeMatch) {
-          state.collectedInfo.duration = timeMatch[0];
-        }
-      }
-      
-      state.stage = 'confirming';
-      
-      const title = state.collectedInfo.title || 'New task';
-      const priority = state.collectedInfo.priority || 'medium';
-      const duration = state.collectedInfo.duration || '30 minutes';
-      const priorityEmoji = priority === 'high' ? '🔴' : priority === 'low' ? '🟢' : '🟡';
-      
-      return `✨ Creating task:
+  const openFormSchema = z.object({
+    title: z.string().describe('Task title'),
+    description: z.string().describe('Task description').optional(),
+    duration: z.string().describe('Duration string').optional(),
+    priority: z.enum(['high', 'medium', 'low']).optional(),
+    difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+    estimatedTime: z.number().describe('Time in minutes').optional(),
+    tips: z.array(z.string()).optional(),
+  });
 
-📌 **${title}**
-${priorityEmoji} Priority: ${priority === 'high' ? 'High' : priority === 'low' ? 'Low' : 'Medium'}
-⏱️ Duration: ${duration}
-${state.collectedInfo.description ? `📝 ${state.collectedInfo.description}` : ''}
+  const { messages: agentMessages, error: agentError, sendMessage: agentSendMessage, setMessages: setAgentMessages, status: agentStatus } = useRorkAgent({
+    tools: {
+      createTask: createRorkTool({
+        description: 'Create a new task for the user. Use this when the user asks to add, create, generate, or schedule a task. Fill in sensible defaults for any missing fields.',
+        zodSchema: createTaskSchema,
+        execute(input) {
+          console.log('[Chat Tool] createTask called:', input);
+          const today = new Date();
+          const store = goalStoreRef.current;
+          const tasks = store.dailyTasks || [];
+          const nextDay = tasks.length > 0
+            ? Math.max(...tasks.filter(t => t.goalId === store.currentGoal?.id).map(t => t.day)) + 1
+            : 1;
 
-Look good? Type "yes" to confirm or "no" to cancel.`;
-    }
+          const newTaskData = {
+            day: nextDay,
+            date: today.toISOString(),
+            title: input.title,
+            description: input.description || 'Task created via AI assistant',
+            duration: input.duration || '30 minutes',
+            priority: input.priority || 'medium' as const,
+            difficulty: input.difficulty || 'medium' as const,
+            estimatedTime: input.estimatedTime || 30,
+            tips: input.tips || ['Stay focused on the goal', 'Break it into smaller steps if needed'],
+          };
 
-    if (state.stage === 'confirming') {
-      if (detectConfirmation(userText)) {
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        
-        const fullRequest = `Title: ${state.collectedInfo.title}. ${state.collectedInfo.description || ''} Priority: ${state.collectedInfo.priority || 'medium'}. Duration: ${state.collectedInfo.duration || '30 minutes'}`;
-        
-        const taskData = await generateTaskFromAI(fullRequest);
-        
-        if (taskData) {
-          if (state.collectedInfo.title) {
-            taskData.title = state.collectedInfo.title;
+          store.addTask(newTaskData).then(() => {
+            console.log('[Chat Tool] Task created successfully:', input.title);
+          }).catch((err: unknown) => {
+            console.error('[Chat Tool] Failed to create task:', err);
+          });
+
+          return `Task "${input.title}" has been created and added to the plan.`;
+        },
+      }),
+
+      listTasks: createRorkTool({
+        description: 'List current tasks. Use when user asks to see their tasks, review progress, or analyze what they have.',
+        zodSchema: filterSchema,
+        execute(input) {
+          console.log('[Chat Tool] listTasks called:', input);
+          const store = goalStoreRef.current;
+          const tasks = store.dailyTasks || [];
+          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+          const today = new Date().toISOString().split('T')[0];
+
+          let filtered = goalTasks;
+          const filterType = input.filter || 'all';
+
+          if (filterType === 'today') {
+            filtered = goalTasks.filter(t => t.date?.startsWith(today));
+          } else if (filterType === 'completed') {
+            filtered = goalTasks.filter(t => t.completed);
+          } else if (filterType === 'pending') {
+            filtered = goalTasks.filter(t => !t.completed);
           }
-          if (state.collectedInfo.priority) {
-            taskData.priority = state.collectedInfo.priority;
+
+          if (filtered.length === 0) {
+            return `No ${filterType === 'all' ? '' : filterType + ' '}tasks found.`;
           }
-          
-          pendingTaskData = taskData;
-          taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-          
-          setTimeout(() => {
-            setTaskFormData(taskData);
-            setShowTaskForm(true);
-          }, 800);
-          
-          return `✅ Great! Opening the task form...`;
-        } else {
-          const fallbackTaskData: GeneratedTaskData = {
-            title: state.collectedInfo.title || 'New task',
-            description: state.collectedInfo.description || '',
-            duration: state.collectedInfo.duration || '30 minutes',
-            priority: state.collectedInfo.priority || 'medium',
-            difficulty: 'medium',
-            estimatedTime: 30,
-            tips: ['Stay focused on the main goal', 'Take breaks when needed'],
+
+          const list = filtered.slice(0, 15).map(t => {
+            const status = t.completed ? '✅' : '⬜';
+            const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
+            return `${status} ${prio} ${t.title} (${t.duration || '?'}) [id:${t.id}]`;
+          }).join('\n');
+
+          const completedCount = filtered.filter(t => t.completed).length;
+          return `Found ${filtered.length} tasks (${completedCount} completed):\n${list}${filtered.length > 15 ? `\n... +${filtered.length - 15} more` : ''}`;
+        },
+      }),
+
+      completeTask: createRorkTool({
+        description: 'Mark a task as completed. Use when user says they finished or completed a task.',
+        zodSchema: taskIdSchema,
+        execute(input) {
+          console.log('[Chat Tool] completeTask called:', input);
+          const store = goalStoreRef.current;
+          const tasks = store.dailyTasks || [];
+
+          let task = input.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
+
+          if (!task && input.taskTitle) {
+            const lowerTitle = input.taskTitle.toLowerCase();
+            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+          }
+
+          if (!task) {
+            return 'Task not found. Please check the task name or list your tasks first.';
+          }
+
+          if (task.completed) {
+            return `Task "${task.title}" is already completed!`;
+          }
+
+          store.toggleTaskCompletion(task.id);
+          return `Task "${task.title}" marked as completed! Great job! 🎉`;
+        },
+      }),
+
+      deleteTask: createRorkTool({
+        description: 'Delete a task. Use when user wants to remove a task.',
+        zodSchema: taskIdSchema,
+        execute(input) {
+          console.log('[Chat Tool] deleteTask called:', input);
+          const store = goalStoreRef.current;
+          const tasks = store.dailyTasks || [];
+
+          let task = input.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
+
+          if (!task && input.taskTitle) {
+            const lowerTitle = input.taskTitle.toLowerCase();
+            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+          }
+
+          if (!task) {
+            return 'Task not found. Please check the task name.';
+          }
+
+          store.deleteTask(task.id);
+          return `Task "${task.title}" has been deleted.`;
+        },
+      }),
+
+      analyzeProgress: createRorkTool({
+        description: 'Analyze user progress and provide insights. Use when user asks about their progress, stats, or performance.',
+        zodSchema: emptySchema,
+        execute() {
+          console.log('[Chat Tool] analyzeProgress called');
+          const store = goalStoreRef.current;
+          const prog = progressRef.current;
+          const tasks = store.dailyTasks || [];
+          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+          const completed = goalTasks.filter(t => t.completed).length;
+          const pending = goalTasks.filter(t => !t.completed).length;
+          const today = new Date().toISOString().split('T')[0];
+          const todayTasks = goalTasks.filter(t => t.date?.startsWith(today));
+          const todayCompleted = todayTasks.filter(t => t.completed).length;
+
+          const completionRate = goalTasks.length > 0 ? Math.round((completed / goalTasks.length) * 100) : 0;
+
+          return `Progress Report:\n- Goal: ${store.currentGoal?.title || 'No active goal'}\n- Total tasks: ${goalTasks.length} (${completed} done, ${pending} remaining)\n- Completion rate: ${completionRate}%\n- Today: ${todayCompleted}/${todayTasks.length} tasks done\n- Streak: ${prog?.currentStreak ?? 0} days (best: ${prog?.bestStreak ?? 0})\n- Focus time: ${prog?.focusTimeDisplay ?? '0m'}`;
+        },
+      }),
+
+      openTaskForm: createRorkTool({
+        description: 'Open the task creation form with pre-filled data for the user to review and customize before saving. Use this when you want to give the user a chance to edit the task details before adding it.',
+        zodSchema: openFormSchema,
+        execute(input) {
+          console.log('[Chat Tool] openTaskForm called:', input);
+          const todayStr = new Date().toISOString().split('T')[0];
+          const formData: GeneratedTaskData = {
+            title: input.title,
+            description: input.description || '',
+            duration: input.duration || '30 minutes',
+            priority: input.priority || 'medium',
+            difficulty: input.difficulty || 'medium',
+            estimatedTime: input.estimatedTime || 30,
+            tips: input.tips || ['Stay focused', 'Break it into smaller steps'],
             date: todayStr,
           };
-          
-          pendingTaskData = fallbackTaskData;
-          taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-          
-          setTimeout(() => {
-            setTaskFormData(fallbackTaskData);
-            setShowTaskForm(true);
-          }, 800);
-          
-          return `✅ Creating task! Opening form...`;
-        }
-      } else {
-        taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
-        return '🚫 Cancelled. Let me know if you want to add a task later!';
-      }
-    }
 
-    return null;
-  }, [generateTaskFromAI, detectConfirmation, detectCancellation]);
+          taskFormQueue.current = formData;
+          return `Opening task form for "${input.title}"...`;
+        },
+      }),
+    },
+  });
+
+  useEffect(() => {
+    if (taskFormQueue.current) {
+      const data = taskFormQueue.current;
+      taskFormQueue.current = null;
+      setTimeout(() => {
+        setTaskFormData(data);
+        setShowTaskForm(true);
+      }, 500);
+    }
+  }, [agentMessages]);
+
+  useEffect(() => {
+    if (!isRealUser) return;
+    getUserChatHistory(userId).then(() => {
+      console.log('[Chat] Chat history check done for:', userId);
+    }).catch((err) => {
+      console.warn('[Chat] Firebase chat load failed:', err);
+    });
+  }, [userId, isRealUser]);
 
   const sendMessage = useCallback(async (input: string | MessageWithAttachments) => {
     const text = typeof input === 'string' ? input : input.text;
     const attachments = typeof input === 'string' ? undefined : input.attachments;
-    
-    if (!text.trim() || isProcessing) return;
 
-    const trimmed = text.trim();
-    console.log('[Chat] Sending message:', trimmed.substring(0, 50), 'with', attachments?.length || 0, 'attachments');
+    if (!text.trim()) return;
 
-    setChatError(null);
-    setIsProcessing(true);
+    console.log('[Chat] Sending message:', text.substring(0, 50), 'with', attachments?.length || 0, 'attachments');
 
-    // Build content with images if present
-    let userContent: string | OpenAIContentPart[];
-    if (attachments && attachments.length > 0) {
-      userContent = [
-        { type: 'text', text: trimmed },
-        ...attachments.map(att => ({
-          type: 'image_url' as const,
-          image_url: { url: att.uri.startsWith('data:') ? att.uri : `data:${att.mimeType};base64,${att.uri}` }
-        }))
-      ];
-    } else {
-      userContent = trimmed;
-    }
-
-    const userMessage: OpenAIMessage = { role: 'user', content: userContent };
-    setMessages(prev => [...prev, { ...userMessage, _attachments: attachments }] as any);
+    const systemContext = getSystemPrompt();
+    const contextPrefix = agentMessages.length === 0
+      ? `[System context — do NOT repeat this to the user]\n${systemContext}\n[End system context]\n\nUser message: `
+      : '';
+    const enrichedText = `${contextPrefix}${text.trim()}`;
 
     try {
-      if (taskCreationState.current.isActive) {
-        console.log('[Chat] Processing task creation conversation, stage:', taskCreationState.current.stage);
-        const response = await processTaskCreationConversation(trimmed);
-        if (response) {
-          setMessages(prev => {
-            const updated = [...prev, { role: 'assistant' as const, content: response }];
-            persistMessages(updated);
-            return updated;
-          });
-          return;
-        }
-      }
-
-      const isTaskCreation = detectTaskCreationIntent(trimmed);
-      
-      if (isTaskCreation) {
-        console.log('[Chat] Task creation intent detected, starting conversation');
-        
-        taskCreationState.current = {
-          isActive: true,
-          stage: 'asking_title',
-          collectedInfo: {},
-        };
-        
-        const askMessage = `🎯 Great! Let's create a task.
-
-What needs to be done? Describe the task in a few words.`;
-        
-        setMessages(prev => {
-          const updated = [...prev, { role: 'assistant' as const, content: askMessage }];
-          persistMessages(updated);
-          return updated;
-        });
-        return;
-      }
-
-      const systemPrompt = buildSystemPrompt();
-      const recentMessages = messages.slice(-10);
-
-      const chatMessages: { role: 'user' | 'assistant'; content: string }[] = [
-        { role: 'user', content: `[System context: ${systemPrompt}]` },
-        ...recentMessages
-          .filter(m => m.role !== 'system')
-          .map(m => ({
-            role: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : (m.content.find(c => c.type === 'text') as any)?.text || '',
-          })),
-        { role: 'user', content: typeof userMessage.content === 'string' ? userMessage.content : (userMessage.content.find(c => c.type === 'text') as any)?.text || '' },
-      ];
-
-      console.log('[Chat] Calling AI toolkit...');
-
-      const assistantContent = await generateText({ messages: chatMessages });
-
-      if (!assistantContent) {
-        throw new Error('Empty response from AI');
-      }
-
-      console.log('[Chat] Response received successfully');
-      setMessages(prev => {
-        const updated = [...prev, { role: 'assistant' as const, content: assistantContent }];
-        persistMessages(updated);
-        return updated;
-      });
-
-    } catch (error: any) {
-      console.error('[Chat] Error:', error);
-      setMessages(prev => prev.slice(0, -1));
-      
-      if (error.name === 'AbortError') {
-        setChatError('Request timed out. Please try again.');
+      if (attachments && attachments.length > 0) {
+        const files = attachments.map(att => ({
+          type: 'file' as const,
+          mediaType: att.mimeType,
+          url: att.uri,
+        }));
+        agentSendMessage({ text: enrichedText, files });
       } else {
-        setChatError(error.message || 'Failed to send message');
+        agentSendMessage(enrichedText);
       }
-    } finally {
-      setIsProcessing(false);
+      console.log('[Chat] Message sent successfully');
+    } catch (error: unknown) {
+      console.error('[Chat] Error sending message:', error);
     }
-  }, [messages, isProcessing, buildSystemPrompt, detectTaskCreationIntent, processTaskCreationConversation]);
+  }, [agentSendMessage, getSystemPrompt, agentMessages.length]);
 
   const clearChat = useCallback(() => {
-    setMessages([]);
-    setChatError(null);
-    taskCreationState.current = { isActive: false, stage: null, collectedInfo: {} };
+    setAgentMessages([]);
     safeStorageSet(chatStorageKey, []).catch(() => {});
     if (isRealUser) {
       saveUserChatHistory(userId, []).catch(() => {});
     }
-  }, [chatStorageKey, isRealUser, userId]);
+  }, [setAgentMessages, chatStorageKey, isRealUser, userId]);
 
   const closeTaskForm = useCallback(() => {
     setShowTaskForm(false);
@@ -476,73 +370,21 @@ What needs to be done? Describe the task in a few words.`;
   const onTaskSaved = useCallback(() => {
     setShowTaskForm(false);
     setTaskFormData(null);
-    setMessages(prev => [...prev, { 
-      role: 'assistant', 
-      content: '✅ Task successfully added to your plan! You can view it in the Plan tab.' 
-    }]);
   }, []);
 
   const analyzeAndCreateTask = useCallback(async () => {
-    console.log('[Chat] Analyzing completed tasks');
-    setIsProcessing(true);
-    
-    const tasks = goalStore.dailyTasks || [];
-    const completedTasks = tasks.filter(t => t.completed);
-    const pendingTasks = tasks.filter(t => !t.completed);
-    
-    const analysisMessage = `📊 Analyzing your completed tasks...
-
-✅ Completed: ${completedTasks.length} tasks
-⏳ In progress: ${pendingTasks.length} tasks`;
-    
-    setMessages(prev => [...prev, { role: 'assistant', content: analysisMessage }]);
-    
+    console.log('[Chat] Analyzing completed tasks via agent');
     try {
-      const completedList = completedTasks.slice(-10).map(t => `- ${t.title}`).join('\n');
-      const pendingList = pendingTasks.slice(0, 5).map(t => `- ${t.title}`).join('\n');
-      
-      const prompt = `User completed these tasks:
-${completedList || 'No completed tasks yet'}
-
-Pending tasks:
-${pendingList || 'No pending tasks'}
-
-Today's date: ${new Date().toISOString().split('T')[0]}
-
-Based on their progress, suggest ONE new task that would help them continue their momentum. Respond in English.`;
-
-      const analysisResult = await generateText({
-        messages: [{ role: 'user', content: prompt + '\n\nReturn ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date (YYYY-MM-DD string).' }],
-      });
-      const taskData = parseTaskJSON(analysisResult);
-      if (!taskData) throw new Error('Failed to parse task data');
-      console.log('[Chat] Generated task from analysis:', taskData);
-      
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `💡 Based on your progress, I recommend:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nOpening the form...` 
-      }]);
-      
-      setTimeout(() => {
-        setTaskFormData(taskData);
-        setShowTaskForm(true);
-      }, 1000);
-      
+      const ctx = getSystemPrompt();
+      agentSendMessage(`[System context]\n${ctx}[End]\n\nAnalyze my completed tasks and suggest a new task based on my progress. Use the analyzeProgress and createTask tools.`);
     } catch (error) {
       console.error('[Chat] Analysis error:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: '❌ Failed to analyze tasks. Please try again.' 
-      }]);
-    } finally {
-      setIsProcessing(false);
     }
-  }, [goalStore.dailyTasks]);
+  }, [agentSendMessage, getSystemPrompt]);
 
   const openTaskForEdit = useCallback((task: any) => {
     console.log('[Chat] Opening task for edit:', task.title);
-    
-    const taskData: GeneratedTaskData = {
+    const editData: GeneratedTaskData = {
       title: task.title,
       description: task.description || '',
       duration: task.duration || '30 minutes',
@@ -553,106 +395,88 @@ Based on their progress, suggest ONE new task that would help them continue thei
       date: task.date ? new Date(task.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       existingTaskId: task.id,
     };
-    
-    setMessages(prev => [...prev, { 
-      role: 'assistant', 
-      content: `✏️ Editing task: **${task.title}**\n\nYou can modify the parameters or regenerate the task.` 
-    }]);
-    
-    setTaskFormData(taskData);
+    setTaskFormData(editData);
     setShowTaskForm(true);
   }, []);
 
   const openNewTaskForm = useCallback(async () => {
-    console.log('[Chat] Opening new task form with AI generation');
-    setIsProcessing(true);
-    
-    setMessages(prev => [...prev, { 
-      role: 'assistant', 
-      content: '✨ Generating a new task based on your goal...' 
-    }]);
-    
+    console.log('[Chat] Generating new task via agent');
     try {
-      const currentGoal = goalStore.currentGoal;
-      const tasks = goalStore.dailyTasks || [];
-      const completedTasks = tasks.filter(t => t.completed);
-      const existingTitles = tasks.map(t => t.title.toLowerCase());
-      
-      const prompt = `User's goal: "${currentGoal?.title || 'Improve productivity'}"
-Completed tasks: ${completedTasks.length}
-Existing tasks (avoid duplicates): ${existingTitles.slice(0, 5).join(', ')}
-Today's date: ${new Date().toISOString().split('T')[0]}
-
-Generate a NEW unique task that helps achieve this goal. Respond in English.`;
-
-      const newTaskResult = await generateText({
-        messages: [{ role: 'user', content: prompt + '\n\nReturn ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date (YYYY-MM-DD string).' }],
-      });
-      const taskData = parseTaskJSON(newTaskResult);
-      if (!taskData) throw new Error('Failed to parse task data');
-      console.log('[Chat] Generated new task:', taskData);
-      
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `🎯 Here's a new task suggestion:\n\n📌 **${taskData.title}**\n${taskData.description}\n\nOpening the form for customization...` 
-      }]);
-      
-      setTimeout(() => {
-        setTaskFormData(taskData);
-        setShowTaskForm(true);
-      }, 800);
-      
+      const ctx = getSystemPrompt();
+      agentSendMessage(`[System context]\n${ctx}[End]\n\nGenerate a new task for me based on my current goal. Create it directly using the createTask tool.`);
     } catch (error) {
       console.error('[Chat] New task generation error:', error);
-      
-      const fallbackTask: GeneratedTaskData = {
-        title: 'New task',
-        description: 'Describe what needs to be done',
-        duration: '30 minutes',
-        priority: 'medium',
-        difficulty: 'medium',
-        estimatedTime: 30,
-        tips: ['Start small', 'Stay focused on the main goal'],
-        date: new Date().toISOString().split('T')[0],
-      };
-      
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: '📝 Opening the task creation form...' 
-      }]);
-      
-      setTimeout(() => {
-        setTaskFormData(fallbackTask);
-        setShowTaskForm(true);
-      }, 500);
-    } finally {
-      setIsProcessing(false);
     }
-  }, [goalStore.currentGoal, goalStore.dailyTasks]);
+  }, [agentSendMessage, getSystemPrompt]);
 
-  // Convert to UI format
   const uiMessages: ChatMessage[] = useMemo(() => {
-    return messages
-      .filter(m => m.role !== 'system')
-      .map((m, idx) => {
-        const msgAny = m as any;
-        const textContent = typeof m.content === 'string' 
-          ? m.content 
-          : m.content.find(c => c.type === 'text')?.text || '';
-        return {
-          id: `msg-${idx}-${m.role}`,
-          text: textContent,
-          isBot: m.role === 'assistant',
+    const result: ChatMessage[] = [];
+
+    for (const m of agentMessages) {
+      if (m.role === 'system') continue;
+
+      const isBot = m.role === 'assistant';
+      const parts = m.parts || [];
+
+      let textContent = '';
+      const toolOutputs: string[] = [];
+
+      for (const part of parts) {
+        if (part.type === 'text' && part.text) {
+          textContent += part.text;
+        } else if (part.type === 'tool') {
+          if (part.state === 'output-available' && part.output) {
+            const outputStr = typeof part.output === 'string' ? part.output : JSON.stringify(part.output);
+            if (part.toolName === 'listTasks' || part.toolName === 'analyzeProgress') {
+              toolOutputs.push(outputStr);
+            }
+          }
+        }
+      }
+
+      if (textContent.trim()) {
+        result.push({
+          id: `${m.id}-text`,
+          text: textContent.trim(),
+          isBot,
           timestamp: new Date(),
-          attachments: msgAny._attachments,
-        };
-      });
-  }, [messages]);
+        });
+      }
+
+      for (let i = 0; i < toolOutputs.length; i++) {
+        result.push({
+          id: `${m.id}-tool-${i}`,
+          text: toolOutputs[i],
+          isBot: true,
+          timestamp: new Date(),
+        });
+      }
+
+      if (!textContent.trim() && toolOutputs.length === 0 && !isBot) {
+        const rawParts = parts.filter(p => p.type === 'text');
+        const fallbackText = rawParts.map(p => (p as any).text || '').join('');
+        if (fallbackText.trim()) {
+          result.push({
+            id: m.id,
+            text: fallbackText.trim(),
+            isBot,
+            timestamp: new Date(),
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [agentMessages]);
+
+  const isLoading = useMemo(() => {
+    return agentStatus === 'submitted' || agentStatus === 'streaming';
+  }, [agentStatus]);
 
   return useMemo(() => ({
     messages: uiMessages,
-    isLoading: isProcessing,
-    error: chatError,
+    isLoading,
+    error: agentError?.message || null,
     sendMessage,
     clearChat,
     showTaskForm,
@@ -668,5 +492,5 @@ Generate a NEW unique task that helps achieve this goal. Respond in English.`;
       currentStreak: progress?.currentStreak ?? 0,
       focusTimeDisplay: progress?.focusTimeDisplay ?? '0m',
     }
-  }), [uiMessages, isProcessing, chatError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, goalStore.profile, goalStore.currentGoal, progress?.currentStreak, progress?.focusTimeDisplay]);
+  }), [uiMessages, isLoading, agentError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, goalStore.profile, goalStore.currentGoal, progress?.currentStreak, progress?.focusTimeDisplay]);
 });
