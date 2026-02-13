@@ -8,7 +8,7 @@ import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import { theme } from '@/constants/theme';
 import { useBreathingTimer } from '@/hooks/use-breathing-timer';
 import { BreathingTechnique } from '@/types/breathing';
-import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 
 const { width: screenWidth } = Dimensions.get('window');
 const TIMER_SIZE = Math.min(screenWidth * 0.65, 280);
@@ -111,11 +111,7 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
 
   const handleStop = () => {
     stopSession();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/home');
-    }
+    safeGoBack('/(tabs)/home');
   };
 
   const progress = getProgress();
@@ -165,11 +161,7 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
       )}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/(tabs)/home');
-          }
+          safeGoBack('/(tabs)/home');
         }}>
           <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>

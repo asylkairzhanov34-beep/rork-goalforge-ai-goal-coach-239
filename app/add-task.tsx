@@ -12,7 +12,7 @@ import {
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import {
@@ -139,11 +139,7 @@ export default function AddTaskScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)/plan');
-      }
+      safeGoBack('/(tabs)/plan');
     } catch (error) {
       console.error('[AddTask] Error saving task:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -154,11 +150,7 @@ export default function AddTaskScreen() {
 
   const handleBack = () => {
     clearPendingTaskData();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/home');
-    }
+    safeGoBack('/(tabs)/home');
   };
 
   return (

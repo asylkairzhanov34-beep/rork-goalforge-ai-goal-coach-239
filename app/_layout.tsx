@@ -420,8 +420,8 @@ export default function RootLayout() {
         {showVideoSplash && (
           <VideoSplashScreen onFinish={handleSplashFinish} />
         )}
-        <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
             <SubscriptionProvider>
               <TrialGate />
               <DeferredNotificationsGate />
@@ -441,8 +441,8 @@ export default function RootLayout() {
                 </FirstTimeSetupProvider>
               </AuthProvider>
             </SubscriptionProvider>
-          </QueryClientProvider>
-        </trpc.Provider>
+          </trpc.Provider>
+        </QueryClientProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

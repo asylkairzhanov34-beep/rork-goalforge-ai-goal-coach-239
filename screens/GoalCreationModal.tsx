@@ -14,7 +14,7 @@ import {
   AccessibilityInfo
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 import { ArrowLeft, X, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@/constants/theme';
@@ -317,11 +317,7 @@ export function GoalCreationModal() {
       }
 
       await createGoal(goal, tasks);
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)/home');
-      }
+      safeGoBack('/(tabs)/home');
     } catch (error) {
       console.error('Error generating plan:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -421,11 +417,7 @@ export function GoalCreationModal() {
           <TouchableOpacity
             testID="goalCreation_back"
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)/home');
-              }
+              safeGoBack('/(tabs)/home');
             }}
             style={styles.backButton}
             activeOpacity={0.8}

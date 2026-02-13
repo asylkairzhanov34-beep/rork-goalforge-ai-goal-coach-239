@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 import {
   ArrowLeft,
   CalendarDays,
@@ -267,7 +267,6 @@ function DayTasksModal({ visible, day, onClose, onToggleTask, onAddTask }: DayTa
 export default function MonthOverviewScreen() {
   const store = useGoalStore();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
 
   const [selectedDay, setSelectedDay] = useState<MonthDay | null>(null);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
@@ -340,12 +339,8 @@ export default function MonthOverviewScreen() {
   );
 
   const onBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/(tabs)/plan');
-  }, [router]);
+    safeGoBack('/(tabs)/plan');
+  }, []);
 
   const premiumDescription = 'See your next 30 days at a glance — and stay consistent.';
 

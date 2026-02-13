@@ -1,14 +1,10 @@
 import React from 'react';
 import { ManifestationSession } from '@/components/ManifestationSession';
-import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 
 export default function ManifestationScreen() {
   const handleComplete = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/home');
-    }
+    safeGoBack('/(tabs)/home');
   };
 
   return <ManifestationSession onComplete={handleComplete} />;

@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 import { Play, Pause, RotateCcw, Heart, Sparkles, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '@/constants/theme';
@@ -350,11 +350,7 @@ export function ManifestationSession({ onComplete }: ManifestationSessionProps) 
         <TouchableOpacity
           style={styles.closeButton}
           onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/home');
-            }
+            safeGoBack('/(tabs)/home');
           }}
         >
           <X size={24} color={theme.colors.textSecondary} />

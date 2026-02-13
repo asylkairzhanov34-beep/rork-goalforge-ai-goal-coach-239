@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '@/utils/safe-navigation';
 import { Target, RotateCcw } from 'lucide-react-native';
 import { GoalCreationModal } from '@/screens/GoalCreationModal';
 import { useGoalStore } from '@/hooks/use-goal-store';
@@ -32,11 +33,7 @@ export default function GoalCreationScreen() {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)/home');
-              }
+              safeGoBack('/(tabs)/home');
             }}
             activeOpacity={0.7}
           >
