@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Send, MessageSquarePlus, Sparkles, X, TrendingUp, Zap, Lock, ClipboardList, Edit3, Plus, Mic, ImageIcon, Camera, XCircle } from 'lucide-react-native';
+import { Send, MessageSquarePlus, Sparkles, X, TrendingUp, Zap, Lock, ClipboardList, Edit3, Plus, Mic, ImageIcon, Camera, XCircle, RotateCcw, ListTodo, BarChart3 } from 'lucide-react-native';
 import { useChat } from '@/hooks/use-chat-store';
 import { ChatMessage, ChatAttachment } from '@/types/chat';
 import { theme } from '@/constants/theme';
@@ -348,7 +348,7 @@ const AnimatedWelcome: React.FC<AnimatedWelcomeProps> = ({ onSuggestionPress, on
 };
 
 const ChatScreenContent: React.FC = () => {
-  const { messages, sendMessage, clearChat, isLoading, error, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm } = useChat();
+  const { messages, sendMessage, clearChat, isLoading, error, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, retryLastMessage } = useChat();
   const { dailyTasks, currentGoal } = useGoalStore();
   const router = useRouter();
   const [inputText, setInputText] = useState<string>('');
@@ -826,6 +826,17 @@ const ChatScreenContent: React.FC = () => {
             {!!error && (
               <View style={styles.errorBanner} testID="chat-error-banner">
                 <Text style={styles.errorBannerText}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.errorRetryButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    retryLastMessage();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <RotateCcw size={14} color="#EF4444" />
+                  <Text style={styles.errorRetryText}>Retry</Text>
+                </TouchableOpacity>
               </View>
             )}
             
@@ -870,6 +881,57 @@ const ChatScreenContent: React.FC = () => {
                       <Animated.View style={[styles.typingDot, { opacity: 1 }]} />
                     </View>
                   </View>
+                </View>
+              )}
+
+              {!showWelcome && messages.length > 0 && !isLoading && !isSending && (
+                <View style={styles.quickActionsRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsContent}>
+                    <TouchableOpacity
+                      style={styles.quickActionChip}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        handleGenerateTask();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Plus size={12} color="#FFD600" />
+                      <Text style={styles.quickActionText}>New Task</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionChip}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        handleAnalyzeCompleted();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <BarChart3 size={12} color="#FFD600" />
+                      <Text style={styles.quickActionText}>Review</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionChip}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        sendMessage('Show me my tasks for today');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <ListTodo size={12} color="#FFD600" />
+                      <Text style={styles.quickActionText}>Today</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionChip}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        handleEditTask();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Edit3 size={12} color="#FFD600" />
+                      <Text style={styles.quickActionText}>Edit</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
                 </View>
               )}
             </ScrollView>
@@ -1117,11 +1179,53 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.15)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickActionsRow: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  quickActionsContent: {
+    gap: 6,
+    paddingVertical: 4,
+  },
+  quickActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 214, 0, 0.08)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 214, 0, 0.15)',
+  },
+  quickActionText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontWeight: '600' as const,
   },
   errorBannerText: {
     color: '#EF4444',
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '500' as const,
+    flex: 1,
+  },
+  errorRetryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  errorRetryText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600' as const,
   },
   scrollView: {
     flex: 1,

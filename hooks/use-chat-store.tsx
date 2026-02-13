@@ -32,6 +32,10 @@ let pendingTaskData: GeneratedTaskData | null = null;
 export const getPendingTaskData = () => pendingTaskData;
 export const clearPendingTaskData = () => { pendingTaskData = null; };
 
+let lastFailedMessage: string | null = null;
+export const getLastFailedMessage = () => lastFailedMessage;
+export const clearLastFailedMessage = () => { lastFailedMessage = null; };
+
 const getChatStorageKey = (userId: string) => `chat_history_v2_${userId}`;
 
 export const [ChatProvider, useChat] = createContextHook(() => {
@@ -114,7 +118,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   });
 
   const filterSchema = z.object({
-    filter: z.enum(['all', 'today', 'completed', 'pending']).describe('Filter tasks').optional(),
+    filter: z.enum(['all', 'today', 'completed', 'pending']).describe('Which tasks to show: all, today only, completed only, or pending only').optional(),
   });
 
   const taskIdSchema = z.object({
@@ -122,7 +126,9 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     taskTitle: z.string().describe('Task title to search for if ID is unknown').optional(),
   });
 
-  const emptySchema = z.object({});
+  const analyzeSchema = z.object({
+    includeRecommendation: z.boolean().describe('Whether to include a recommendation for next task').optional(),
+  });
 
   const openFormSchema = z.object({
     title: z.string().describe('Task title'),
@@ -140,33 +146,39 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         description: 'Create a new task for the user. Use this when the user asks to add, create, generate, or schedule a task. Fill in sensible defaults for any missing fields.',
         zodSchema: createTaskSchema,
         execute(input) {
-          console.log('[Chat Tool] createTask called:', input);
-          const today = new Date();
-          const store = goalStoreRef.current;
-          const tasks = store.dailyTasks || [];
-          const nextDay = tasks.length > 0
-            ? Math.max(...tasks.filter(t => t.goalId === store.currentGoal?.id).map(t => t.day)) + 1
-            : 1;
+          try {
+            console.log('[Chat Tool] createTask called:', input);
+            const today = new Date();
+            const store = goalStoreRef.current;
+            const tasks = store.dailyTasks || [];
+            const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+            const nextDay = goalTasks.length > 0
+              ? Math.max(...goalTasks.map(t => t.day)) + 1
+              : 1;
 
-          const newTaskData = {
-            day: nextDay,
-            date: today.toISOString(),
-            title: input.title,
-            description: input.description || 'Task created via AI assistant',
-            duration: input.duration || '30 minutes',
-            priority: input.priority || 'medium' as const,
-            difficulty: input.difficulty || 'medium' as const,
-            estimatedTime: input.estimatedTime || 30,
-            tips: input.tips || ['Stay focused on the goal', 'Break it into smaller steps if needed'],
-          };
+            const newTaskData = {
+              day: nextDay,
+              date: today.toISOString(),
+              title: input.title,
+              description: input.description || 'Task created via AI assistant',
+              duration: input.duration || '30 minutes',
+              priority: input.priority || 'medium' as const,
+              difficulty: input.difficulty || 'medium' as const,
+              estimatedTime: input.estimatedTime || 30,
+              tips: input.tips || ['Stay focused on the goal', 'Break it into smaller steps if needed'],
+            };
 
-          store.addTask(newTaskData).then(() => {
-            console.log('[Chat Tool] Task created successfully:', input.title);
-          }).catch((err: unknown) => {
-            console.error('[Chat Tool] Failed to create task:', err);
-          });
+            store.addTask(newTaskData).then(() => {
+              console.log('[Chat Tool] Task created successfully:', input.title);
+            }).catch((err: unknown) => {
+              console.error('[Chat Tool] Failed to create task:', err);
+            });
 
-          return `Task "${input.title}" has been created and added to the plan.`;
+            return `Task "${input.title}" has been created and added to the plan.`;
+          } catch (err) {
+            console.error('[Chat Tool] createTask error:', err);
+            return `Error creating task: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`;
+          }
         },
       }),
 
@@ -174,35 +186,40 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         description: 'List current tasks. Use when user asks to see their tasks, review progress, or analyze what they have.',
         zodSchema: filterSchema,
         execute(input) {
-          console.log('[Chat Tool] listTasks called:', input);
-          const store = goalStoreRef.current;
-          const tasks = store.dailyTasks || [];
-          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
-          const today = new Date().toISOString().split('T')[0];
+          try {
+            console.log('[Chat Tool] listTasks called:', input);
+            const store = goalStoreRef.current;
+            const tasks = store.dailyTasks || [];
+            const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+            const today = new Date().toISOString().split('T')[0];
 
-          let filtered = goalTasks;
-          const filterType = input.filter || 'all';
+            let filtered = goalTasks;
+            const filterType = input?.filter || 'all';
 
-          if (filterType === 'today') {
-            filtered = goalTasks.filter(t => t.date?.startsWith(today));
-          } else if (filterType === 'completed') {
-            filtered = goalTasks.filter(t => t.completed);
-          } else if (filterType === 'pending') {
-            filtered = goalTasks.filter(t => !t.completed);
+            if (filterType === 'today') {
+              filtered = goalTasks.filter(t => t.date?.startsWith(today));
+            } else if (filterType === 'completed') {
+              filtered = goalTasks.filter(t => t.completed);
+            } else if (filterType === 'pending') {
+              filtered = goalTasks.filter(t => !t.completed);
+            }
+
+            if (filtered.length === 0) {
+              return `No ${filterType === 'all' ? '' : filterType + ' '}tasks found.`;
+            }
+
+            const list = filtered.slice(0, 15).map(t => {
+              const status = t.completed ? '✅' : '⬜';
+              const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
+              return `${status} ${prio} ${t.title} (${t.duration || '?'}) [id:${t.id}]`;
+            }).join('\n');
+
+            const completedCount = filtered.filter(t => t.completed).length;
+            return `Found ${filtered.length} tasks (${completedCount} completed):\n${list}${filtered.length > 15 ? `\n... +${filtered.length - 15} more` : ''}`;
+          } catch (err) {
+            console.error('[Chat Tool] listTasks error:', err);
+            return `Error listing tasks: ${err instanceof Error ? err.message : 'Unknown error'}`;
           }
-
-          if (filtered.length === 0) {
-            return `No ${filterType === 'all' ? '' : filterType + ' '}tasks found.`;
-          }
-
-          const list = filtered.slice(0, 15).map(t => {
-            const status = t.completed ? '✅' : '⬜';
-            const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
-            return `${status} ${prio} ${t.title} (${t.duration || '?'}) [id:${t.id}]`;
-          }).join('\n');
-
-          const completedCount = filtered.filter(t => t.completed).length;
-          return `Found ${filtered.length} tasks (${completedCount} completed):\n${list}${filtered.length > 15 ? `\n... +${filtered.length - 15} more` : ''}`;
         },
       }),
 
@@ -210,27 +227,32 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         description: 'Mark a task as completed. Use when user says they finished or completed a task.',
         zodSchema: taskIdSchema,
         execute(input) {
-          console.log('[Chat Tool] completeTask called:', input);
-          const store = goalStoreRef.current;
-          const tasks = store.dailyTasks || [];
+          try {
+            console.log('[Chat Tool] completeTask called:', input);
+            const store = goalStoreRef.current;
+            const tasks = store.dailyTasks || [];
 
-          let task = input.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
+            let task = input?.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
 
-          if (!task && input.taskTitle) {
-            const lowerTitle = input.taskTitle.toLowerCase();
-            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+            if (!task && input?.taskTitle) {
+              const lowerTitle = input.taskTitle.toLowerCase();
+              task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+            }
+
+            if (!task) {
+              return 'Task not found. Please check the task name or list your tasks first.';
+            }
+
+            if (task.completed) {
+              return `Task "${task.title}" is already completed!`;
+            }
+
+            store.toggleTaskCompletion(task.id);
+            return `Task "${task.title}" marked as completed! Great job! 🎉`;
+          } catch (err) {
+            console.error('[Chat Tool] completeTask error:', err);
+            return `Error completing task: ${err instanceof Error ? err.message : 'Unknown error'}`;
           }
-
-          if (!task) {
-            return 'Task not found. Please check the task name or list your tasks first.';
-          }
-
-          if (task.completed) {
-            return `Task "${task.title}" is already completed!`;
-          }
-
-          store.toggleTaskCompletion(task.id);
-          return `Task "${task.title}" marked as completed! Great job! 🎉`;
         },
       }),
 
@@ -238,44 +260,73 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         description: 'Delete a task. Use when user wants to remove a task.',
         zodSchema: taskIdSchema,
         execute(input) {
-          console.log('[Chat Tool] deleteTask called:', input);
-          const store = goalStoreRef.current;
-          const tasks = store.dailyTasks || [];
+          try {
+            console.log('[Chat Tool] deleteTask called:', input);
+            const store = goalStoreRef.current;
+            const tasks = store.dailyTasks || [];
 
-          let task = input.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
+            let task = input?.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
 
-          if (!task && input.taskTitle) {
-            const lowerTitle = input.taskTitle.toLowerCase();
-            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+            if (!task && input?.taskTitle) {
+              const lowerTitle = input.taskTitle.toLowerCase();
+              task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
+            }
+
+            if (!task) {
+              return 'Task not found. Please check the task name.';
+            }
+
+            store.deleteTask(task.id);
+            return `Task "${task.title}" has been deleted.`;
+          } catch (err) {
+            console.error('[Chat Tool] deleteTask error:', err);
+            return `Error deleting task: ${err instanceof Error ? err.message : 'Unknown error'}`;
           }
-
-          if (!task) {
-            return 'Task not found. Please check the task name.';
-          }
-
-          store.deleteTask(task.id);
-          return `Task "${task.title}" has been deleted.`;
         },
       }),
 
       analyzeProgress: createRorkTool({
-        description: 'Analyze user progress and provide insights. Use when user asks about their progress, stats, or performance.',
-        zodSchema: emptySchema,
-        execute() {
-          console.log('[Chat Tool] analyzeProgress called');
-          const store = goalStoreRef.current;
-          const prog = progressRef.current;
-          const tasks = store.dailyTasks || [];
-          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
-          const completed = goalTasks.filter(t => t.completed).length;
-          const pending = goalTasks.filter(t => !t.completed).length;
-          const today = new Date().toISOString().split('T')[0];
-          const todayTasks = goalTasks.filter(t => t.date?.startsWith(today));
-          const todayCompleted = todayTasks.filter(t => t.completed).length;
+        description: 'Analyze user progress and provide insights. Use when user asks about their progress, stats, performance, or wants a review of tasks.',
+        zodSchema: analyzeSchema,
+        execute(input) {
+          try {
+            console.log('[Chat Tool] analyzeProgress called with:', input);
+            const store = goalStoreRef.current;
+            const prog = progressRef.current;
+            const tasks = store.dailyTasks || [];
+            const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+            const completed = goalTasks.filter(t => t.completed).length;
+            const pending = goalTasks.filter(t => !t.completed).length;
+            const today = new Date().toISOString().split('T')[0];
+            const todayTasks = goalTasks.filter(t => t.date?.startsWith(today));
+            const todayCompleted = todayTasks.filter(t => t.completed).length;
 
-          const completionRate = goalTasks.length > 0 ? Math.round((completed / goalTasks.length) * 100) : 0;
+            const completionRate = goalTasks.length > 0 ? Math.round((completed / goalTasks.length) * 100) : 0;
 
-          return `Progress Report:\n- Goal: ${store.currentGoal?.title || 'No active goal'}\n- Total tasks: ${goalTasks.length} (${completed} done, ${pending} remaining)\n- Completion rate: ${completionRate}%\n- Today: ${todayCompleted}/${todayTasks.length} tasks done\n- Streak: ${prog?.currentStreak ?? 0} days (best: ${prog?.bestStreak ?? 0})\n- Focus time: ${prog?.focusTimeDisplay ?? '0m'}`;
+            let report = `Progress Report:\n- Goal: ${store.currentGoal?.title || 'No active goal'}\n- Total tasks: ${goalTasks.length} (${completed} done, ${pending} remaining)\n- Completion rate: ${completionRate}%\n- Today: ${todayCompleted}/${todayTasks.length} tasks done\n- Streak: ${prog?.currentStreak ?? 0} days (best: ${prog?.bestStreak ?? 0})\n- Focus time: ${prog?.focusTimeDisplay ?? '0m'}`;
+
+            if (pending > 0) {
+              const nextPending = goalTasks.filter(t => !t.completed).slice(0, 3);
+              report += `\n\nNext pending tasks:`;
+              nextPending.forEach(t => {
+                const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
+                report += `\n  ${prio} ${t.title}`;
+              });
+            }
+
+            if (completed > 0) {
+              const recentCompleted = goalTasks.filter(t => t.completed).slice(-3);
+              report += `\n\nRecently completed:`;
+              recentCompleted.forEach(t => {
+                report += `\n  ✅ ${t.title}`;
+              });
+            }
+
+            return report;
+          } catch (err) {
+            console.error('[Chat Tool] analyzeProgress error:', err);
+            return `Error analyzing progress: ${err instanceof Error ? err.message : 'Unknown error'}`;
+          }
         },
       }),
 
@@ -283,21 +334,26 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         description: 'Open the task creation form with pre-filled data for the user to review and customize before saving. Use this when you want to give the user a chance to edit the task details before adding it.',
         zodSchema: openFormSchema,
         execute(input) {
-          console.log('[Chat Tool] openTaskForm called:', input);
-          const todayStr = new Date().toISOString().split('T')[0];
-          const formData: GeneratedTaskData = {
-            title: input.title,
-            description: input.description || '',
-            duration: input.duration || '30 minutes',
-            priority: input.priority || 'medium',
-            difficulty: input.difficulty || 'medium',
-            estimatedTime: input.estimatedTime || 30,
-            tips: input.tips || ['Stay focused', 'Break it into smaller steps'],
-            date: todayStr,
-          };
+          try {
+            console.log('[Chat Tool] openTaskForm called:', input);
+            const todayStr = new Date().toISOString().split('T')[0];
+            const formData: GeneratedTaskData = {
+              title: input.title,
+              description: input.description || '',
+              duration: input.duration || '30 minutes',
+              priority: input.priority || 'medium',
+              difficulty: input.difficulty || 'medium',
+              estimatedTime: input.estimatedTime || 30,
+              tips: input.tips || ['Stay focused', 'Break it into smaller steps'],
+              date: todayStr,
+            };
 
-          taskFormQueue.current = formData;
-          return `Opening task form for "${input.title}"...`;
+            taskFormQueue.current = formData;
+            return `Opening task form for "${input.title}"...`;
+          } catch (err) {
+            console.error('[Chat Tool] openTaskForm error:', err);
+            return `Error opening task form: ${err instanceof Error ? err.message : 'Unknown error'}`;
+          }
         },
       }),
     },
@@ -332,10 +388,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     console.log('[Chat] Sending message:', text.substring(0, 50), 'with', attachments?.length || 0, 'attachments');
 
     const systemContext = getSystemPrompt();
-    const contextPrefix = agentMessages.length === 0
-      ? `[System context — do NOT repeat this to the user]\n${systemContext}\n[End system context]\n\nUser message: `
-      : '';
+    const contextPrefix = `[System context — do NOT repeat verbatim. Use tools proactively.]\n${systemContext}\n[End context]\n\n`;
     const enrichedText = `${contextPrefix}${text.trim()}`;
+
+    lastFailedMessage = text.trim();
 
     try {
       if (attachments && attachments.length > 0) {
@@ -349,10 +405,11 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         agentSendMessage(enrichedText);
       }
       console.log('[Chat] Message sent successfully');
+      lastFailedMessage = null;
     } catch (error: unknown) {
       console.error('[Chat] Error sending message:', error);
     }
-  }, [agentSendMessage, getSystemPrompt, agentMessages.length]);
+  }, [agentSendMessage, getSystemPrompt]);
 
   const clearChat = useCallback(() => {
     setAgentMessages([]);
@@ -373,10 +430,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   }, []);
 
   const analyzeAndCreateTask = useCallback(async () => {
-    console.log('[Chat] Analyzing completed tasks via agent');
+    console.log('[Chat] Analyzing tasks via agent');
     try {
       const ctx = getSystemPrompt();
-      agentSendMessage(`[System context]\n${ctx}[End]\n\nAnalyze my completed tasks and suggest a new task based on my progress. Use the analyzeProgress and createTask tools.`);
+      agentSendMessage(`[System context — do NOT repeat verbatim]\n${ctx}\n[End context]\n\nReview my tasks and progress. Use the analyzeProgress tool to get my stats, then give me a brief summary with actionable advice.`);
     } catch (error) {
       console.error('[Chat] Analysis error:', error);
     }
@@ -403,7 +460,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     console.log('[Chat] Generating new task via agent');
     try {
       const ctx = getSystemPrompt();
-      agentSendMessage(`[System context]\n${ctx}[End]\n\nGenerate a new task for me based on my current goal. Create it directly using the createTask tool.`);
+      agentSendMessage(`[System context — do NOT repeat verbatim]\n${ctx}\n[End context]\n\nSuggest and create a new task for me based on my current goal and progress. Use the createTask tool to add it directly.`);
     } catch (error) {
       console.error('[Chat] New task generation error:', error);
     }
@@ -420,27 +477,44 @@ export const [ChatProvider, useChat] = createContextHook(() => {
 
       let textContent = '';
       const toolOutputs: string[] = [];
+      const toolErrors: string[] = [];
+      let hasToolCalls = false;
 
       for (const part of parts) {
         if (part.type === 'text' && part.text) {
-          textContent += part.text;
+          const cleaned = part.text.replace(/\[System context[\s\S]*?\[End context\]\s*/g, '').trim();
+          if (cleaned) textContent += cleaned;
         } else if (part.type === 'tool') {
+          hasToolCalls = true;
           if (part.state === 'output-available' && part.output) {
             const outputStr = typeof part.output === 'string' ? part.output : JSON.stringify(part.output);
             if (part.toolName === 'listTasks' || part.toolName === 'analyzeProgress') {
               toolOutputs.push(outputStr);
             }
+          } else if (part.state === 'output-error') {
+            const errText = (part as any).errorText || 'Tool execution failed';
+            toolErrors.push(`⚠️ ${part.toolName}: ${errText}`);
+            console.error('[Chat] Tool error:', part.toolName, errText);
           }
         }
       }
 
-      if (textContent.trim()) {
-        result.push({
-          id: `${m.id}-text`,
-          text: textContent.trim(),
-          isBot,
-          timestamp: new Date(),
-        });
+      if (!isBot) {
+        const userText = parts
+          .filter(p => p.type === 'text')
+          .map(p => (p as any).text || '')
+          .join('')
+          .replace(/\[System context[\s\S]*?\[End context\]\s*/g, '')
+          .trim();
+        if (userText) {
+          result.push({
+            id: `${m.id}-text`,
+            text: userText,
+            isBot: false,
+            timestamp: new Date(),
+          });
+        }
+        continue;
       }
 
       for (let i = 0; i < toolOutputs.length; i++) {
@@ -452,14 +526,39 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         });
       }
 
-      if (!textContent.trim() && toolOutputs.length === 0 && !isBot) {
-        const rawParts = parts.filter(p => p.type === 'text');
-        const fallbackText = rawParts.map(p => (p as any).text || '').join('');
-        if (fallbackText.trim()) {
+      for (let i = 0; i < toolErrors.length; i++) {
+        result.push({
+          id: `${m.id}-err-${i}`,
+          text: toolErrors[i],
+          isBot: true,
+          timestamp: new Date(),
+          isError: true,
+        } as ChatMessage & { isError?: boolean });
+      }
+
+      if (textContent.trim()) {
+        result.push({
+          id: `${m.id}-text`,
+          text: textContent.trim(),
+          isBot: true,
+          timestamp: new Date(),
+        });
+      }
+
+      if (!textContent.trim() && toolOutputs.length === 0 && toolErrors.length === 0 && hasToolCalls) {
+        const toolNames = parts
+          .filter(p => p.type === 'tool')
+          .map(p => (p as any).toolName || 'tool')
+          .filter((v, i, a) => a.indexOf(v) === i);
+        const actionText = toolNames.includes('createTask') ? '✅ Task action completed'
+          : toolNames.includes('completeTask') ? '✅ Task updated'
+          : toolNames.includes('deleteTask') ? '🗑️ Task removed'
+          : null;
+        if (actionText) {
           result.push({
-            id: m.id,
-            text: fallbackText.trim(),
-            isBot,
+            id: `${m.id}-action`,
+            text: actionText,
+            isBot: true,
             timestamp: new Date(),
           });
         }
@@ -472,6 +571,15 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   const isLoading = useMemo(() => {
     return agentStatus === 'submitted' || agentStatus === 'streaming';
   }, [agentStatus]);
+
+  const retryLastMessage = useCallback(() => {
+    const msg = lastFailedMessage;
+    if (msg) {
+      console.log('[Chat] Retrying last message:', msg.substring(0, 50));
+      lastFailedMessage = null;
+      sendMessage(msg);
+    }
+  }, [sendMessage]);
 
   return useMemo(() => ({
     messages: uiMessages,
@@ -486,11 +594,12 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     analyzeAndCreateTask,
     openTaskForEdit,
     openNewTaskForm,
+    retryLastMessage,
     userContext: {
       profile: goalStore.profile,
       currentGoal: goalStore.currentGoal,
       currentStreak: progress?.currentStreak ?? 0,
       focusTimeDisplay: progress?.focusTimeDisplay ?? '0m',
     }
-  }), [uiMessages, isLoading, agentError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, goalStore.profile, goalStore.currentGoal, progress?.currentStreak, progress?.focusTimeDisplay]);
+  }), [uiMessages, isLoading, agentError, sendMessage, clearChat, showTaskForm, taskFormData, closeTaskForm, onTaskSaved, analyzeAndCreateTask, openTaskForEdit, openNewTaskForm, retryLastMessage, goalStore.profile, goalStore.currentGoal, progress?.currentStreak, progress?.focusTimeDisplay]);
 });
