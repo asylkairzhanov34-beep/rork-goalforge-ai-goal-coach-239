@@ -7,11 +7,11 @@ import {
   Alert,
   Platform,
   Animated,
-  Dimensions,
   Linking,
   KeyboardAvoidingView,
   ScrollView,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/hooks/use-auth-store';
@@ -21,9 +21,8 @@ interface AuthScreenProps {
   onAuthSuccess?: () => void;
 }
 
-const { width, height } = Dimensions.get('window');
-
 export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
+  const { width, height } = useWindowDimensions();
   const [isLoading, setIsLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [isTestingBackend, setIsTestingBackend] = useState(false);

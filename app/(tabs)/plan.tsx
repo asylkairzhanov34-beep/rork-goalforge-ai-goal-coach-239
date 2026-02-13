@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Animated, TextInput, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Animated, TextInput, ImageBackground, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Calendar, Sparkles, Trophy, ListTodo, Search, Clock, Star, Users, ChevronRight, Flame, Dumbbell, Rocket, Smartphone, BookOpen, Heart, Zap, Leaf, Activity, User, Sunrise, Ban, Code2, Globe, TrendingUp } from 'lucide-react-native';
@@ -227,6 +227,8 @@ export default function PlanScreen() {
   const challengeStore = useChallengeStore();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const isTablet = screenWidth >= 768;
   const [selectedDay, setSelectedDay] = useState(getCurrentDayKey());
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [availableDays] = useState<string[]>(getAvailableDays());
@@ -690,13 +692,14 @@ export default function PlanScreen() {
             <Text style={styles.emptySubtext}>Try adjusting your search</Text>
           </View>
         ) : (
-          <View style={styles.challengesGrid}>
+          <View style={[styles.challengesGrid, isTablet && styles.challengesGridTablet]}>
             {filteredChallenges.map(challenge => (
-              <ChallengeCard
-                key={challenge.id}
-                challenge={challenge}
-                onPress={() => handleChallengePress(challenge.id)}
-              />
+              <View key={challenge.id} style={isTablet ? { width: '48%' } : undefined}>
+                <ChallengeCard
+                  challenge={challenge}
+                  onPress={() => handleChallengePress(challenge.id)}
+                />
+              </View>
             ))}
           </View>
         )}
@@ -1018,6 +1021,11 @@ const styles = StyleSheet.create({
   },
   challengesGrid: {
     gap: 10,
+  },
+  challengesGridTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   challengeCard: {
     backgroundColor: '#1A1A1A',

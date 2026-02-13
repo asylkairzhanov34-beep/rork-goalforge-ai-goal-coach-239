@@ -10,7 +10,6 @@ import {
   Animated,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Dimensions,
   Easing,
   Image,
 } from 'react-native';
@@ -29,7 +28,7 @@ import { DailyTask } from '@/types/goal';
 
 import PremiumGate from '@/components/PremiumGate';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 
 const STT_API_URL = 'https://toolkit.rork.com/stt/transcribe/';
 
@@ -1261,7 +1260,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messageBubble: {
-    maxWidth: SCREEN_WIDTH * 0.75,
+    maxWidth: '75%',
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -1286,14 +1285,13 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   videoSection: {
-    width: SCREEN_WIDTH,
+    width: '100%',
     marginBottom: 20,
     alignItems: 'center',
-    marginLeft: -16,
   },
   welcomeVideo: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 0.75,
+    width: '100%',
+    aspectRatio: 4 / 3,
   },
   welcomeTitle: {
     fontSize: 24,

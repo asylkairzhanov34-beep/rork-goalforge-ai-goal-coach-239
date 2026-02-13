@@ -10,7 +10,6 @@ import {
   Platform,
   Linking,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
@@ -29,8 +28,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSubscription } from '@/hooks/use-subscription-store';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface SubscriptionScreenProps {
   skipButton?: boolean;
@@ -577,7 +574,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   featureCard: {
-    width: (SCREEN_WIDTH - 50) / 2,
+    flex: 1,
+    minWidth: 140,
     backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 16,
     padding: 14,

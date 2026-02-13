@@ -5,15 +5,12 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, Flame, Lock, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { REWARDS, getRewardProgress, type Reward } from '@/constants/rewards';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DailyStreakBannerProps {
   currentStreak: number;
@@ -32,6 +29,7 @@ export const DailyStreakBanner: React.FC<DailyStreakBannerProps> = ({
   visible,
   onDismiss,
 }) => {
+  const SHIMMER_RANGE = 400;
   const slideAnim = useRef(new Animated.Value(-200)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const flameScale = useRef(new Animated.Value(1)).current;
@@ -201,7 +199,7 @@ export const DailyStreakBanner: React.FC<DailyStreakBannerProps> = ({
 
   const shimmerTranslate = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH],
+    outputRange: [-SHIMMER_RANGE, SHIMMER_RANGE],
   });
 
   const progressWidth = progressAnim.interpolate({

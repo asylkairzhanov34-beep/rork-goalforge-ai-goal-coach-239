@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, Dimensions, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, LayoutAnimation } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy } from 'lucide-react-native';
 
-import Constants from 'expo-constants';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
 
@@ -17,6 +16,7 @@ import { useProgress } from '@/hooks/use-progress';
 import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, getRewardProgress } from '@/constants/rewards';
 import type { Reward } from '@/constants/rewards';
 import { RewardDetailModal } from '@/components/RewardDetailModal';
+import { useResponsive } from '@/hooks/use-responsive';
 
 export default function ProfileScreen() {
   const store = useGoalStore();
@@ -27,6 +27,7 @@ export default function ProfileScreen() {
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const insets = useSafeAreaInsets();
+  const { isTablet, contentMaxWidth, profileOrbGridItemWidth } = useResponsive();
 
   const DEFAULT_AVATAR_VIDEO = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769956429/0126_6_eud89t.mp4';
   
@@ -295,7 +296,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.statsSection}>
+          <View style={[styles.statsSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <View style={styles.statCard}>
               <View style={[styles.statIconWrapper, { backgroundColor: 'rgba(255, 215, 0, 0.1)' }]}>
                 <Target size={16} color={theme.colors.primary} />
@@ -320,7 +321,7 @@ export default function ProfileScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.milestonesSection}
+            style={[styles.milestonesSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               setMilestonesExpanded(!milestonesExpanded);
@@ -391,12 +392,12 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {milestonesExpanded && (
-            <View style={styles.milestonesExpandedSection}>
+            <View style={[styles.milestonesExpandedSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
               <View style={styles.orbsGrid}>
                 {allRewards.map((reward: Reward, index: number) => (
                   <TouchableOpacity 
                     key={reward.id} 
-                    style={styles.orbGridItem}
+                    style={[styles.orbGridItem, { width: profileOrbGridItemWidth }]}
                     onPress={() => handleRewardPress(index)}
                     activeOpacity={0.8}
                   >
@@ -432,7 +433,7 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          <View style={styles.menuSection}>
+          <View style={[styles.menuSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             {menuItems.map((item, index) => (
               <TouchableOpacity
                 key={index}
@@ -452,7 +453,7 @@ export default function ProfileScreen() {
             ))}
           </View>
 
-          <View style={styles.dangerZone}>
+          <View style={[styles.dangerZone, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <TouchableOpacity
               style={styles.dangerButton}
               onPress={handleLogout}
@@ -547,6 +548,7 @@ export default function ProfileScreen() {
 }
 
 const AVATAR_SIZE = 72;
+const MODAL_MAX_WIDTH = 420;
 
 const styles = StyleSheet.create({
   container: {
@@ -811,7 +813,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   orbGridItem: {
-    width: (Dimensions.get('window').width - 40 - 32 - 24) / 3,
     alignItems: 'center',
   },
   orbGridWrapper: {
@@ -964,7 +965,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     width: '100%',
-    maxWidth: 340,
+    maxWidth: MODAL_MAX_WIDTH,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },

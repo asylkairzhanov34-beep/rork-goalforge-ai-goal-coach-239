@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -36,7 +35,7 @@ import { getChallengeById } from '@/constants/challenges';
 import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { ChallengeCustomization, ChallengeDifficulty } from '@/types/challenge';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 
 const AGE_RANGES = ['18-24', '25-34', '35-44', '45-54', '55+'];
 
@@ -835,7 +834,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   timeCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
+    flex: 1,
+    minWidth: 140,
     backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 16,

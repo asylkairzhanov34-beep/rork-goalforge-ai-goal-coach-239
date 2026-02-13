@@ -5,8 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { safeGoBack } from '@/utils/safe-navigation';
@@ -17,13 +17,12 @@ import { GradientBackground } from '@/components/GradientBackground';
 import { useManifestationStore } from '@/hooks/use-manifestation-store';
 import { useGoalStore } from '@/hooks/use-goal-store';
 
-const { width } = Dimensions.get('window');
-
 interface ManifestationSessionProps {
   onComplete: () => void;
 }
 
 export function ManifestationSession({ onComplete }: ManifestationSessionProps) {
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const manifestationStore = useManifestationStore();
   const goalStore = useGoalStore();

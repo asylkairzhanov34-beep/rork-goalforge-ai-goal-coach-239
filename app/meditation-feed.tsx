@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   FlatList,
   TouchableOpacity,
   Animated,
   Platform,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Audio } from 'expo-av';
@@ -21,8 +21,6 @@ import * as Haptics from 'expo-haptics';
 import { MEDITATION_SLIDES, MeditationSlide } from '@/constants/meditation-slides';
 import { theme } from '@/constants/theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 interface SlideItemProps {
   item: MeditationSlide;
   index: number;
@@ -30,11 +28,13 @@ interface SlideItemProps {
   onComplete: () => void;
   isLastSlide: boolean;
   onSlideReady: (ready: boolean) => void;
+  screenWidth: number;
+  screenHeight: number;
 }
 
 
 
-function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideReady }: SlideItemProps) {
+function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideReady, screenWidth, screenHeight }: SlideItemProps) {
   const [timeLeft, setTimeLeft] = useState(item.duration);
   const [isPaused, setIsPaused] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -213,11 +213,11 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   });
 
   return (
-    <View style={styles.slideContainer}>
+    <View style={[styles.slideContainer, { width: screenWidth, height: screenHeight }]}>
       <Video
         ref={videoRef}
         source={{ uri: item.videoUrl }}
-        style={styles.slideVideo}
+        style={[styles.slideVideo, { width: screenWidth, height: screenHeight }]}
         resizeMode={ResizeMode.COVER}
         isLooping={false}
         isMuted={false}
@@ -316,6 +316,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
 export default function MeditationFeedScreen() {
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const [canScroll, setCanScroll] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -384,14 +385,16 @@ export default function MeditationFeedScreen() {
       onComplete={() => handleSlideComplete(index)}
       isLastSlide={index === MEDITATION_SLIDES.length - 1}
       onSlideReady={handleSlideReady}
+      screenWidth={SCREEN_WIDTH}
+      screenHeight={SCREEN_HEIGHT}
     />
-  ), [activeIndex, handleSlideComplete, handleSlideReady]);
+  ), [activeIndex, handleSlideComplete, handleSlideReady, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
     length: SCREEN_HEIGHT,
     offset: SCREEN_HEIGHT * index,
     index,
-  }), []);
+  }), [SCREEN_HEIGHT]);
 
   return (
     <View style={styles.container}>
@@ -417,6 +420,7 @@ export default function MeditationFeedScreen() {
         getItemLayout={getItemLayout}
         decelerationRate="fast"
         snapToInterval={SCREEN_HEIGHT}
+        style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
         snapToAlignment="start"
         bounces={false}
         scrollEnabled={canScroll}
@@ -441,14 +445,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   slideContainer: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
     position: 'relative',
   },
   slideVideo: {
-    ...StyleSheet.absoluteFillObject,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,

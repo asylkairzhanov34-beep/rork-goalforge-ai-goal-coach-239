@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Settings, Volume2, Check, Play, Headphones, VolumeX, Music, Waves, Sparkles } from 'lucide-react-native';
@@ -18,9 +18,6 @@ const AMBIENT_SOUNDS = [
   { id: 'ambient1', name: 'Focus Flow', description: 'Calm ambient for deep work', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142014/3gwt67NbS8Go3MhssMPz_oo3xfu.mp4', icon: Music, gradient: ['#667eea', '#764ba2'] as const },
   { id: 'ambient2', name: 'Zen Waves', description: 'Peaceful concentration tones', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142016/hYCBEvsXvN3tenAHl9PZ_unyiy9.mp4', icon: Waves, gradient: ['#11998e', '#38ef7d'] as const },
 ];
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 
 export default function TimerScreen() {
   const insets = useSafeAreaInsets();

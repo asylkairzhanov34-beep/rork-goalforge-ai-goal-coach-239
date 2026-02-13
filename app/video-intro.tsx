@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
@@ -17,11 +17,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
-const { width: INIT_WIDTH, height: INIT_HEIGHT } = Dimensions.get('window');
-
 const VIDEO_URL = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769273122/0124_3_bdocck.mp4';
 
 export default function VideoIntroScreen() {
+  useWindowDimensions();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
@@ -197,8 +196,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   video: {
-    width: INIT_WIDTH,
-    height: INIT_HEIGHT,
+    width: '100%',
+    height: '100%',
   },
   videoHidden: {
     opacity: 0,

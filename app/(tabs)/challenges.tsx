@@ -8,6 +8,7 @@ import {
   TextInput,
   Animated,
   ImageBackground,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -240,6 +241,8 @@ export default function ChallengesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { templates, getActiveChallenge } = useChallengeStore();
+  const { width: screenWidth } = useWindowDimensions();
+  const isTablet = screenWidth >= 768;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ChallengeCategory | 'all'>('all');
@@ -465,9 +468,9 @@ export default function ChallengesScreen() {
               <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
             </View>
           ) : (
-            <View style={styles.gridContainer}>
+            <View style={[styles.gridContainer, isTablet && styles.gridContainerTablet]}>
               {filteredChallenges.map(challenge => (
-                <View key={challenge.id} style={styles.gridItem}>
+                <View key={challenge.id} style={[styles.gridItem, isTablet && { width: '48%' }]}>
                   <ChallengeCard
                     challenge={challenge}
                     onPress={() => handleChallengePress(challenge.id)}
@@ -649,9 +652,15 @@ const styles = StyleSheet.create({
   },
   horizontalCardWrapper: {
     width: 280,
+    maxWidth: 320,
   },
   gridContainer: {
     gap: 12,
+  },
+  gridContainerTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   gridItem: {
     marginBottom: 4,

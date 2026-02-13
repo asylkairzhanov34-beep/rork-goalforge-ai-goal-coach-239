@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Platform, ImageBackground } from 'react-native';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform, ImageBackground, useWindowDimensions } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { Play, Pause, Square, ArrowLeft, Wind, Sparkles, Clock, Zap } from 'lucide-react-native';
@@ -10,17 +10,19 @@ import { useBreathingTimer } from '@/hooks/use-breathing-timer';
 import { BreathingTechnique } from '@/types/breathing';
 import { safeGoBack } from '@/utils/safe-navigation';
 
-const { width: screenWidth } = Dimensions.get('window');
-const TIMER_SIZE = Math.min(screenWidth * 0.65, 280);
 const STROKE_WIDTH = 6;
-const RADIUS = (TIMER_SIZE / 2) - STROKE_WIDTH - 10;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 interface BreathingTimerProps {
   technique: BreathingTechnique;
 }
 
 export function BreathingTimer({ technique }: BreathingTimerProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  const isTablet = screenWidth >= 768;
+  const TIMER_SIZE = useMemo(() => isTablet ? Math.min(screenWidth * 0.4, 320) : Math.min(screenWidth * 0.65, 280), [screenWidth, isTablet]);
+  const RADIUS = (TIMER_SIZE / 2) - STROKE_WIDTH - 10;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
   const {
     isActive,
     isPaused,
@@ -499,9 +501,9 @@ const styles = StyleSheet.create({
   },
   outerGlow: {
     position: 'absolute',
-    width: TIMER_SIZE + 60,
-    height: TIMER_SIZE + 60,
-    borderRadius: (TIMER_SIZE + 60) / 2,
+    width: 340,
+    height: 340,
+    borderRadius: 170,
   },
   timerContainer: {
     alignItems: 'center',
@@ -521,8 +523,6 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     position: 'absolute',
-    width: TIMER_SIZE,
-    height: TIMER_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },

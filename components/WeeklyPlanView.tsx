@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Dimensions, Animated, Easing, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Animated, Easing, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, Clock, Target, CheckCircle, Plus, ChevronRight, Lock, Flame, Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
@@ -61,7 +61,6 @@ const getChallengeTheme = (challengeName: string | undefined, taskTitle: string)
   return CHALLENGE_GRADIENT_THEMES[index];
 };
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAY_BUTTON_SIZE = 56;
 const DAY_BUTTON_GAP = 8;
 
@@ -156,7 +155,7 @@ export function WeeklyPlanView({
     const currentDayIndex = DAYS_OF_WEEK.findIndex((day) => day.key === selectedDay);
     if (currentDayIndex !== -1 && scrollViewRef.current) {
       const itemWidth = 48 + DAY_BUTTON_GAP;
-      const scrollPosition = (currentDayIndex * itemWidth) - (SCREEN_WIDTH / 2) + (24) + 20;
+      const scrollPosition = (currentDayIndex * itemWidth) - 120;
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({ x: Math.max(0, scrollPosition), animated: false });
       }, 100);

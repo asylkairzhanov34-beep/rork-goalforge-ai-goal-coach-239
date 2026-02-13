@@ -2,16 +2,14 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
   Platform,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const { width, height } = Dimensions.get('window');
 
 const SPLASH_VIDEO_URL = 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769364588/3d269dee0a4a0dfea5ce1519b94577fe_d96680d9-a4c1-43d4-8587-df295267d3e8_3_yfef1w.mp4';
 
@@ -23,6 +21,7 @@ const SPLASH_SHOWN_KEY = 'video_splash_shown_session';
 const MAX_SPLASH_DURATION = 8000;
 
 export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
+  const { width, height } = useWindowDimensions();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [shouldShow, setShouldShow] = useState<boolean | null>(null);
   const videoRef = useRef<VideoType>(null);
@@ -141,7 +140,7 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
         <Video
           ref={videoRef}
           source={{ uri: SPLASH_VIDEO_URL }}
-          style={styles.video}
+          style={{ width, height }}
           resizeMode={ResizeMode.COVER}
           shouldPlay
           isLooping={false}
@@ -166,10 +165,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  video: {
-    width: width,
-    height: height,
-  },
+
   webFallback: {
     flex: 1,
     justifyContent: 'center',

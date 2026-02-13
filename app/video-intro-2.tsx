@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { Video as VideoType } from 'expo-av';
@@ -16,11 +16,10 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Sparkles } from 'lucide-react-native';
 
-const { width: INIT_WIDTH, height: INIT_HEIGHT } = Dimensions.get('window');
-
 const VIDEO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/k1zzetp7zbzgwvqznsmbm';
 
 export default function VideoIntro2Screen() {
+  useWindowDimensions();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
@@ -153,8 +152,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   video: {
-    width: INIT_WIDTH,
-    height: INIT_HEIGHT,
+    width: '100%',
+    height: '100%',
   },
   videoHidden: {
     opacity: 0,

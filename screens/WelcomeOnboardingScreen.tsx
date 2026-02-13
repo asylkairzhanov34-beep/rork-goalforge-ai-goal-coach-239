@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Animated,
   TouchableOpacity,
   Image,
   Platform,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ import { ChevronRight, Check, Crown, Zap, Brain, Target, Shield, BarChart3 } fro
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/use-auth-store';
 
-const { width, height } = Dimensions.get('window');
+
 
 interface OnboardingSlide {
   id: string;
@@ -96,6 +96,7 @@ const slides: OnboardingSlide[] = [
 ];
 
 export function WelcomeOnboardingScreen() {
+  const { width, height } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const slideRef = useRef<Animated.FlatList<OnboardingSlide>>(null);
@@ -180,7 +181,7 @@ export function WelcomeOnboardingScreen() {
     const isPaywall = item.type === 'paywall';
 
     return (
-      <View style={styles.slide} testID={`welcome-slide-${item.id}`}>
+      <View style={[styles.slide, { width, height }]} testID={`welcome-slide-${item.id}`}>
         <Animated.View style={[styles.imageBackground, { opacity: imageOpacity }]}>
           <Image
             source={{ uri: item.image }}
@@ -380,8 +381,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   slide: {
-    width,
-    height,
   },
   imageBackground: {
     ...StyleSheet.absoluteFillObject,

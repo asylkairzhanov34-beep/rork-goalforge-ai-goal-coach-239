@@ -6,8 +6,8 @@ import {
   Modal,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 
 import { VideoOrb } from '@/components/VideoOrb';
@@ -15,17 +15,16 @@ import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { type Reward } from '@/constants/rewards';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 interface RewardUnlockModalProps {
   visible: boolean;
   reward: Reward | null;
   onClose: () => void;
 }
 
-const UNLOCK_ORB_SIZE = Math.round(SCREEN_WIDTH * 0.75);
-
 export function RewardUnlockModal({ visible, reward, onClose }: RewardUnlockModalProps) {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const isTablet = SCREEN_WIDTH >= 768;
+  const UNLOCK_ORB_SIZE = Math.round(isTablet ? Math.min(SCREEN_WIDTH * 0.45, 360) : SCREEN_WIDTH * 0.75);
 
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -224,8 +223,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   container: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    flex: 1,
     backgroundColor: '#000000',
     paddingTop: 100,
     paddingBottom: 50,

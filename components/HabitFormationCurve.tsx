@@ -1,11 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, G } from 'react-native-svg';
 import { Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_WIDTH = SCREEN_WIDTH - 60;
+const CHART_WIDTH = 300;
 const CHART_HEIGHT = 220;
 const PADDING_LEFT = 45;
 const PADDING_RIGHT = 30;

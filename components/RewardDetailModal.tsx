@@ -6,9 +6,9 @@ import {
   Modal,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Platform,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { VideoOrb } from '@/components/VideoOrb';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,9 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Reward, RewardProgress } from '@/constants/rewards';
 import { formatFocusTime, LOCKED_ORB_VIDEO } from '@/constants/rewards';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.48;
-const VIDEO_ORB_SIZE = Math.round(ORB_SIZE);
+
 
 interface RewardDetailModalProps {
   visible: boolean;
@@ -50,6 +48,10 @@ const RewardDetailModalInner: React.FC<RewardDetailModalProps> = ({
   getProgressForReward,
 }) => {
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const isTablet = SCREEN_WIDTH >= 768;
+  const ORB_SIZE = isTablet ? Math.min(SCREEN_WIDTH * 0.35, 300) : SCREEN_WIDTH * 0.48;
+  const VIDEO_ORB_SIZE = Math.round(ORB_SIZE);
   const [, setVideoReady] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(initialIndex ?? 0);
   const flatListRef = useRef<FlatList>(null);
@@ -498,7 +500,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   carouselSection: {
-    height: ORB_SIZE + 40,
     marginTop: 16,
     position: 'relative',
   },
@@ -506,16 +507,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
-    height: ORB_SIZE + 40,
   },
   orbPage: {
-    width: SCREEN_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
   },
   orbContainer: {
-    width: ORB_SIZE + 16,
-    height: ORB_SIZE + 16,
     alignItems: 'center',
     justifyContent: 'center',
   },

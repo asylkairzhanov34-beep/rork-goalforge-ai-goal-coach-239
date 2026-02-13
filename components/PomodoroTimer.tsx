@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, Platform, TouchableOpacity, Dimensions, ScrollView, Modal, Pressable, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform, TouchableOpacity, ScrollView, Modal, Pressable, Easing, useWindowDimensions } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, Square, X } from 'lucide-react-native';
@@ -14,19 +14,14 @@ import { REWARDS, isRewardUnlocked, GRAY_ORB_VIDEO } from '@/constants/rewards';
 import { VideoOrb } from '@/components/VideoOrb';
 
 
-const { width: screenWidth } = Dimensions.get('window');
 const ORB_SIZE = 48;
+const STROKE_WIDTH = 6;
 
 const SESSION_LABELS = {
   focus: 'Focus',
   shortBreak: 'Break',
   longBreak: 'Long Break',
 };
-
-const TIMER_SIZE = Math.min(screenWidth * 0.7, 280);
-const STROKE_WIDTH = 6;
-const RADIUS = (TIMER_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 
 
@@ -36,6 +31,15 @@ export function PomodoroTimer() {
   const { currentGoal } = useGoalStore();
   const timerStore = useTimer();
   const progress = useProgress();
+  const { width: screenWidth } = useWindowDimensions();
+
+  const isTablet = screenWidth >= 768;
+  const TIMER_SIZE = useMemo(() => {
+    if (isTablet) return Math.min(screenWidth * 0.45, 320);
+    return Math.min(screenWidth * 0.7, 280);
+  }, [screenWidth, isTablet]);
+  const RADIUS = (TIMER_SIZE - STROKE_WIDTH) / 2;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
   const lastUnlockedOrb = useMemo(() => {
     const streak = progress?.currentStreak ?? 0;
@@ -293,11 +297,10 @@ export function PomodoroTimer() {
           )}
           
           <View style={[styles.timerCircle, { width: TIMER_SIZE, height: TIMER_SIZE }]}>
-            {/* Background circle */}
-            <View style={styles.timerBackground} />
+            <View style={[styles.timerBackground, { width: TIMER_SIZE - STROKE_WIDTH * 2 - 16, height: TIMER_SIZE - STROKE_WIDTH * 2 - 16, borderRadius: (TIMER_SIZE - STROKE_WIDTH * 2 - 16) / 2 }]} />
             
             {/* Progress Ring */}
-            <View style={styles.progressRingContainer}>
+            <View style={[styles.progressRingContainer, { width: TIMER_SIZE, height: TIMER_SIZE }]}>
               {Platform.OS !== 'web' ? (
                 <Svg width={TIMER_SIZE} height={TIMER_SIZE} style={styles.progressSvg}>
                   <Defs>
@@ -667,9 +670,9 @@ const styles = StyleSheet.create({
   },
   timerGlow: {
     position: 'absolute',
-    width: TIMER_SIZE + 40,
-    height: TIMER_SIZE + 40,
-    borderRadius: (TIMER_SIZE + 40) / 2,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
     backgroundColor: 'transparent',
     shadowColor: '#FFD12A',
     shadowOffset: { width: 0, height: 0 },
@@ -684,17 +687,12 @@ const styles = StyleSheet.create({
   },
   timerBackground: {
     position: 'absolute',
-    width: TIMER_SIZE - STROKE_WIDTH * 2 - 16,
-    height: TIMER_SIZE - STROKE_WIDTH * 2 - 16,
-    borderRadius: (TIMER_SIZE - STROKE_WIDTH * 2 - 16) / 2,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   progressRingContainer: {
     position: 'absolute',
-    width: TIMER_SIZE,
-    height: TIMER_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },

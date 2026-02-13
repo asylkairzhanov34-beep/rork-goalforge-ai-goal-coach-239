@@ -6,7 +6,7 @@ import {
   Animated,
   TouchableOpacity,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
@@ -15,10 +15,7 @@ import { useProgress } from '@/hooks/use-progress';
 import * as Haptics from 'expo-haptics';
 import { useTimer } from '@/hooks/use-timer-store';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 const COMPACT_WIDTH = 160;
-const EXPANDED_WIDTH = Math.min(SCREEN_WIDTH - 32, 340);
 
 interface FloatingDynamicIslandStreakProps {
   visible?: boolean;
@@ -27,6 +24,8 @@ interface FloatingDynamicIslandStreakProps {
 
 export function FloatingDynamicIslandStreak({ visible: externalVisible, onDismiss }: FloatingDynamicIslandStreakProps) {
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const EXPANDED_WIDTH = Math.min(SCREEN_WIDTH - 32, 340);
   const pathname = usePathname();
   const progress = useProgress();
   const timerStore = useTimer();

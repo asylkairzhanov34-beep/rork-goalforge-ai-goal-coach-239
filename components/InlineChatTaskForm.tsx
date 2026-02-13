@@ -8,7 +8,6 @@ import {
   ScrollView,
   Animated,
   Easing,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -28,7 +27,7 @@ import { theme } from '@/constants/theme';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { GeneratedTaskData } from '@/hooks/use-chat-store';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 
 type Priority = 'high' | 'medium' | 'low';
 type Difficulty = 'easy' | 'medium' | 'hard';
@@ -68,7 +67,7 @@ export const InlineChatTaskForm: React.FC<InlineChatTaskFormProps> = ({
   const [tips, setTips] = useState<string[]>(['Stay focused', 'Take breaks when needed']);
   const [isSaving, setIsSaving] = useState(false);
 
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const slideAnim = useRef(new Animated.Value(900)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -99,7 +98,7 @@ export const InlineChatTaskForm: React.FC<InlineChatTaskFormProps> = ({
     } else {
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
+          toValue: 900,
           duration: 300,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
@@ -407,7 +406,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: SCREEN_HEIGHT * 0.85,
+    maxHeight: '85%',
     backgroundColor: '#0D0D0D',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

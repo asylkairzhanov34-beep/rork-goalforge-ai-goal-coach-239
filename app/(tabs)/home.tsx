@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, AppState, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, PanResponder, Easing, AppState, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RewardOrb } from '@/components/RewardOrb';
 
@@ -30,12 +30,14 @@ import { useRewardUnlock } from '@/hooks/use-reward-unlock';
 import SubscriptionOfferModal from '@/src/components/SubscriptionOfferModal';
 import { DailyStreakBanner } from '@/components/DailyStreakBanner';
 import { useDailyFirstOpen } from '@/hooks/use-daily-first-open';
+import { useResponsive } from '@/hooks/use-responsive';
 
 
 export default function TodayScreen() {
   const store = useGoalStore();
   const { user } = useAuth();
   const { profile: setupProfile } = useFirstTimeSetup();
+  const { width: screenWidth, isTablet, orbSize: ORB_SIZE, orbSwipeOffset, contentMaxWidth } = useResponsive();
 
   const challengeStore = useChallengeStore();
   const progress = useProgress();
@@ -77,6 +79,10 @@ export default function TodayScreen() {
   const buttonTranslateY = useRef(new Animated.Value(0)).current;
   const [activeRewardIndex, setActiveRewardIndex] = useState(0);
   const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const screenWidthRef = useRef(screenWidth);
+  const orbSwipeOffsetRef = useRef(orbSwipeOffset);
+  useEffect(() => { screenWidthRef.current = screenWidth; }, [screenWidth]);
+  useEffect(() => { orbSwipeOffsetRef.current = orbSwipeOffset; }, [orbSwipeOffset]);
   
   const activeIndexRef = useRef(activeRewardIndex);
   
@@ -143,7 +149,7 @@ export default function TodayScreen() {
   
   const orbAnimations = useRef(
     Array.from({ length: TOTAL_REWARDS }, (_, i) => ({
-      translateX: new Animated.Value(i === 0 ? 0 : SCREEN_WIDTH * 0.45),
+      translateX: new Animated.Value(i === 0 ? 0 : screenWidthRef.current * 0.45),
       scale: new Animated.Value(i === 0 ? 1 : 0.5),
       opacity: new Animated.Value(i === 0 ? 1 : (i === 1 ? 0.25 : 0)),
     }))
@@ -152,6 +158,7 @@ export default function TodayScreen() {
   useEffect(() => {
     activeIndexRef.current = activeRewardIndex;
     
+    const swipeOff = orbSwipeOffsetRef.current;
     rewards.forEach((_, index) => {
       const isActive = activeRewardIndex === index;
       const isNext = activeRewardIndex + 1 === index;
@@ -166,11 +173,11 @@ export default function TodayScreen() {
         targetScale = 1;
         targetOpacity = 1;
       } else if (isPrev) {
-        targetTranslateX = -SCREEN_WIDTH * 0.45;
+        targetTranslateX = -swipeOff;
         targetScale = 0.5;
         targetOpacity = 0.25;
       } else if (isNext) {
-        targetTranslateX = SCREEN_WIDTH * 0.45;
+        targetTranslateX = swipeOff;
         targetScale = 0.5;
         targetOpacity = 0.25;
       }
@@ -210,6 +217,7 @@ export default function TodayScreen() {
       onPanResponderMove: (_, gestureState) => {
         const { dx } = gestureState;
         const currentRewards = rewardsRef.current;
+        const swOff = orbSwipeOffsetRef.current;
         currentRewards.forEach((_, index) => {
           const isActive = activeIndexRef.current === index;
           const isNext = activeIndexRef.current + 1 === index;
@@ -217,8 +225,8 @@ export default function TodayScreen() {
           
           if (isActive || isNext || isPrev) {
             let baseX = 0;
-            if (isNext) baseX = SCREEN_WIDTH * 0.45;
-            if (isPrev) baseX = -SCREEN_WIDTH * 0.45;
+            if (isNext) baseX = swOff;
+            if (isPrev) baseX = -swOff;
             
             const clampedDx = Math.max(-80, Math.min(80, dx * 0.3));
             orbAnimations[index].translateX.setValue(baseX + clampedDx);
@@ -230,6 +238,7 @@ export default function TodayScreen() {
         const currentRewards = rewardsRef.current;
         const total = currentRewards.length;
         const { dx, vx } = gestureState;
+        const swOff = orbSwipeOffsetRef.current;
         
         const swipeThreshold = 30;
         const velocityThreshold = 0.3;
@@ -247,8 +256,8 @@ export default function TodayScreen() {
             const isPrev = currentIdx - 1 === index;
             
             let targetX = 0;
-            if (isNext) targetX = SCREEN_WIDTH * 0.45;
-            if (isPrev) targetX = -SCREEN_WIDTH * 0.45;
+            if (isNext) targetX = swOff;
+            if (isPrev) targetX = -swOff;
             
             Animated.spring(orbAnimations[index].translateX, {
               toValue: targetX,
@@ -507,9 +516,9 @@ export default function TodayScreen() {
             </TouchableOpacity>
           )}
 
-          <View style={styles.orbContainer}>
+          <View style={[styles.orbContainer, isTablet && { marginHorizontal: 0 }]}>
             <View 
-              style={styles.orbTouchable} 
+              style={[styles.orbTouchable, { width: screenWidth, height: ORB_SIZE + 20 }]} 
               {...panResponder.panHandlers}
             >
               {rewards.map((item, index) => {
@@ -536,7 +545,7 @@ export default function TodayScreen() {
                   >
                     <RewardOrb
                       videoUri={item.unlocked ? item.video : LOCKED_ORB_VIDEO}
-                      size={ORB_SIZE}
+                      size={Math.round(ORB_SIZE)}
                       isActive={isActive}
                       isUnlocked={item.unlocked}
                       isScreenFocused={isScreenFocused}
@@ -680,7 +689,7 @@ export default function TodayScreen() {
             </View>
           </TouchableOpacity>
 
-          <View style={styles.quickActionsSection}>
+          <View style={[styles.quickActionsSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity
@@ -722,7 +731,7 @@ export default function TodayScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.meditationFeedCard}
+            style={[styles.meditationFeedCard, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}
             onPress={() => router.push('/meditation-feed')}
             activeOpacity={0.9}
           >
@@ -749,7 +758,7 @@ export default function TodayScreen() {
             </View>
           </TouchableOpacity>
 
-          <View style={styles.forYouSection}>
+          <View style={[styles.forYouSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <Text style={styles.sectionTitle}>For You</Text>
             <Text style={styles.forYouSubtitle}>Breathing techniques to calm your mind</Text>
             <ScrollView
@@ -901,8 +910,7 @@ function getQuotes() {
   ];
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ORB_SIZE = SCREEN_WIDTH * 0.56;
+
 
 const styles = StyleSheet.create({
   container: {
@@ -918,35 +926,14 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   orbTouchable: {
-    width: SCREEN_WIDTH,
-    height: ORB_SIZE + 20,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   orbWrapper: {
     position: 'absolute',
-    width: ORB_SIZE,
-    height: ORB_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  orbVideoWrapper: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-    borderRadius: ORB_SIZE / 2,
-    overflow: 'hidden',
-  },
-  orbVideo: {
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-  },
-  lockedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: ORB_SIZE / 2,
   },
   requirementText: {
     marginTop: 8,
