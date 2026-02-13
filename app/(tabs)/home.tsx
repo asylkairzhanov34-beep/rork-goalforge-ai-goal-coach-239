@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { usePathname, router, useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, PanResponder, Easing, AppState, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video, ResizeMode } from 'expo-av';
+import { RewardOrb } from '@/components/RewardOrb';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Target, Wind, Sparkles, Calendar, Shield, Lock, Trophy, BookOpen, Leaf, ChevronRight, Gift, Flame, Clock } from 'lucide-react-native';
+import { Target, Wind, Sparkles, Calendar, Shield, Trophy, BookOpen, Leaf, ChevronRight, Gift, Flame, Clock } from 'lucide-react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
@@ -79,7 +79,6 @@ export default function TodayScreen() {
   
   const activeIndexRef = useRef(activeRewardIndex);
   
-  const videoRefs = useRef<{ [key: string]: Video | null }>({});
   const [isScreenFocused, setIsScreenFocused] = useState(true);
 
   const isDeveloper = user?.email === 'developer@test.local';
@@ -302,9 +301,7 @@ export default function TodayScreen() {
     return () => sub.remove();
   }, []);
 
-  const setVideoRef = useCallback((id: string) => (ref: Video | null) => {
-    videoRefs.current[id] = ref;
-  }, []);
+
 
   useEffect(() => {
     if (isHomeActive) {
@@ -535,24 +532,13 @@ export default function TodayScreen() {
                       },
                     ]}
                   >
-                    <View style={styles.orbVideoWrapper}>
-                      <Video
-                        key={item.id}
-                        ref={setVideoRef(item.id)}
-                        source={{ uri: item.unlocked ? item.video : LOCKED_ORB_VIDEO }}
-                        style={styles.orbVideo}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay={isScreenFocused}
-                        isLooping
-                        isMuted
-                        progressUpdateIntervalMillis={5000}
-                      />
-                    </View>
-                    {!item.unlocked && (
-                      <View style={styles.lockedOverlay}>
-                        <Lock size={36} color="rgba(255,255,255,0.7)" />
-                      </View>
-                    )}
+                    <RewardOrb
+                      videoUri={item.unlocked ? item.video : LOCKED_ORB_VIDEO}
+                      size={ORB_SIZE}
+                      isActive={isActive}
+                      isUnlocked={item.unlocked}
+                      isScreenFocused={isScreenFocused}
+                    />
                   </Animated.View>
                 );
               })}
