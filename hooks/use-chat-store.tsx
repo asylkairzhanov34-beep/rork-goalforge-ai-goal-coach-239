@@ -5,11 +5,9 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { ChatMessage, ChatAttachment } from '@/types/chat';
 import { safeStorageGet, safeStorageSet } from '@/utils/storage-helper';
 import { getUserChatHistory, saveUserChatHistory } from '@/lib/firebase';
+import { generateText } from '@rork-ai/toolkit-sdk';
 
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
-
-// OpenAI API key
-const OPENAI_API_KEY = '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';
 
 type OpenAIContentPart = 
   | { type: 'text'; text: string }
@@ -153,67 +151,38 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     return cancelWords.some(word => lowerText.includes(word));
   }, []);
 
-  const generateTaskFromAI = useCallback(async (userRequest: string): Promise<GeneratedTaskData | null> => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
-    const prompt = `User wants to add a task. Their request: "${userRequest}"
-
-Generate a task based on this request. Return ONLY valid JSON (no markdown, no explanation):
-{
-  "title": "Short task title (max 50 chars)",
-  "description": "Detailed description of what to do (1-2 sentences)",
-  "duration": "estimated time (e.g. '30 minutes', '1 hour')",
-  "priority": "high" or "medium" or "low",
-  "difficulty": "easy" or "medium" or "hard",
-  "estimatedTime": number in minutes,
-  "tips": ["helpful tip 1", "helpful tip 2"],
-  "date": "${todayStr}"
-}
-
-Respond in the same language as user's request.`;
-
+  const parseTaskJSON = useCallback((text: string): GeneratedTaskData | null => {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You generate task data as JSON. Return ONLY valid JSON, no other text.' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.5,
-          max_tokens: 300,
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('[Chat] Task generation API error:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-      let content = data.choices?.[0]?.message?.content || '';
-      
-      content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      let content = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       const startIdx = content.indexOf('{');
       const endIdx = content.lastIndexOf('}');
       if (startIdx !== -1 && endIdx !== -1) {
         content = content.substring(startIdx, endIdx + 1);
       }
-      
-      const taskData = JSON.parse(content) as GeneratedTaskData;
-      console.log('[Chat] Generated task data:', taskData);
-      return taskData;
+      return JSON.parse(content) as GeneratedTaskData;
+    } catch {
+      console.error('[Chat] Failed to parse task JSON from:', text.substring(0, 100));
+      return null;
+    }
+  }, []);
+
+  const generateTaskFromAI = useCallback(async (userRequest: string): Promise<GeneratedTaskData | null> => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    try {
+      const result = await generateText({
+        messages: [
+          { role: 'user', content: `Generate a task based on this request: "${userRequest}". Today's date is ${todayStr}. Respond in the same language as the request. Return ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string like "30 minutes"), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date ("${todayStr}").` }
+        ],
+      });
+      console.log('[Chat] Generated task text:', result);
+      return parseTaskJSON(result);
     } catch (error) {
       console.error('[Chat] Task generation error:', error);
       return null;
     }
-  }, []);
+  }, [parseTaskJSON]);
 
   const buildSystemPrompt = useCallback(() => {
     const tasks = goalStore.dailyTasks || [];
@@ -448,55 +417,24 @@ What needs to be done? Describe the task in a few words.`;
 
       const systemPrompt = buildSystemPrompt();
       const recentMessages = messages.slice(-10);
-      
-      const messagesToSend: OpenAIMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...recentMessages,
-        userMessage,
+
+      const chatMessages: { role: 'user' | 'assistant'; content: string }[] = [
+        { role: 'user', content: `[System context: ${systemPrompt}]` },
+        ...recentMessages
+          .filter(m => m.role !== 'system')
+          .map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : (m.content.find(c => c.type === 'text') as any)?.text || '',
+          })),
+        { role: 'user', content: typeof userMessage.content === 'string' ? userMessage.content : (userMessage.content.find(c => c.type === 'text') as any)?.text || '' },
       ];
 
-      console.log('[Chat] Calling OpenAI API...');
+      console.log('[Chat] Calling AI toolkit...');
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: messagesToSend,
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Chat] API Error:', response.status, errorText);
-        
-        if (response.status === 401) {
-          throw new Error('Invalid API key');
-        } else if (response.status === 429) {
-          throw new Error('Too many requests. Please wait a moment.');
-        } else if (response.status === 503) {
-          throw new Error('Service temporarily unavailable');
-        } else {
-          throw new Error(`API error: ${response.status}`);
-        }
-      }
-
-      const data = await response.json();
-      const assistantContent = data.choices?.[0]?.message?.content;
+      const assistantContent = await generateText({ messages: chatMessages });
 
       if (!assistantContent) {
-        throw new Error('Empty response from API');
+        throw new Error('Empty response from AI');
       }
 
       console.log('[Chat] Response received successfully');
@@ -569,52 +507,15 @@ ${completedList || 'No completed tasks yet'}
 Pending tasks:
 ${pendingList || 'No pending tasks'}
 
-Based on their progress, suggest ONE new task that would help them continue their momentum. Return ONLY valid JSON:
-{
-  "title": "Task title (max 50 chars)",
-  "description": "Why this task is recommended based on their progress",
-  "duration": "estimated time",
-  "priority": "high" or "medium" or "low",
-  "difficulty": "easy" or "medium" or "hard",
-  "estimatedTime": number in minutes,
-  "tips": ["tip 1", "tip 2"],
-  "date": "${new Date().toISOString().split('T')[0]}"
-}
+Today's date: ${new Date().toISOString().split('T')[0]}
 
-Respond in English.`;
+Based on their progress, suggest ONE new task that would help them continue their momentum. Respond in English.`;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You analyze user progress and suggest tasks. Return ONLY valid JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 400,
-        }),
+      const analysisResult = await generateText({
+        messages: [{ role: 'user', content: prompt + '\n\nReturn ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date (YYYY-MM-DD string).' }],
       });
-
-      if (!response.ok) {
-        throw new Error('API error');
-      }
-
-      const data = await response.json();
-      let content = data.choices?.[0]?.message?.content || '';
-      
-      content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const startIdx = content.indexOf('{');
-      const endIdx = content.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx !== -1) {
-        content = content.substring(startIdx, endIdx + 1);
-      }
-      
-      const taskData = JSON.parse(content) as GeneratedTaskData;
+      const taskData = parseTaskJSON(analysisResult);
+      if (!taskData) throw new Error('Failed to parse task data');
       console.log('[Chat] Generated task from analysis:', taskData);
       
       setMessages(prev => [...prev, { 
@@ -680,53 +581,15 @@ Respond in English.`;
       const prompt = `User's goal: "${currentGoal?.title || 'Improve productivity'}"
 Completed tasks: ${completedTasks.length}
 Existing tasks (avoid duplicates): ${existingTitles.slice(0, 5).join(', ')}
+Today's date: ${new Date().toISOString().split('T')[0]}
 
-Generate a NEW unique task that helps achieve this goal. Return ONLY valid JSON:
-{
-  "title": "Task title (max 50 chars, must be different from existing)",
-  "description": "Detailed description",
-  "duration": "estimated time",
-  "priority": "high" or "medium" or "low",
-  "difficulty": "easy" or "medium" or "hard",
-  "estimatedTime": number in minutes,
-  "tips": ["tip 1", "tip 2"],
-  "date": "${new Date().toISOString().split('T')[0]}"
-}
+Generate a NEW unique task that helps achieve this goal. Respond in English.`;
 
-Respond in English.`;
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You generate creative, actionable tasks. Return ONLY valid JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.8,
-          max_tokens: 400,
-        }),
+      const newTaskResult = await generateText({
+        messages: [{ role: 'user', content: prompt + '\n\nReturn ONLY valid JSON with these fields: title (string, max 50 chars), description (string), duration (string), priority ("high"|"medium"|"low"), difficulty ("easy"|"medium"|"hard"), estimatedTime (number in minutes), tips (array of 2 strings), date (YYYY-MM-DD string).' }],
       });
-
-      if (!response.ok) {
-        throw new Error('API error');
-      }
-
-      const data = await response.json();
-      let content = data.choices?.[0]?.message?.content || '';
-      
-      content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const startIdx = content.indexOf('{');
-      const endIdx = content.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx !== -1) {
-        content = content.substring(startIdx, endIdx + 1);
-      }
-      
-      const taskData = JSON.parse(content) as GeneratedTaskData;
+      const taskData = parseTaskJSON(newTaskResult);
+      if (!taskData) throw new Error('Failed to parse task data');
       console.log('[Chat] Generated new task:', taskData);
       
       setMessages(prev => [...prev, { 
