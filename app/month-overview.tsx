@@ -173,9 +173,9 @@ function DayTasksModal({ visible, day, onClose, onToggleTask, onAddTask }: DayTa
                     <View
                       style={[
                         modalStyles.priorityBadge,
-                        modalStyles[
-                          `priority${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}` as keyof typeof modalStyles
-                        ],
+                        task.priority === 'high' ? modalStyles.priorityHigh :
+                        task.priority === 'medium' ? modalStyles.priorityMedium :
+                        modalStyles.priorityLow,
                       ]}
                     >
                       <Text style={modalStyles.priorityText}>{priorityLabel(task.priority)}</Text>
