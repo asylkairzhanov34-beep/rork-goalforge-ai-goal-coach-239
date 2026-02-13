@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, Component, ReactNode, useState, memo, useCallback } from "react";
 import { StyleSheet, Text, View, LogBox, InteractionManager, TouchableOpacity } from "react-native";
@@ -11,7 +11,7 @@ import { TimerProvider } from '@/hooks/use-timer-store';
 import { ChatProvider } from '@/hooks/use-chat-store';
 import { ManifestationProvider } from '@/hooks/use-manifestation-store';
 import { FirstTimeSetupProvider } from '@/hooks/use-first-time-setup';
-import { SubscriptionProvider } from '@/hooks/use-subscription-store';
+import { SubscriptionProvider, useSubscription } from '@/hooks/use-subscription-store';
 import { ChallengeProvider } from '@/hooks/use-challenge-store';
 import { JournalProvider } from '@/hooks/use-journal-store';
 import { FocusShieldProvider } from '@/hooks/use-focus-shield-store';
@@ -22,6 +22,8 @@ import { RewardUnlockProvider, useRewardUnlock } from '@/hooks/use-reward-unlock
 import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
 import { VideoSplashScreen } from '@/components/VideoSplashScreen';
+import TrialExpiredModal from '@/components/TrialExpiredModal';
+import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -102,8 +104,6 @@ const LazyFloatingStreak = React.lazy(() =>
   import('@/components/FloatingDynamicIslandStreak').then(m => ({ default: m.FloatingDynamicIslandStreak }))
 );
 
-import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
-
 function StreakCelebrationOverlay() {
   const { isVisible, hideCelebration } = useStreakCelebration();
   if (!isVisible) return null;
@@ -118,6 +118,25 @@ function RewardUnlockOverlay() {
   const { modalVisible, pendingReward, closeModal } = useRewardUnlock();
   if (!modalVisible) return null;
   return <RewardUnlockModal visible={modalVisible} reward={pendingReward} onClose={closeModal} />;
+}
+
+function TrialGate() {
+  const { isTrialExpired, isPremium, isInitialized } = useSubscription();
+  const router = useRouter();
+
+  const handleGetPremium = useCallback(() => {
+    router.push('/subscription');
+  }, [router]);
+
+  if (!isInitialized || isPremium) return null;
+
+  return (
+    <TrialExpiredModal
+      visible={isTrialExpired}
+      onGetPremium={handleGetPremium}
+      testID="trial-expired-modal"
+    />
+  );
 }
 
 function DeferredNotificationsGate() {
@@ -402,6 +421,7 @@ export default function RootLayout() {
         <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
           <QueryClientProvider client={queryClient}>
             <SubscriptionProvider>
+              <TrialGate />
               <DeferredNotificationsGate />
               <AuthProvider>
                 <FirstTimeSetupProvider>

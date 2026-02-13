@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Alert, Platform } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initializeRevenueCat,
   getOfferings,
@@ -47,6 +48,9 @@ interface FirebaseSubscriptionData {
 
 const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 5000;
 
+const TRIAL_START_KEY = 'trialStartISO';
+const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
+
 const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
   return Promise.race([
     promise,
@@ -62,10 +66,64 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
+  const [trialStartISO, setTrialStartISO] = useState<string | null>(null);
+  const [trialLoaded, setTrialLoaded] = useState(false);
   const lastSyncedStatus = useRef<SubscriptionStatus | null>(null);
   const firebaseUserId = useRef<string | null>(null);
   const revenueCatInitialized = useRef(false);
   const initStarted = useRef(false);
+
+  useEffect(() => {
+    const loadTrial = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(TRIAL_START_KEY);
+        if (stored) {
+          console.log('[Trial] Loaded trial start:', stored);
+          setTrialStartISO(stored);
+        } else {
+          const now = new Date().toISOString();
+          console.log('[Trial] First launch — starting trial:', now);
+          await AsyncStorage.setItem(TRIAL_START_KEY, now);
+          setTrialStartISO(now);
+        }
+      } catch (e) {
+        console.error('[Trial] Failed to load/set trial start:', e);
+        const fallback = new Date().toISOString();
+        setTrialStartISO(fallback);
+      } finally {
+        setTrialLoaded(true);
+      }
+    };
+    loadTrial();
+  }, []);
+
+  const isTrialExpired = useMemo(() => {
+    if (!trialLoaded || !trialStartISO) return false;
+    if (status === 'premium') return false;
+    const start = new Date(trialStartISO).getTime();
+    const now = Date.now();
+    const expired = now - start >= TRIAL_DURATION_MS;
+    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min');
+    return expired;
+  }, [trialLoaded, trialStartISO, status]);
+
+  const [trialExpiredLive, setTrialExpiredLive] = useState(false);
+
+  useEffect(() => {
+    if (!trialLoaded || !trialStartISO || status === 'premium') {
+      setTrialExpiredLive(false);
+      return;
+    }
+    const check = () => {
+      const start = new Date(trialStartISO).getTime();
+      const now = Date.now();
+      const expired = now - start >= TRIAL_DURATION_MS;
+      setTrialExpiredLive(expired);
+    };
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [trialLoaded, trialStartISO, status]);
 
   const syncSubscriptionToFirebase = useCallback(async (
     newStatus: SubscriptionStatus,
@@ -412,6 +470,8 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     error,
     isFirstLaunch,
     isPremium: status === 'premium',
+    isTrialExpired: isTrialExpired || trialExpiredLive,
+    trialStartISO,
     purchasePackage: handlePurchase,
     restorePurchases: handleRestore,
     refreshStatus,
