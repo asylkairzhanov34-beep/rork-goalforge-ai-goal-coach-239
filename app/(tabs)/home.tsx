@@ -538,6 +538,7 @@ export default function TodayScreen() {
                       isActive={isActive}
                       isUnlocked={item.unlocked}
                       isScreenFocused={isScreenFocused}
+                      color={item.color}
                     />
                   </Animated.View>
                 );
