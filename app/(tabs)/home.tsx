@@ -40,6 +40,7 @@ export default function TodayScreen() {
   const challengeStore = useChallengeStore();
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
+  const [offerDismissed, setOfferDismissed] = useState(false);
   const { pendingReward, modalVisible, closeModal, markOfferSeen, showPendingRewards, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
   const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
   const [showStreakBanner, setShowStreakBanner] = useState(false);
@@ -455,15 +456,16 @@ export default function TodayScreen() {
   return (
     <GradientBackground>
       <SubscriptionOfferModal
-        visible={shouldShowOffer}
+        visible={shouldShowOffer && !offerDismissed}
         loading={subscriptionChecking}
         onPrimary={() => {
+          setOfferDismissed(true);
           markOfferSeen();
           router.push('/subscription');
         }}
         onSkip={() => {
+          setOfferDismissed(true);
           markOfferSeen();
-          router.push('/subscription');
         }}
         testID="subscription-offer"
       />
