@@ -374,7 +374,9 @@ function DeferredProviders({ children }: { children: ReactNode }) {
         <ManifestationProvider>
           <JournalProvider>
             <FocusShieldProvider>
-              {children}
+              <RewardUnlockProvider>
+                {children}
+              </RewardUnlockProvider>
             </FocusShieldProvider>
           </JournalProvider>
         </ManifestationProvider>
