@@ -24,6 +24,7 @@ import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
 import { VideoSplashScreen } from '@/components/VideoSplashScreen';
 import TrialExpiredModal from '@/components/TrialExpiredModal';
 import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
+import { useSmartNotifications } from '@/hooks/use-smart-notifications';
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -147,6 +148,11 @@ function DeferredNotificationsGate() {
   }, []);
   if (!ready) return null;
   return <GlobalNotificationsGate />;
+}
+
+function SmartNotificationsInit() {
+  useSmartNotifications();
+  return null;
 }
 
 function RootLayoutNav() {
@@ -432,6 +438,7 @@ export default function RootLayout() {
                       <TimerProvider>
                         <ProgressProvider>
                           <DeferredProviders>
+                            <SmartNotificationsInit />
                             <MemoizedRootLayoutNav />
                           </DeferredProviders>
                         </ProgressProvider>

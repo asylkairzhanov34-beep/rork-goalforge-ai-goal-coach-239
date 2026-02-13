@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import {
+  getRandomMessage,
+  getMessagesForProductivityTime,
+  getNotificationHoursForProductivity,
+  AI_COACH_INCOMPLETE_TASKS_MESSAGES,
+} from '@/constants/ai-notifications';
 
 type MockPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -359,6 +365,71 @@ export function useNotifications() {
     });
   };
 
+  const scheduleSmartAINotifications = async (
+    productivityTime: 'morning' | 'afternoon' | 'evening' | 'unknown' | undefined
+  ) => {
+    if (Platform.OS === 'web') {
+      console.log('[Notifications] Smart AI notifications not available on web');
+      return;
+    }
+
+    if (!permission.granted) {
+      console.log('[Notifications] No permission for smart AI notifications');
+      return;
+    }
+
+    const { mainHour, mainMinute, followUpHour, followUpMinute } =
+      getNotificationHoursForProductivity(productivityTime);
+
+    const messages = getMessagesForProductivityTime(productivityTime);
+    const mainMsg = getRandomMessage(messages);
+    const followUpMsg = getRandomMessage(AI_COACH_INCOMPLETE_TASKS_MESSAGES);
+
+    console.log(`[Notifications] Scheduling smart AI notifications:`);
+    console.log(`  Main: ${mainHour}:${String(mainMinute).padStart(2, '0')} - "${mainMsg.title}"`);
+    console.log(`  Follow-up: ${followUpHour}:${String(followUpMinute).padStart(2, '0')} - "${followUpMsg.title}"`);
+
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('[Notifications] Cleared old notifications before scheduling smart ones');
+
+      const mainId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: mainMsg.title,
+          body: mainMsg.body,
+          data: { type: 'ai_coach_main', productivityTime },
+          sound: 'default',
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: mainHour,
+          minute: mainMinute,
+        },
+      });
+      console.log('[Notifications] Main AI coach notification scheduled, id:', mainId);
+
+      const followUpId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: followUpMsg.title,
+          body: followUpMsg.body,
+          data: { type: 'ai_coach_followup', productivityTime },
+          sound: 'default',
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: followUpHour,
+          minute: followUpMinute,
+        },
+      });
+      console.log('[Notifications] Follow-up AI coach notification scheduled, id:', followUpId);
+
+      return { mainId, followUpId };
+    } catch (error) {
+      console.error('[Notifications] Error scheduling smart AI notifications:', error);
+      return null;
+    }
+  };
+
   return {
     expoPushToken,
     permission,
@@ -373,6 +444,7 @@ export function useNotifications() {
     scheduleDailyReminder,
     scheduleGoalReminder,
     scheduleProductivityReminder,
+    scheduleSmartAINotifications,
     getNotificationTimeForProductivity,
   };
 }
