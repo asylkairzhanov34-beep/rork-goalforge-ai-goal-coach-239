@@ -714,6 +714,26 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     return { completed, total, percentage };
   };
 
+  const updateGoal = async (updatedGoal: Goal) => {
+    if (!user?.id) return;
+    console.log('[GoalStore] Updating goal:', updatedGoal.title);
+    
+    setCurrentGoal(updatedGoal);
+    
+    const goals = goalsQuery.data || [];
+    const updatedGoals = goals.map((g: Goal) => g.id === updatedGoal.id ? updatedGoal : g);
+    
+    await safeStorageSet(STORAGE_KEYS.GOALS, updatedGoals);
+    if (!user.id.startsWith('dev_guest_')) {
+      await saveUserGoals(user.id, updatedGoals).catch((err: Error) => {
+        console.error('[GoalStore] Failed to sync goals to Firebase:', err);
+      });
+    }
+    
+    queryClient.invalidateQueries({ queryKey: ['goals', user?.id] });
+    console.log('[GoalStore] Goal updated successfully');
+  };
+
   const resetGoal = async () => {
     if (!user?.id) return;
     console.log('[GoalStore] Resetting goal for user:', user.id);
@@ -854,6 +874,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     addPomodoroSession,
     updatePomodoroSession,
     getPomodoroStats,
+    updateGoal,
     updateTask,
     deleteTask,
     saveTaskFeedback,

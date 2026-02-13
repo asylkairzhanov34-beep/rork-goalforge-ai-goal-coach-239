@@ -66,8 +66,29 @@ const TOOLS: OpenAIFunctionTool[] = [
         difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], description: 'Task difficulty' },
         estimatedTime: { type: 'number', description: 'Estimated time in minutes' },
         tips: { type: 'array', items: { type: 'string' }, description: '1-2 helpful tips' },
+        date: { type: 'string', description: 'Task date in YYYY-MM-DD format. Defaults to today.' },
       },
       required: ['title'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'editTask',
+    description: 'Edit an existing task. Use when user wants to change title, description, priority, difficulty, duration, date, or tips of an existing task. Search by taskId or taskTitle.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The task ID to edit' },
+        taskTitle: { type: 'string', description: 'Task title to search for if ID is unknown' },
+        title: { type: 'string', description: 'New title' },
+        description: { type: 'string', description: 'New description' },
+        duration: { type: 'string', description: 'New duration string' },
+        priority: { type: 'string', enum: ['high', 'medium', 'low'], description: 'New priority' },
+        difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], description: 'New difficulty' },
+        estimatedTime: { type: 'number', description: 'New estimated time in minutes' },
+        tips: { type: 'array', items: { type: 'string' }, description: 'New tips' },
+        date: { type: 'string', description: 'New date in YYYY-MM-DD format' },
+      },
     },
   },
   {
@@ -77,7 +98,7 @@ const TOOLS: OpenAIFunctionTool[] = [
     parameters: {
       type: 'object',
       properties: {
-        filter: { type: 'string', enum: ['all', 'today', 'completed', 'pending'], description: 'Which tasks to show' },
+        filter: { type: 'string', enum: ['all', 'today', 'completed', 'pending', 'high_priority', 'overdue'], description: 'Which tasks to show' },
       },
     },
   },
@@ -85,6 +106,18 @@ const TOOLS: OpenAIFunctionTool[] = [
     type: 'function',
     name: 'completeTask',
     description: 'Mark a task as completed. Use when user says they finished or completed a task.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The task ID' },
+        taskTitle: { type: 'string', description: 'Task title to search for if ID is unknown' },
+      },
+    },
+  },
+  {
+    type: 'function',
+    name: 'uncompleteTask',
+    description: 'Mark a completed task as NOT completed (undo completion). Use when user wants to reopen or undo a completed task.',
     parameters: {
       type: 'object',
       properties: {
@@ -103,6 +136,18 @@ const TOOLS: OpenAIFunctionTool[] = [
         taskId: { type: 'string', description: 'The task ID' },
         taskTitle: { type: 'string', description: 'Task title to search for if ID is unknown' },
       },
+    },
+  },
+  {
+    type: 'function',
+    name: 'deleteAllTasks',
+    description: 'Delete ALL tasks. Use only when user explicitly asks to clear/remove all tasks.',
+    parameters: {
+      type: 'object',
+      properties: {
+        confirm: { type: 'boolean', description: 'Must be true to confirm deletion' },
+      },
+      required: ['confirm'],
     },
   },
   {
@@ -132,6 +177,71 @@ const TOOLS: OpenAIFunctionTool[] = [
         tips: { type: 'array', items: { type: 'string' } },
       },
       required: ['title'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'updateGoal',
+    description: 'Update the current goal properties. Use when user wants to change goal title, description, deadline, category, or motivation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'New goal title' },
+        description: { type: 'string', description: 'New goal description' },
+        endDate: { type: 'string', description: 'New deadline in YYYY-MM-DD format' },
+        category: { type: 'string', description: 'New category' },
+        motivation: { type: 'string', description: 'New motivation text' },
+      },
+    },
+  },
+  {
+    type: 'function',
+    name: 'resetGoal',
+    description: 'Reset/delete the current goal and all its tasks. Use ONLY when user explicitly asks to reset or delete their goal.',
+    parameters: {
+      type: 'object',
+      properties: {
+        confirm: { type: 'boolean', description: 'Must be true to confirm reset' },
+      },
+      required: ['confirm'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'getGoalInfo',
+    description: 'Get detailed information about the current goal. Use when user asks about their goal details.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    type: 'function',
+    name: 'bulkCreateTasks',
+    description: 'Create multiple tasks at once. Use when user asks to generate a plan, create several tasks, or populate their schedule.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              description: { type: 'string' },
+              duration: { type: 'string' },
+              priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+              difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+              estimatedTime: { type: 'number' },
+              tips: { type: 'array', items: { type: 'string' } },
+              date: { type: 'string', description: 'YYYY-MM-DD format' },
+            },
+            required: ['title'],
+          },
+          description: 'Array of tasks to create',
+        },
+      },
+      required: ['tasks'],
     },
   },
 ];
@@ -174,11 +284,19 @@ export const [ChatProvider, useChat] = createContextHook(() => {
 
     let prompt = `You are GoalForge AI — a friendly, concise productivity coach. Today: ${today}.\n\n`;
     prompt += `RULES:\n`;
-    prompt += `- You have FULL access to the user's tasks via tools. Use them proactively.\n`;
-    prompt += `- When user asks to create/add/generate a task, use the createTask tool immediately. Do NOT ask follow-up questions unless the request is truly ambiguous.\n`;
+    prompt += `- You have FULL UNRESTRICTED access to ALL user data: tasks, goals, progress, stats. Use tools proactively.\n`;
+    prompt += `- When user asks to create/add/generate a task, use createTask immediately. Do NOT ask follow-up questions unless truly ambiguous.\n`;
+    prompt += `- When user asks to edit/change/update a task, use editTask tool.\n`;
     prompt += `- When user asks to see tasks, use listTasks tool.\n`;
     prompt += `- When user asks to complete a task, use completeTask tool.\n`;
+    prompt += `- When user asks to undo/reopen a completed task, use uncompleteTask tool.\n`;
     prompt += `- When user asks to delete a task, use deleteTask tool.\n`;
+    prompt += `- When user asks to delete ALL tasks, use deleteAllTasks tool.\n`;
+    prompt += `- When user asks about their goal, use getGoalInfo tool.\n`;
+    prompt += `- When user asks to change/update their goal, use updateGoal tool.\n`;
+    prompt += `- When user asks to reset/delete their goal, use resetGoal tool.\n`;
+    prompt += `- When user asks to create multiple tasks or a plan, use bulkCreateTasks tool.\n`;
+    prompt += `- You can combine multiple tools in one response for complex requests.\n`;
     prompt += `- Be concise (2-4 sentences). Use a friendly, encouraging tone.\n`;
     prompt += `- IMPORTANT: Always respond in the SAME language as the user's message.\n`;
     prompt += `- When creating a task, pick sensible defaults for any missing fields.\n\n`;
@@ -218,6 +336,16 @@ export const [ChatProvider, useChat] = createContextHook(() => {
       const store = goalStoreRef.current;
       const prog = progressRef.current;
 
+      const findTaskByIdOrTitle = (taskId?: string, taskTitle?: string) => {
+        const tasks = store.dailyTasks || [];
+        let task = taskId ? tasks.find(t => t.id === taskId) : undefined;
+        if (!task && taskTitle) {
+          const lower = taskTitle.toLowerCase();
+          task = tasks.find(t => t.title.toLowerCase().includes(lower));
+        }
+        return task;
+      };
+
       switch (toolName) {
         case 'createTask': {
           const tasks = store.dailyTasks || [];
@@ -226,9 +354,13 @@ export const [ChatProvider, useChat] = createContextHook(() => {
             ? Math.max(...goalTasks.map(t => t.day)) + 1
             : 1;
 
+          const taskDate = input.date
+            ? new Date(input.date + 'T12:00:00').toISOString()
+            : new Date().toISOString();
+
           const newTaskData = {
             day: nextDay,
-            date: new Date().toISOString(),
+            date: taskDate,
             title: input.title,
             description: input.description || 'Task created via AI assistant',
             duration: input.duration || '30 minutes',
@@ -247,6 +379,25 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           return `Task "${input.title}" has been created and added to the plan.`;
         }
 
+        case 'editTask': {
+          const task = findTaskByIdOrTitle(input.taskId, input.taskTitle);
+          if (!task) return 'Task not found. Please check the task name or list your tasks first.';
+
+          const updates: Record<string, unknown> = {};
+          if (input.title) updates.title = input.title;
+          if (input.description) updates.description = input.description;
+          if (input.duration) updates.duration = input.duration;
+          if (input.priority) updates.priority = input.priority;
+          if (input.difficulty) updates.difficulty = input.difficulty;
+          if (input.estimatedTime) updates.estimatedTime = input.estimatedTime;
+          if (input.tips) updates.tips = input.tips;
+          if (input.date) updates.date = new Date(input.date + 'T12:00:00').toISOString();
+
+          store.updateTask(task.id, updates);
+          const changedFields = Object.keys(updates).join(', ');
+          return `Task "${task.title}" updated (${changedFields}).`;
+        }
+
         case 'listTasks': {
           const tasks = store.dailyTasks || [];
           const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
@@ -260,6 +411,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
             filtered = goalTasks.filter(t => t.completed);
           } else if (filterType === 'pending') {
             filtered = goalTasks.filter(t => !t.completed);
+          } else if (filterType === 'high_priority') {
+            filtered = goalTasks.filter(t => t.priority === 'high' && !t.completed);
+          } else if (filterType === 'overdue') {
+            filtered = goalTasks.filter(t => !t.completed && t.date && t.date.split('T')[0] < today);
           }
 
           if (filtered.length === 0) {
@@ -269,7 +424,8 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           const list = filtered.slice(0, 15).map(t => {
             const status = t.completed ? '✅' : '⬜';
             const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
-            return `${status} ${prio} ${t.title} (${t.duration || '?'}) [id:${t.id}]`;
+            const dateStr = t.date ? t.date.split('T')[0] : '';
+            return `${status} ${prio} ${t.title} (${t.duration || '?'}) ${dateStr} [id:${t.id}]`;
           }).join('\n');
 
           const completedCount = filtered.filter(t => t.completed).length;
@@ -277,14 +433,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         }
 
         case 'completeTask': {
-          const tasks = store.dailyTasks || [];
-          let task = input?.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
-
-          if (!task && input?.taskTitle) {
-            const lowerTitle = input.taskTitle.toLowerCase();
-            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
-          }
-
+          const task = findTaskByIdOrTitle(input?.taskId, input?.taskTitle);
           if (!task) return 'Task not found. Please check the task name or list your tasks first.';
           if (task.completed) return `Task "${task.title}" is already completed!`;
 
@@ -292,18 +441,29 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           return `Task "${task.title}" marked as completed! Great job! 🎉`;
         }
 
+        case 'uncompleteTask': {
+          const task = findTaskByIdOrTitle(input?.taskId, input?.taskTitle);
+          if (!task) return 'Task not found. Please check the task name or list your tasks first.';
+          if (!task.completed) return `Task "${task.title}" is not completed yet.`;
+
+          store.toggleTaskCompletion(task.id);
+          return `Task "${task.title}" has been reopened (marked as not completed).`;
+        }
+
         case 'deleteTask': {
-          const tasks = store.dailyTasks || [];
-          let task = input?.taskId ? tasks.find(t => t.id === input.taskId) : undefined;
-
-          if (!task && input?.taskTitle) {
-            const lowerTitle = input.taskTitle.toLowerCase();
-            task = tasks.find(t => t.title.toLowerCase().includes(lowerTitle));
-          }
-
+          const task = findTaskByIdOrTitle(input?.taskId, input?.taskTitle);
           if (!task) return 'Task not found. Please check the task name.';
           store.deleteTask(task.id);
           return `Task "${task.title}" has been deleted.`;
+        }
+
+        case 'deleteAllTasks': {
+          if (!input?.confirm) return 'Deletion cancelled. Set confirm to true to proceed.';
+          const tasks = store.dailyTasks || [];
+          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+          const count = goalTasks.length;
+          goalTasks.forEach(t => store.deleteTask(t.id));
+          return `All ${count} tasks have been deleted.`;
         }
 
         case 'analyzeProgress': {
@@ -315,9 +475,11 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           const todayTasks = goalTasks.filter(t => t.date?.startsWith(today));
           const todayCompleted = todayTasks.filter(t => t.completed).length;
 
+          const highPriPending = goalTasks.filter(t => !t.completed && t.priority === 'high').length;
+          const overdue = goalTasks.filter(t => !t.completed && t.date && t.date.split('T')[0] < today).length;
           const completionRate = goalTasks.length > 0 ? Math.round((completed / goalTasks.length) * 100) : 0;
 
-          let report = `Progress Report:\n- Goal: ${store.currentGoal?.title || 'No active goal'}\n- Total tasks: ${goalTasks.length} (${completed} done, ${pending} remaining)\n- Completion rate: ${completionRate}%\n- Today: ${todayCompleted}/${todayTasks.length} tasks done\n- Streak: ${prog?.currentStreak ?? 0} days (best: ${prog?.bestStreak ?? 0})\n- Focus time: ${prog?.focusTimeDisplay ?? '0m'}`;
+          let report = `Progress Report:\n- Goal: ${store.currentGoal?.title || 'No active goal'}\n- Total tasks: ${goalTasks.length} (${completed} done, ${pending} remaining)\n- Completion rate: ${completionRate}%\n- Today: ${todayCompleted}/${todayTasks.length} tasks done\n- High priority pending: ${highPriPending}\n- Overdue: ${overdue}\n- Streak: ${prog?.currentStreak ?? 0} days (best: ${prog?.bestStreak ?? 0})\n- Focus time: ${prog?.focusTimeDisplay ?? '0m'}`;
 
           if (pending > 0) {
             const nextPending = goalTasks.filter(t => !t.completed).slice(0, 3);
@@ -354,6 +516,77 @@ export const [ChatProvider, useChat] = createContextHook(() => {
 
           taskFormQueue.current = formData;
           return `Opening task form for "${input.title}"...`;
+        }
+
+        case 'updateGoal': {
+          const goal = store.currentGoal;
+          if (!goal) return 'No active goal found. Create a goal first.';
+
+          const updates: Record<string, unknown> = {};
+          if (input.title) updates.title = input.title;
+          if (input.description) updates.description = input.description;
+          if (input.endDate) updates.endDate = input.endDate;
+          if (input.category) updates.category = input.category;
+          if (input.motivation) updates.motivation = input.motivation;
+
+          const updatedGoal = { ...goal, ...updates };
+          store.updateGoal?.(updatedGoal);
+          const changedFields = Object.keys(updates).join(', ');
+          return `Goal "${updatedGoal.title}" updated (${changedFields}).`;
+        }
+
+        case 'resetGoal': {
+          if (!input?.confirm) return 'Reset cancelled. Set confirm to true to proceed.';
+          const goalTitle = store.currentGoal?.title || 'current goal';
+          store.resetGoal();
+          return `Goal "${goalTitle}" and all its tasks have been deleted. User can now create a new goal.`;
+        }
+
+        case 'getGoalInfo': {
+          const goal = store.currentGoal;
+          if (!goal) return 'No active goal. User needs to create a goal first.';
+
+          const tasks = store.dailyTasks || [];
+          const goalTasks = tasks.filter(t => t.goalId === goal.id);
+          const completed = goalTasks.filter(t => t.completed).length;
+
+          return `Goal: ${goal.title}\nDescription: ${goal.description}\nCategory: ${goal.category}\nMotivation: ${goal.motivation}\nStart: ${goal.startDate}\nDeadline: ${goal.endDate || 'No deadline (free plan)'}\nPlan type: ${goal.planType}\nTasks: ${goalTasks.length} total (${completed} completed)\nCreated: ${goal.createdAt}`;
+        }
+
+        case 'bulkCreateTasks': {
+          if (!input.tasks || !Array.isArray(input.tasks) || input.tasks.length === 0) {
+            return 'No tasks provided.';
+          }
+
+          const tasks = store.dailyTasks || [];
+          const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
+          let nextDay = goalTasks.length > 0
+            ? Math.max(...goalTasks.map(t => t.day)) + 1
+            : 1;
+
+          const created: string[] = [];
+          for (const t of input.tasks) {
+            const taskDate = t.date
+              ? new Date(t.date + 'T12:00:00').toISOString()
+              : new Date().toISOString();
+
+            store.addTask({
+              day: nextDay++,
+              date: taskDate,
+              title: t.title,
+              description: t.description || 'Task created via AI assistant',
+              duration: t.duration || '30 minutes',
+              priority: (t.priority || 'medium') as 'high' | 'medium' | 'low',
+              difficulty: (t.difficulty || 'medium') as 'easy' | 'medium' | 'hard',
+              estimatedTime: t.estimatedTime || 30,
+              tips: t.tips || ['Stay focused'],
+            }).catch((err: unknown) => {
+              console.error('[Chat Tool] Failed to create task:', t.title, err);
+            });
+            created.push(t.title);
+          }
+
+          return `Created ${created.length} tasks: ${created.join(', ')}`;
         }
 
         default:
