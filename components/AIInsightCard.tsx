@@ -135,7 +135,7 @@ Respond in Russian.
   const handleActionPress = () => {
     if (insight?.actionRoute) {
       if (insight.actionRoute === '/chat' && insight.actionParam) {
-         router.push({ pathname: '/chat', params: { initialMessage: insight.actionParam } });
+         router.push({ pathname: '/chat' as any, params: { initialMessage: insight.actionParam } });
       } else {
          router.push(insight.actionRoute as any);
       }

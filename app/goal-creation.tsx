@@ -24,7 +24,7 @@ export default function GoalCreationScreen() {
           </Text>
           <TouchableOpacity
             style={styles.profileButton}
-            onPress={() => router.replace('/(tabs)/profile')}
+            onPress={() => router.replace('/(tabs)/profile' as any)}
             activeOpacity={0.7}
           >
             <RotateCcw size={20} color={theme.colors.background} style={{ marginRight: 8 }} />

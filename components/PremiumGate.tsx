@@ -46,7 +46,7 @@ export default function PremiumGate({
           visible={showPaywall}
           variant="feature"
           featureName={feature}
-          onPrimaryAction={() => router.push('/subscription')}
+          onPrimaryAction={() => router.push('/subscription' as any)}
           onSecondaryAction={() => setShowPaywall(false)}
           onRequestClose={() => setShowPaywall(false)}
           primaryLabel="Get Premium"
@@ -88,7 +88,7 @@ export function usePremiumGate() {
       featureName="GoalForge Premium"
       onPrimaryAction={() => {
         setShowPaywall(false);
-        router.push('/subscription');
+        router.push('/subscription' as any);
       }}
       onSecondaryAction={() => setShowPaywall(false)}
       onRequestClose={() => setShowPaywall(false)}

@@ -182,7 +182,7 @@ export default function SettingsScreen() {
   };
 
   const handleOpenNotifications = () => {
-    router.push('/notifications');
+    router.push('/notifications' as any);
   };
 
   const handleResetOnboarding = () => {
@@ -196,7 +196,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await updateProfile({ isCompleted: false });
-              router.replace('/first-time-setup');
+              router.replace('/first-time-setup' as any);
             } catch {
               Alert.alert('Error', 'Failed to reset setup');
             }
@@ -293,7 +293,7 @@ export default function SettingsScreen() {
   };
 
   const handleOpenDevTools = () => {
-    router.push('/dev-subscription-tools');
+    router.push('/dev-subscription-tools' as any);
   };
 
   const handleRestorePurchases = async () => {
@@ -321,7 +321,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await logout();
-              router.replace('/auth');
+              router.replace('/auth' as any);
             } catch {
               Alert.alert('Error', 'Failed to sign out');
             }
@@ -352,7 +352,7 @@ export default function SettingsScreen() {
                   onPress: async () => {
                     try {
                       await deleteAccount();
-                      router.replace('/auth');
+                      router.replace('/auth' as any);
                     } catch (error) {
                       const msg = error instanceof Error ? error.message : 'Failed to delete account';
                       Alert.alert('Error', msg);
@@ -447,7 +447,7 @@ export default function SettingsScreen() {
               icon={Crown}
               title="Subscription Status"
               subtitle={subscription?.isPremium ? 'Premium Active' : 'Free Plan'}
-              onPress={() => router.push('/subscription')}
+              onPress={() => router.push('/subscription' as any)}
               showArrow
               iconColor="#F59E0B"
             />

@@ -113,20 +113,20 @@ export default function ProfileScreen() {
       icon: Crown,
       title: 'Premium Active',
       subtitle: 'Thank you for your support!',
-      onPress: () => router.push('/subscription'),
+      onPress: () => router.push('/subscription' as any),
       iconColor: theme.colors.primary,
     }] : [{
       icon: Crown,
       title: 'Get Premium',
       subtitle: 'Unlock all features',
-      onPress: () => router.push('/subscription'),
+      onPress: () => router.push('/subscription' as any),
       iconColor: theme.colors.primary,
     }]),
     {
       icon: MessageCircle,
       title: 'AI Coach',
       subtitle: 'Chat with your personal assistant',
-      onPress: () => router.push('/chat'),
+      onPress: () => router.push('/chat' as any),
       iconColor: '#8B5CF6',
     },
     ...(currentGoal ? [{
@@ -140,14 +140,14 @@ export default function ProfileScreen() {
       icon: Bell,
       title: 'Notifications',
       subtitle: 'Manage your reminders',
-      onPress: () => router.push('/notifications'),
+      onPress: () => router.push('/notifications' as any),
       iconColor: '#22C55E',
     },
     {
       icon: Settings,
       title: 'Settings',
       subtitle: 'App preferences & options',
-      onPress: () => router.push('/settings'),
+      onPress: () => router.push('/settings' as any),
       iconColor: '#6366F1',
     },
     {
@@ -182,7 +182,7 @@ export default function ProfileScreen() {
                       console.log('[Profile] Starting account deletion...');
                       await deleteAccount();
                       console.log('[Profile] Account deletion complete');
-                      router.replace('/auth');
+                      router.replace('/auth' as any);
                     } catch (error) {
                       console.error('[Profile] Delete account error:', error);
                       const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
@@ -210,7 +210,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               await logout();
-              router.replace('/auth');
+              router.replace('/auth' as any);
             } catch {
               Alert.alert('Error', 'Failed to sign out');
             }
@@ -286,7 +286,7 @@ export default function ProfileScreen() {
               {!isPremium && (
                 <TouchableOpacity
                   style={styles.upgradeButton}
-                  onPress={() => router.push('/subscription')}
+                  onPress={() => router.push('/subscription' as any)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
@@ -475,7 +475,7 @@ export default function ProfileScreen() {
           {__DEV__ && (
             <TouchableOpacity
               style={styles.devEntry}
-              onPress={() => router.push('/dev-subscription-tools')}
+              onPress={() => router.push('/dev-subscription-tools' as any)}
               activeOpacity={0.7}
               testID="dev-subscription-entry"
             >

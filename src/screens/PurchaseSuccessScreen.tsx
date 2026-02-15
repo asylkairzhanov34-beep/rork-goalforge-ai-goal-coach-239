@@ -53,7 +53,7 @@ export default function PurchaseSuccessScreen() {
     if (Platform.OS !== 'web') {
       await Haptics.selectionAsync().catch(() => undefined);
     }
-    router.replace('/(tabs)/home');
+    router.replace('/(tabs)/home' as any);
   };
 
   const handleRestore = async () => {

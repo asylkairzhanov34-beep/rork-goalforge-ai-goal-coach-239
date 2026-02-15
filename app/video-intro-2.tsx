@@ -74,7 +74,7 @@ export default function VideoIntro2Screen() {
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
-      router.replace('/welcome-onboarding');
+      router.replace('/welcome-onboarding' as any);
     });
   }, [buttonScale, fadeAnim]);
 

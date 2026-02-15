@@ -732,7 +732,7 @@ export default function PlanScreen() {
             </View>
             <TouchableOpacity 
               style={styles.monthButton}
-              onPress={() => router.push('/month-overview')}
+              onPress={() => router.push('/month-overview' as any)}
             >
               <Calendar size={18} color="#000000" />
               <Text style={styles.monthButtonText}>Month</Text>

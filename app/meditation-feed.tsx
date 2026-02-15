@@ -362,7 +362,7 @@ export default function MeditationFeedScreen() {
     
     if (index === MEDITATION_SLIDES.length - 1) {
       setTimeout(() => {
-        router.replace('/timer');
+        router.replace('/timer' as any);
       }, 300);
     } else {
       flatListRef.current?.scrollToIndex({

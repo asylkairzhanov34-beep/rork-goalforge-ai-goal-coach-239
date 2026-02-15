@@ -48,7 +48,7 @@ export default function FirstTimeSetupScreen() {
     if (!setupLoading && profile?.isCompleted && !hasCheckedProfile.current) {
       hasCheckedProfile.current = true;
       console.log('[FirstTimeSetupRoute] Profile loaded from Firebase - already completed, redirecting');
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     }
   }, [setupLoading, profile?.isCompleted]);
 
@@ -65,12 +65,12 @@ export default function FirstTimeSetupScreen() {
 
   if (!isAuthenticated) {
     console.log('[FirstTimeSetupRoute] Not authenticated -> redirect to /auth');
-    return <Redirect href="/auth" />;
+    return <Redirect href={'/auth' as any} />;
   }
 
   if (profile?.isCompleted) {
     console.log('[FirstTimeSetupRoute] Setup already completed -> redirect to /(tabs)/home');
-    return <Redirect href="/(tabs)/home" />;
+    return <Redirect href={"/(tabs)/home" as any} />;
   }
 
   const handleStep1Next = async (data: { nickname: string }) => {
@@ -113,12 +113,12 @@ export default function FirstTimeSetupScreen() {
         });
       }
       
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     } catch (error) {
       console.error('[FirstTimeSetup] handleStep3Next failed:', error);
       try {
         await completeSetup();
-        router.replace('/(tabs)/home');
+        router.replace('/(tabs)/home' as any);
       } catch (retryError) {
         console.error('[FirstTimeSetup] Retry also failed:', retryError);
       }
@@ -129,10 +129,10 @@ export default function FirstTimeSetupScreen() {
     try {
       await completeSetup();
       console.log('[FirstTimeSetup] Setup completed (skipped step3)');
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     } catch (error) {
       console.error('[FirstTimeSetup] handleStep3Skip failed:', error);
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     }
   };
 
@@ -157,10 +157,10 @@ export default function FirstTimeSetupScreen() {
         }
       }
       
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     } catch (error) {
       console.error('[FirstTimeSetup] handleWelcomeComplete failed:', error);
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/home' as any);
     }
   };
 

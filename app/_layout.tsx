@@ -126,7 +126,7 @@ function TrialGate() {
   const router = useRouter();
 
   const handleGetPremium = useCallback(() => {
-    router.push('/subscription');
+    router.push('/subscription' as any);
   }, [router]);
 
   if (!isInitialized || isPremium) return null;

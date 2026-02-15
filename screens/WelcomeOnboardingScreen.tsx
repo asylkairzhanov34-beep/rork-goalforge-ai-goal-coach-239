@@ -118,7 +118,7 @@ export function WelcomeOnboardingScreen() {
       useNativeDriver: true,
     }).start(() => {
       setWelcomeOnboardingCompleted(true);
-      router.replace('/auth');
+      router.replace('/auth' as any);
     });
   }, [fadeAnim, setWelcomeOnboardingCompleted]);
 
@@ -154,7 +154,7 @@ export function WelcomeOnboardingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     setWelcomeOnboardingCompleted(true);
-    router.replace('/auth');
+    router.replace('/auth' as any);
   }, [setWelcomeOnboardingCompleted]);
 
   const renderSlide = useCallback(({ item, index }: { item: OnboardingSlide; index: number }) => {

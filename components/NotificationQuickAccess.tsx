@@ -9,7 +9,7 @@ export function NotificationQuickAccess() {
   const { permission } = useNotifications();
 
   const handlePress = () => {
-    router.push('/notifications');
+    router.push('/notifications' as any);
   };
 
   return (

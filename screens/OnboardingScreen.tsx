@@ -45,7 +45,7 @@ export function OnboardingScreen() {
       name: name || 'Goal Achiever',
       onboardingCompleted: true 
     });
-    router.replace('/(tabs)/home');
+    router.replace('/(tabs)/home' as any);
   };
 
   const handleSkip = () => {
@@ -53,7 +53,7 @@ export function OnboardingScreen() {
       name: 'Goal Achiever',
       onboardingCompleted: true 
     });
-    router.replace('/(tabs)/home');
+    router.replace('/(tabs)/home' as any);
   };
 
   return (

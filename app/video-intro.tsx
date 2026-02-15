@@ -118,7 +118,7 @@ export default function VideoIntroScreen() {
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
-      router.replace('/video-intro-2');
+      router.replace('/video-intro-2' as any);
     });
   }, [buttonScale, fadeAnim]);
 

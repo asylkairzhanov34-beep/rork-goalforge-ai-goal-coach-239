@@ -7,7 +7,7 @@ import { BREATHING_TECHNIQUES } from '@/constants/breathing';
 
 export default function BreathingScreen() {
   const handleTechniquePress = (techniqueId: string) => {
-    router.push({ pathname: '/breathing/[id]', params: { id: techniqueId } });
+    router.push({ pathname: '/breathing/[id]' as any, params: { id: techniqueId } });
   };
 
   return (

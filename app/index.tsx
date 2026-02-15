@@ -55,18 +55,18 @@ export default function Index() {
       console.log('[Index] Routing to /auth');
       hasLoggedRouting.current = true;
     }
-    return <Redirect href="/auth" />;
+    return <Redirect href={'/auth' as any} />;
   }
 
   if (route === 'video-intro') {
-    return <Redirect href="/video-intro" />;
+    return <Redirect href={'/video-intro' as any} />;
   }
 
   if (route === 'first-time-setup') {
-    return <Redirect href="/first-time-setup" />;
+    return <Redirect href={'/first-time-setup' as any} />;
   }
 
   console.log('[Index] All checks passed, routing to home');
-  return <Redirect href="/(tabs)/home" />;
+  return <Redirect href={"/(tabs)/home" as any} />;
 }
 
