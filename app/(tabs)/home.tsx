@@ -41,17 +41,12 @@ export default function TodayScreen() {
 
   const challengeStore = useChallengeStore();
   const progress = useProgress();
-  const { shouldShowOffer, checking: subscriptionChecking, isPremium } = useSubscriptionStatus();
-  const [offerDismissed, setOfferDismissed] = useState(false);
+  const { shouldShowOffer, checking: subscriptionChecking, isPremium, markOfferDismissed } = useSubscriptionStatus();
   const { pendingReward, modalVisible, closeModal, markOfferSeen, showPendingRewards, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
   const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
   const [showStreakBanner, setShowStreakBanner] = useState(false);
 
-  useEffect(() => {
-    if (isPremium && !subscriptionChecking) {
-      markOfferSeen();
-    }
-  }, [isPremium, subscriptionChecking, markOfferSeen]);
+
 
   useEffect(() => {
     if (isFirstOpenToday && progress?.isReady && !shouldShowOffer) {
@@ -448,7 +443,7 @@ export default function TodayScreen() {
             </Text>
             <TouchableOpacity
               style={styles.createGoalButton}
-              onPress={() => router.push('/goal-creation')}
+              onPress={() => router.push('/goal-creation' as any)}
               activeOpacity={0.9}
             >
               <View style={styles.createGoalButtonInner}>
@@ -465,16 +460,14 @@ export default function TodayScreen() {
   return (
     <GradientBackground>
       <SubscriptionOfferModal
-        visible={shouldShowOffer && !offerDismissed}
+        visible={shouldShowOffer}
         loading={subscriptionChecking}
-        onPrimary={() => {
-          setOfferDismissed(true);
-          markOfferSeen();
-          router.push('/subscription');
+        onPrimary={async () => {
+          await markOfferDismissed();
+          router.push('/subscription' as any);
         }}
-        onSkip={() => {
-          setOfferDismissed(true);
-          markOfferSeen();
+        onSkip={async () => {
+          await markOfferDismissed();
         }}
         testID="subscription-offer"
       />
@@ -661,7 +654,7 @@ export default function TodayScreen() {
 
           <TouchableOpacity 
             style={styles.coachCard}
-            onPress={() => router.push('/chat')}
+            onPress={() => router.push('/chat' as any)}
             activeOpacity={0.9}
           >
             <LinearGradient
@@ -694,7 +687,7 @@ export default function TodayScreen() {
             <View style={styles.quickActionsRow}>
               <TouchableOpacity
                 style={styles.quickActionItem}
-                onPress={() => router.push('/manifestation')}
+                onPress={() => router.push('/manifestation' as any)}
                 testID="quick-action-manifestation"
                 activeOpacity={0.8}
               >
@@ -706,7 +699,7 @@ export default function TodayScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
-                onPress={() => router.push('/timer')}
+                onPress={() => router.push('/timer' as any)}
                 testID="quick-action-focus"
                 activeOpacity={0.8}
               >
@@ -718,7 +711,7 @@ export default function TodayScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
-                onPress={() => router.push('/reflection')}
+                onPress={() => router.push('/reflection' as any)}
                 testID="quick-action-journal"
                 activeOpacity={0.8}
               >
@@ -732,7 +725,7 @@ export default function TodayScreen() {
 
           <TouchableOpacity
             style={[styles.meditationFeedCard, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}
-            onPress={() => router.push('/meditation-feed')}
+            onPress={() => router.push('/meditation-feed' as any)}
             activeOpacity={0.9}
           >
             <Image
@@ -771,7 +764,7 @@ export default function TodayScreen() {
                   <TouchableOpacity
                     key={technique.id}
                     style={styles.forYouCard}
-                    onPress={() => router.push({ pathname: '/breathing/[id]', params: { id: technique.id } })}
+                    onPress={() => router.push({ pathname: '/breathing/[id]', params: { id: technique.id } } as any)}
                     activeOpacity={0.85}
                   >
                     <View style={styles.forYouCardBorder}>
@@ -841,7 +834,7 @@ export default function TodayScreen() {
         >
           <TouchableOpacity 
             style={styles.glassmorphismButton}
-            onPress={() => router.push('/plan')}
+            onPress={() => router.push('/plan' as any)}
             activeOpacity={0.85}
           >
             <View style={styles.glassmorphismInner}>
