@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, AppState, AppStateStatus } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -46,7 +46,7 @@ interface FirebaseSubscriptionData {
   platform?: string;
 }
 
-const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 5000;
+const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 8000;
 
 const TRIAL_START_KEY = 'trialStartISO';
 const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -121,14 +121,14 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[Trial] Not initialized yet, suppressing trial expired');
       return false;
     }
-    if (premiumEverConfirmed && status !== 'free') {
-      console.log('[Trial] Previously premium user, status not definitively free yet');
+    if (premiumEverConfirmed) {
+      console.log('[Trial] Previously confirmed premium user - never showing trial expired');
       return false;
     }
     const start = new Date(trialStartISO).getTime();
     const now = Date.now();
     const expired = now - start >= TRIAL_DURATION_MS;
-    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min', '| premiumEverConfirmed:', premiumEverConfirmed);
+    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min');
     return expired;
   }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
@@ -139,7 +139,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       setTrialExpiredLive(false);
       return;
     }
-    if (premiumEverConfirmed && status !== 'free') {
+    if (premiumEverConfirmed) {
       setTrialExpiredLive(false);
       return;
     }
@@ -255,10 +255,16 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[Subscription] 🚀 Initializing...');
       console.log('[Subscription] Platform:', Platform.OS);
 
-      const timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(async () => {
         if (!isInitialized) {
           console.warn('[Subscription] Init timeout reached, forcing completion');
-          setStatus('free');
+          const premiumVal = await AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY).catch(() => null);
+          if (premiumVal === 'true') {
+            console.log('[Subscription] Timeout but previously premium - keeping premium status');
+            setStatus('premium');
+          } else {
+            setStatus('free');
+          }
           setIsInitialized(true);
         }
       }, INIT_TIMEOUT);
@@ -392,6 +398,38 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       unsubscribe();
     };
   }, [isInitialized, checkAndUpdateStatus]);
+
+  useEffect(() => {
+    if (!isInitialized || Platform.OS === 'web') return;
+
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        console.log('[Subscription] App became active - refreshing status');
+        try {
+          if (revenueCatInitialized.current) {
+            const info = await getCustomerInfo();
+            if (info) {
+              const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+                                info.entitlements.active['premium'] !== undefined;
+              if (hasPremium) {
+                console.log('[Subscription] Confirmed premium on app resume');
+                setStatus('premium');
+                setCustomerInfo(info);
+                confirmPremium();
+              } else if (!premiumEverConfirmed) {
+                setStatus('free');
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[Subscription] Error refreshing on app resume:', err);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [isInitialized, confirmPremium, premiumEverConfirmed]);
 
   const handlePurchase = useCallback(async (packageIdentifier: string): Promise<boolean> => {
     console.log('[Subscription] 🛒 Purchase requested:', packageIdentifier);
