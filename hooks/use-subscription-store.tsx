@@ -46,7 +46,7 @@ interface FirebaseSubscriptionData {
   platform?: string;
 }
 
-const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 8000;
+const INIT_TIMEOUT = Platform.OS === 'web' ? 3000 : 10000;
 
 const TRIAL_START_KEY = 'trialStartISO';
 const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -59,8 +59,16 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
   ]);
 };
 
-const markPremiumConfirmed = () => {
-  AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true').catch(() => {});
+const markPremiumConfirmed = async () => {
+  try {
+    await AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true');
+    console.log('[Subscription] Premium confirmed flag saved to storage');
+  } catch (e) {
+    console.error('[Subscription] Failed to save premium flag:', e);
+    setTimeout(() => {
+      AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true').catch(() => {});
+    }, 500);
+  }
 };
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
@@ -114,9 +122,26 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, []);
 
   const isTrialExpired = useMemo(() => {
-    if (!trialLoaded || !premiumConfirmedLoaded || !trialStartISO) return false;
-    if (status === 'premium') return false;
-    if (status === 'loading') return false;
+    if (!trialLoaded) {
+      console.log('[Trial] Trial not loaded yet, suppressing');
+      return false;
+    }
+    if (!premiumConfirmedLoaded) {
+      console.log('[Trial] Premium confirmed not loaded yet, suppressing');
+      return false;
+    }
+    if (!trialStartISO) {
+      console.log('[Trial] No trial start date, suppressing');
+      return false;
+    }
+    if (status === 'premium') {
+      console.log('[Trial] Status is premium, suppressing');
+      return false;
+    }
+    if (status === 'loading') {
+      console.log('[Trial] Status is loading, suppressing');
+      return false;
+    }
     if (!isInitialized) {
       console.log('[Trial] Not initialized yet, suppressing trial expired');
       return false;
@@ -128,7 +153,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     const start = new Date(trialStartISO).getTime();
     const now = Date.now();
     const expired = now - start >= TRIAL_DURATION_MS;
-    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min');
+    if (expired) {
+      console.log('[Trial] EXPIRED | elapsed:', Math.round((now - start) / 1000 / 60), 'min');
+    }
     return expired;
   }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
@@ -155,6 +182,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
   const confirmPremium = useCallback(() => {
+    console.log('[Subscription] Confirming premium status permanently');
     setPremiumEverConfirmed(true);
     markPremiumConfirmed();
   }, []);
@@ -258,11 +286,18 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       const timeoutId = setTimeout(async () => {
         if (!isInitialized) {
           console.warn('[Subscription] Init timeout reached, forcing completion');
-          const premiumVal = await AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY).catch(() => null);
-          if (premiumVal === 'true') {
-            console.log('[Subscription] Timeout but previously premium - keeping premium status');
-            setStatus('premium');
-          } else {
+          try {
+            const premiumVal = await AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY);
+            if (premiumVal === 'true') {
+              console.log('[Subscription] Timeout but previously premium - keeping premium status');
+              setStatus('premium');
+              setPremiumEverConfirmed(true);
+            } else {
+              console.log('[Subscription] Timeout - no premium flag found, setting free');
+              setStatus('free');
+            }
+          } catch (e) {
+            console.error('[Subscription] Error reading premium flag on timeout:', e);
             setStatus('free');
           }
           setIsInitialized(true);

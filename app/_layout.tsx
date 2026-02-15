@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, Component, ReactNode, useState, memo, useCallback } from "react";
+import React, { useEffect, Component, ReactNode, useState, memo, useCallback, useRef } from "react";
 import { StyleSheet, Text, View, LogBox, InteractionManager, TouchableOpacity } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { disableLogsInProduction } from '@/utils/performance';
@@ -122,18 +122,36 @@ function RewardUnlockOverlay() {
 }
 
 function TrialGate() {
-  const { isTrialExpired, isPremium, isInitialized, status } = useSubscription();
+  const { isTrialExpired, isPremium, isInitialized, status, refreshStatus } = useSubscription();
   const router = useRouter();
+  const [showDelayed, setShowDelayed] = useState(false);
+  const hasCheckedRef = useRef(false);
+
+  useEffect(() => {
+    if (isInitialized && isTrialExpired && !isPremium && status !== 'premium' && !hasCheckedRef.current) {
+      hasCheckedRef.current = true;
+      console.log('[TrialGate] Trial appears expired, doing final check before showing modal');
+      refreshStatus().then(() => {
+        setTimeout(() => {
+          setShowDelayed(true);
+        }, 500);
+      });
+    } else if (isPremium || status === 'premium') {
+      setShowDelayed(false);
+      hasCheckedRef.current = false;
+    }
+  }, [isInitialized, isTrialExpired, isPremium, status, refreshStatus]);
 
   const handleGetPremium = useCallback(() => {
     router.push('/subscription' as any);
   }, [router]);
 
   if (!isInitialized || isPremium || status === 'loading' || status === 'premium') return null;
+  if (!showDelayed) return null;
 
   return (
     <TrialExpiredModal
-      visible={isTrialExpired}
+      visible={isTrialExpired && showDelayed}
       onGetPremium={handleGetPremium}
       testID="trial-expired-modal"
     />
