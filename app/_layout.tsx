@@ -122,14 +122,14 @@ function RewardUnlockOverlay() {
 }
 
 function TrialGate() {
-  const { isTrialExpired, isPremium, isInitialized } = useSubscription();
+  const { isTrialExpired, isPremium, isInitialized, status } = useSubscription();
   const router = useRouter();
 
   const handleGetPremium = useCallback(() => {
     router.push('/subscription' as any);
   }, [router]);
 
-  if (!isInitialized || isPremium) return null;
+  if (!isInitialized || isPremium || status === 'loading' || status === 'premium') return null;
 
   return (
     <TrialExpiredModal

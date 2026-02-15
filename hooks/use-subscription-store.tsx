@@ -50,12 +50,17 @@ const INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 5000;
 
 const TRIAL_START_KEY = 'trialStartISO';
 const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
+const PREMIUM_CONFIRMED_KEY = 'subscription_premium_confirmed';
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
   ]);
+};
+
+const markPremiumConfirmed = () => {
+  AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true').catch(() => {});
 };
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
@@ -68,6 +73,8 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
   const [trialStartISO, setTrialStartISO] = useState<string | null>(null);
   const [trialLoaded, setTrialLoaded] = useState(false);
+  const [premiumEverConfirmed, setPremiumEverConfirmed] = useState(false);
+  const [premiumConfirmedLoaded, setPremiumConfirmedLoaded] = useState(false);
   const lastSyncedStatus = useRef<SubscriptionStatus | null>(null);
   const firebaseUserId = useRef<string | null>(null);
   const revenueCatInitialized = useRef(false);
@@ -76,7 +83,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   useEffect(() => {
     const loadTrial = async () => {
       try {
-        const stored = await AsyncStorage.getItem(TRIAL_START_KEY);
+        const [stored, premiumVal] = await Promise.all([
+          AsyncStorage.getItem(TRIAL_START_KEY),
+          AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY),
+        ]);
+        if (premiumVal === 'true') {
+          setPremiumEverConfirmed(true);
+          console.log('[Trial] Previously confirmed premium user');
+        }
+        setPremiumConfirmedLoaded(true);
         if (stored) {
           console.log('[Trial] Loaded trial start:', stored);
           setTrialStartISO(stored);
@@ -90,6 +105,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         console.error('[Trial] Failed to load/set trial start:', e);
         const fallback = new Date().toISOString();
         setTrialStartISO(fallback);
+        setPremiumConfirmedLoaded(true);
       } finally {
         setTrialLoaded(true);
       }
@@ -98,19 +114,32 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, []);
 
   const isTrialExpired = useMemo(() => {
-    if (!trialLoaded || !trialStartISO) return false;
+    if (!trialLoaded || !premiumConfirmedLoaded || !trialStartISO) return false;
     if (status === 'premium') return false;
+    if (status === 'loading') return false;
+    if (!isInitialized) {
+      console.log('[Trial] Not initialized yet, suppressing trial expired');
+      return false;
+    }
+    if (premiumEverConfirmed && status !== 'free') {
+      console.log('[Trial] Previously premium user, status not definitively free yet');
+      return false;
+    }
     const start = new Date(trialStartISO).getTime();
     const now = Date.now();
     const expired = now - start >= TRIAL_DURATION_MS;
-    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min');
+    console.log('[Trial] expired:', expired, '| elapsed:', Math.round((now - start) / 1000 / 60), 'min', '| premiumEverConfirmed:', premiumEverConfirmed);
     return expired;
-  }, [trialLoaded, trialStartISO, status]);
+  }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
   const [trialExpiredLive, setTrialExpiredLive] = useState(false);
 
   useEffect(() => {
-    if (!trialLoaded || !trialStartISO || status === 'premium') {
+    if (!trialLoaded || !premiumConfirmedLoaded || !trialStartISO || status === 'premium' || status === 'loading' || !isInitialized) {
+      setTrialExpiredLive(false);
+      return;
+    }
+    if (premiumEverConfirmed && status !== 'free') {
       setTrialExpiredLive(false);
       return;
     }
@@ -123,7 +152,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
-  }, [trialLoaded, trialStartISO, status]);
+  }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
+
+  const confirmPremium = useCallback(() => {
+    setPremiumEverConfirmed(true);
+    markPremiumConfirmed();
+  }, []);
 
   const syncSubscriptionToFirebase = useCallback(async (
     newStatus: SubscriptionStatus,
@@ -198,6 +232,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         
         console.log('[Subscription] RevenueCat status:', hasPremium ? 'PREMIUM' : 'FREE');
         setStatus(newStatus);
+        if (hasPremium) {
+          confirmPremium();
+        }
         
         await syncSubscriptionToFirebase(newStatus, info, forceFirebaseSync);
         return newStatus;
@@ -208,7 +245,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.error('[Subscription] Check status error:', err);
       return null;
     }
-  }, [syncSubscriptionToFirebase]);
+  }, [syncSubscriptionToFirebase, confirmPremium]);
 
   useEffect(() => {
     if (initStarted.current) return;
@@ -236,6 +273,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         if (firebaseData?.isPremium) {
           console.log('[Subscription] 📥 Found premium status in Firebase');
           setStatus('premium');
+          confirmPremium();
           lastSyncedStatus.current = 'premium';
         }
 
@@ -277,6 +315,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           
           if (hasPremium) {
             setStatus('premium');
+            confirmPremium();
             console.log('[Subscription] Status from RevenueCat: PREMIUM');
             syncSubscriptionToFirebase('premium', info, true).catch(() => {});
           } else if (firebaseData?.isPremium) {
@@ -319,7 +358,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     };
 
     init();
-  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase, isInitialized]);
+  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase, confirmPremium, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -376,6 +415,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
                           info.entitlements.active['premium'] !== undefined;
         if (hasPremium) {
           setStatus('premium');
+          confirmPremium();
           console.log('[Subscription] ✅ Purchase successful - now PREMIUM');
           
           await syncSubscriptionToFirebase('premium', info);
@@ -396,7 +436,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     } finally {
       setIsPurchasing(false);
     }
-  }, [syncSubscriptionToFirebase]);
+  }, [syncSubscriptionToFirebase, confirmPremium]);
 
   const handleRestore = useCallback(async (): Promise<boolean> => {
     console.log('[Subscription] 🔄 Restore requested');
@@ -412,6 +452,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
                           info.entitlements.active['premium'] !== undefined;
         if (hasPremium) {
           setStatus('premium');
+          confirmPremium();
           console.log('[Subscription] ✅ Restore successful - now PREMIUM');
           
           await syncSubscriptionToFirebase('premium', info);
@@ -429,7 +470,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     } finally {
       setIsPurchasing(false);
     }
-  }, [syncSubscriptionToFirebase]);
+  }, [syncSubscriptionToFirebase, confirmPremium]);
 
   const refreshStatus = useCallback(async () => {
     console.log('[Subscription] 🔄 Refreshing status...');

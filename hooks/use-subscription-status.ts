@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OFFER_DISMISSED_KEY = 'subscription_offer_dismissed_at';
 const PREMIUM_CONFIRMED_KEY = 'subscription_premium_confirmed';
-const OFFER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const OFFER_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type SubscriptionStatusHook = {
   isPremium: boolean;
@@ -68,10 +68,10 @@ export function useSubscriptionStatus(): SubscriptionStatusHook {
   const shouldShowOffer = useMemo(() => {
     if (!isInitialized || !dismissedLoaded) return false;
     if (checking) return false;
-    if (status === 'premium' || isPremium) return false;
+    if (status === 'premium' || status === 'loading' || isPremium) return false;
     
     if (premiumConfirmed) {
-      console.log('[SubscriptionStatus] Previously premium user, not showing offer until verified as non-premium');
+      console.log('[SubscriptionStatus] Previously premium user, never showing offer');
       return false;
     }
     
