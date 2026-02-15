@@ -274,11 +274,19 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           setCustomerInfo(info);
           const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
                             info.entitlements.active['premium'] !== undefined;
-          const newStatus = hasPremium ? 'premium' : 'free';
-          setStatus(newStatus);
-          console.log('[Subscription] Status from RevenueCat:', hasPremium ? 'PREMIUM' : 'FREE');
           
-          syncSubscriptionToFirebase(newStatus, info, true).catch(() => {});
+          if (hasPremium) {
+            setStatus('premium');
+            console.log('[Subscription] Status from RevenueCat: PREMIUM');
+            syncSubscriptionToFirebase('premium', info, true).catch(() => {});
+          } else if (firebaseData?.isPremium) {
+            console.log('[Subscription] RevenueCat says FREE but Firebase has PREMIUM - keeping premium');
+            setStatus('premium');
+          } else {
+            setStatus('free');
+            console.log('[Subscription] Status from RevenueCat: FREE');
+            syncSubscriptionToFirebase('free', info, true).catch(() => {});
+          }
         } else if (!firebaseData?.isPremium) {
           setStatus('free');
         }
