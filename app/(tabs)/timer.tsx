@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Settings, Volume2, Check, Play, Headphones, VolumeX, Music, Waves, Sparkles } from 'lucide-react-native';
+import { Settings, Volume2, Check, Play, Pause, Headphones, VolumeX, Radio, Waves, Sparkles, Globe, Moon, Orbit, Wind, CloudRain, Coffee } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -14,9 +14,23 @@ import { SoundManager } from '@/utils/SoundManager';
 
 const AMBIENT_STORAGE_KEY = '@timer_ambient_settings';
 
-const AMBIENT_SOUNDS = [
-  { id: 'ambient1', name: 'Focus Flow', description: 'Calm ambient for deep work', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142014/3gwt67NbS8Go3MhssMPz_oo3xfu.mp4', icon: Music, gradient: ['#667eea', '#764ba2'] as const },
-  { id: 'ambient2', name: 'Zen Waves', description: 'Peaceful concentration tones', url: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1770142016/hYCBEvsXvN3tenAHl9PZ_unyiy9.mp4', icon: Waves, gradient: ['#11998e', '#38ef7d'] as const },
+interface LofiStation {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  icon: typeof Radio;
+  gradient: readonly [string, string];
+  tag: string;
+}
+
+const LOFI_STATIONS: LofiStation[] = [
+  { id: 'groovesalad', name: 'Groove Salad', description: 'Ambient downtempo beats & grooves', url: 'https://ice1.somafm.com/groovesalad-128-mp3', icon: Coffee, gradient: ['#f7971e', '#ffd200'] as const, tag: 'CHILL' },
+  { id: 'dronezone', name: 'Drone Zone', description: 'Atmospheric textures, minimal beats', url: 'https://ice1.somafm.com/dronezone-128-mp3', icon: Moon, gradient: ['#667eea', '#764ba2'] as const, tag: 'DEEP' },
+  { id: 'deepspaceone', name: 'Deep Space One', description: 'Deep ambient electronic exploration', url: 'https://ice1.somafm.com/deepspaceone-128-mp3', icon: Orbit, gradient: ['#0f2027', '#2c5364'] as const, tag: 'AMBIENT' },
+  { id: 'lush', name: 'Lush', description: 'Mellow vocals, dreamy electronica', url: 'https://ice1.somafm.com/lush-128-mp3', icon: Wind, gradient: ['#11998e', '#38ef7d'] as const, tag: 'VOCAL' },
+  { id: 'spacestation', name: 'Space Station', description: 'Spaced-out ambient & mid-tempo', url: 'https://ice1.somafm.com/spacestation-128-mp3', icon: Globe, gradient: ['#4568dc', '#b06ab3'] as const, tag: 'SPACE' },
+  { id: 'gsclassic', name: 'Groove Salad Classic', description: 'Classic chilled ambient from 2000s', url: 'https://ice1.somafm.com/gsclassic-128-mp3', icon: CloudRain, gradient: ['#355c7d', '#6c5b7b'] as const, tag: 'RETRO' },
 ];
 
 export default function TimerScreen() {
@@ -28,7 +42,7 @@ export default function TimerScreen() {
 
   
   const [ambientEnabled, setAmbientEnabled] = useState(false);
-  const [selectedAmbientId, setSelectedAmbientId] = useState('ambient1');
+  const [selectedAmbientId, setSelectedAmbientId] = useState('groovesalad');
   const ambientSoundRef = useRef<Audio.Sound | null>(null);
   
   const selectedSound = timerStore?.notificationSound || 'bell';
@@ -37,13 +51,16 @@ export default function TimerScreen() {
   const isRunning = timerStore?.isRunning ?? false;
   const isPaused = timerStore?.isPaused ?? false;
 
+  const [isBuffering, setIsBuffering] = useState(false);
+
   useEffect(() => {
     const loadAmbientSettings = async () => {
       try {
         const stored = await AsyncStorage.getItem(AMBIENT_STORAGE_KEY);
         if (stored) {
           const settings = JSON.parse(stored);
-          setSelectedAmbientId(settings.soundId || 'ambient1');
+          const validStation = LOFI_STATIONS.find(s => s.id === settings.soundId);
+          setSelectedAmbientId(validStation ? settings.soundId : 'groovesalad');
           setAmbientEnabled(settings.enabled === true);
         }
       } catch (error) {
@@ -64,38 +81,47 @@ export default function TimerScreen() {
   useEffect(() => {
     const handleAmbientPlayback = async () => {
       if (isRunning && !isPaused && ambientEnabled) {
-        const selectedAmbient = AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId);
-        if (!selectedAmbient) return;
+        const selectedStation = LOFI_STATIONS.find(s => s.id === selectedAmbientId);
+        if (!selectedStation) return;
         try {
           if (ambientSoundRef.current) {
             await ambientSoundRef.current.unloadAsync();
             ambientSoundRef.current = null;
           }
+          setIsBuffering(true);
           await Audio.setAudioModeAsync({
             playsInSilentModeIOS: true,
             staysActiveInBackground: true,
           });
           const { sound } = await Audio.Sound.createAsync(
-            { uri: selectedAmbient.url },
-            { shouldPlay: true, isLooping: true, volume: 0.6 }
+            { uri: selectedStation.url },
+            { shouldPlay: true, isLooping: false, volume: 0.6 }
           );
           ambientSoundRef.current = sound;
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded) {
+              setIsBuffering(status.isBuffering);
+            }
+          });
+          console.log('[Timer] Lo-fi radio started:', selectedStation.name);
         } catch (error) {
-          console.log('Error playing ambient sound:', error);
+          console.log('Error playing lo-fi radio:', error);
+          setIsBuffering(false);
         }
       } else if (isPaused && ambientSoundRef.current) {
         try {
           await ambientSoundRef.current.pauseAsync();
         } catch (error) {
-          console.log('Error pausing ambient sound:', error);
+          console.log('Error pausing lo-fi radio:', error);
         }
       } else if (!isRunning && ambientSoundRef.current) {
         try {
           await ambientSoundRef.current.stopAsync();
           await ambientSoundRef.current.unloadAsync();
           ambientSoundRef.current = null;
+          setIsBuffering(false);
         } catch (error) {
-          console.log('Error stopping ambient sound:', error);
+          console.log('Error stopping lo-fi radio:', error);
         }
       }
     };
@@ -147,16 +173,28 @@ export default function TimerScreen() {
           await ambientSoundRef.current.unloadAsync();
           ambientSoundRef.current = null;
         }
-        const newAmbient = AMBIENT_SOUNDS.find(s => s.id === soundId);
-        if (newAmbient) {
+        setIsBuffering(true);
+        const newStation = LOFI_STATIONS.find(s => s.id === soundId);
+        if (newStation) {
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+          });
           const { sound } = await Audio.Sound.createAsync(
-            { uri: newAmbient.url },
-            { shouldPlay: true, isLooping: true, volume: 0.6 }
+            { uri: newStation.url },
+            { shouldPlay: true, isLooping: false, volume: 0.6 }
           );
           ambientSoundRef.current = sound;
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded) {
+              setIsBuffering(status.isBuffering);
+            }
+          });
+          console.log('[Timer] Switched to lo-fi radio:', newStation.name);
         }
       } catch (error) {
-        console.log('Error switching ambient sound:', error);
+        console.log('Error switching lo-fi radio:', error);
+        setIsBuffering(false);
       }
     }
   }, [ambientEnabled, saveAmbientSettings, isRunning, isPaused]);
@@ -318,14 +356,14 @@ export default function TimerScreen() {
       >
         <PomodoroTimer />
         
-        {/* Focus Sounds Section */}
+        {/* Lo-Fi Radio Section */}
         <View style={styles.focusSoundsSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
-              <Sparkles size={18} color="#a78bfa" />
-              <Text style={styles.sectionTitle}>Focus Sounds</Text>
+              <Radio size={18} color="#f7971e" />
+              <Text style={styles.sectionTitle}>Lo-Fi Radio</Text>
             </View>
-            <Text style={styles.sectionSubtitle}>Ambient audio for deep concentration</Text>
+            <Text style={styles.sectionSubtitle}>Live radio streams for deep focus</Text>
           </View>
           
           {/* Main Toggle Card */}
@@ -336,7 +374,7 @@ export default function TimerScreen() {
           >
             <LinearGradient
               colors={ambientEnabled 
-                ? ['rgba(139, 92, 246, 0.15)', 'rgba(99, 102, 241, 0.08)']
+                ? ['rgba(247, 151, 30, 0.15)', 'rgba(255, 210, 0, 0.08)']
                 : ['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.02)']
               }
               start={{ x: 0, y: 0 }}
@@ -349,7 +387,7 @@ export default function TimerScreen() {
                   ambientEnabled && styles.mainToggleIconActive,
                 ]}>
                   {ambientEnabled ? (
-                    <Headphones size={26} color="#a78bfa" />
+                    <Headphones size={26} color="#f7971e" />
                   ) : (
                     <VolumeX size={26} color="rgba(255, 255, 255, 0.3)" />
                   )}
@@ -362,12 +400,15 @@ export default function TimerScreen() {
                     styles.mainToggleTitle,
                     ambientEnabled && styles.mainToggleTitleActive,
                   ]}>
-                    {ambientEnabled ? 'Now Playing' : 'Focus Sounds Off'}
+                    {ambientEnabled 
+                      ? (isBuffering ? 'Connecting...' : 'On Air')
+                      : 'Lo-Fi Radio Off'
+                    }
                   </Text>
                   <Text style={styles.mainToggleSubtitle}>
                     {ambientEnabled 
-                      ? `${AMBIENT_SOUNDS.find(s => s.id === selectedAmbientId)?.name || 'Focus Flow'} • Tap to pause`
-                      : 'Tap to enable ambient sounds'
+                      ? `${LOFI_STATIONS.find(s => s.id === selectedAmbientId)?.name || 'Groove Salad'} • Tap to stop`
+                      : 'Tap to tune in during focus'
                     }
                   </Text>
                 </View>
@@ -384,71 +425,79 @@ export default function TimerScreen() {
             </LinearGradient>
           </TouchableOpacity>
           
-          {/* Sound Cards */}
-          <View style={styles.soundCardsContainer}>
-            {AMBIENT_SOUNDS.map((sound, index) => {
-              const isActive = selectedAmbientId === sound.id;
-              const IconComponent = sound.icon;
+          {/* Radio Station Cards */}
+          <View style={styles.radioStationsGrid}>
+            {LOFI_STATIONS.map((station) => {
+              const isActive = selectedAmbientId === station.id;
+              const isPlaying = isActive && ambientEnabled && isRunning && !isPaused;
+              const IconComponent = station.icon;
               return (
                 <TouchableOpacity
-                  key={sound.id}
+                  key={station.id}
                   style={[
-                    styles.soundCard,
-                    isActive && styles.soundCardActive,
+                    styles.radioCard,
+                    isActive && styles.radioCardActive,
+                    isPlaying && styles.radioCardPlaying,
                   ]}
-                  onPress={() => handleAmbientSelect(sound.id)}
+                  onPress={() => handleAmbientSelect(station.id)}
                   activeOpacity={0.85}
                 >
                   <LinearGradient
                     colors={isActive 
-                      ? [sound.gradient[0] + '25', sound.gradient[1] + '15']
+                      ? [station.gradient[0] + '20', station.gradient[1] + '10']
                       : ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)']
                     }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.soundCardGradient}
+                    style={styles.radioCardGradient}
                   >
-                    <View style={styles.soundCardHeader}>
+                    <View style={styles.radioCardTop}>
                       <LinearGradient
-                        colors={isActive ? [...sound.gradient] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
+                        colors={isActive ? [...station.gradient] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={styles.soundCardIcon}
+                        style={styles.radioCardIcon}
                       >
                         <IconComponent 
-                          size={22} 
+                          size={20} 
                           color={isActive ? '#fff' : 'rgba(255, 255, 255, 0.4)'} 
                         />
                       </LinearGradient>
-                      {isActive && (
-                        <View style={styles.activeIndicator}>
-                          <View style={[styles.equalizerBar, styles.bar1]} />
-                          <View style={[styles.equalizerBar, styles.bar2]} />
-                          <View style={[styles.equalizerBar, styles.bar3]} />
-                        </View>
-                      )}
-                    </View>
-                    
-                    <View style={styles.soundCardContent}>
-                      <Text style={[
-                        styles.soundCardTitle,
-                        isActive && { color: sound.gradient[0] },
+                      <View style={[
+                        styles.radioTag,
+                        isActive && { backgroundColor: station.gradient[0] + '30' },
                       ]}>
-                        {sound.name}
-                      </Text>
-                      <Text style={styles.soundCardDescription}>
-                        {sound.description}
-                      </Text>
+                        <Text style={[
+                          styles.radioTagText,
+                          isActive && { color: station.gradient[0] },
+                        ]}>{station.tag}</Text>
+                      </View>
                     </View>
                     
-                    <View style={[
-                      styles.soundCardCheck,
-                      isActive && { backgroundColor: sound.gradient[0] + '30', borderColor: sound.gradient[0] + '50' },
-                    ]}>
-                      {isActive ? (
-                        <Check size={14} color={sound.gradient[0]} strokeWidth={3} />
+                    <Text style={[
+                      styles.radioCardTitle,
+                      isActive && { color: station.gradient[0] },
+                    ]} numberOfLines={1}>
+                      {station.name}
+                    </Text>
+                    <Text style={styles.radioCardDescription} numberOfLines={2}>
+                      {station.description}
+                    </Text>
+                    
+                    <View style={styles.radioCardBottom}>
+                      {isPlaying ? (
+                        <View style={styles.radioLiveIndicator}>
+                          <View style={[styles.liveDot, { backgroundColor: station.gradient[0] }]} />
+                          <Text style={[styles.liveText, { color: station.gradient[0] }]}>LIVE</Text>
+                        </View>
+                      ) : isActive ? (
+                        <View style={styles.radioSelectedBadge}>
+                          <Check size={12} color={station.gradient[0]} strokeWidth={3} />
+                        </View>
                       ) : (
-                        <Play size={12} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
+                        <View style={styles.radioPlayBadge}>
+                          <Play size={10} color="rgba(255,255,255,0.3)" fill="rgba(255,255,255,0.3)" />
+                        </View>
                       )}
                     </View>
                   </LinearGradient>
@@ -456,6 +505,8 @@ export default function TimerScreen() {
               );
             })}
           </View>
+          
+          <Text style={styles.radioCredit}>Powered by SomaFM • Commercial-free radio</Text>
         </View>
       </ScrollView>
     </View>
@@ -664,7 +715,7 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   mainToggleIconActive: {
-    backgroundColor: 'rgba(167, 139, 250, 0.15)',
+    backgroundColor: 'rgba(247, 151, 30, 0.15)',
   },
   pulseRing: {
     position: 'absolute',
@@ -672,7 +723,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: 'rgba(167, 139, 250, 0.3)',
+    borderColor: 'rgba(247, 151, 30, 0.3)',
   },
   mainToggleText: {
     flex: 1,
@@ -684,7 +735,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   mainToggleTitleActive: {
-    color: '#a78bfa',
+    color: '#f7971e',
   },
   mainToggleSubtitle: {
     fontSize: 13,
@@ -699,7 +750,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleSwitchActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.4)',
+    backgroundColor: 'rgba(247, 151, 30, 0.4)',
   },
   toggleKnob: {
     width: 24,
@@ -708,84 +759,109 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   toggleKnobActive: {
-    backgroundColor: '#a78bfa',
+    backgroundColor: '#f7971e',
     alignSelf: 'flex-end',
   },
-  soundCardsContainer: {
+  radioStationsGrid: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  soundCard: {
-    flex: 1,
-    borderRadius: 18,
+  radioCard: {
+    width: '48%' as unknown as number,
+    flexGrow: 1,
+    flexBasis: '47%' as unknown as number,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  soundCardActive: {
+  radioCardActive: {
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
-  soundCardGradient: {
-    padding: 16,
-    minHeight: 140,
+  radioCardPlaying: {
+    borderColor: 'rgba(247, 151, 30, 0.25)',
   },
-  soundCardHeader: {
+  radioCardGradient: {
+    padding: 14,
+    minHeight: 130,
+  },
+  radioCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  soundCardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  radioCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 3,
-    height: 18,
+  radioTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  equalizerBar: {
-    width: 3,
-    borderRadius: 2,
-    backgroundColor: '#a78bfa',
+  radioTagText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: 'rgba(255, 255, 255, 0.35)',
+    letterSpacing: 0.8,
   },
-  bar1: {
-    height: 8,
-  },
-  bar2: {
-    height: 14,
-  },
-  bar3: {
-    height: 10,
-  },
-  soundCardContent: {
-    flex: 1,
-  },
-  soundCardTitle: {
-    fontSize: 15,
+  radioCardTitle: {
+    fontSize: 14,
     fontWeight: '600' as const,
     color: theme.colors.text,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  soundCardDescription: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.4)',
-    lineHeight: 16,
+  radioCardDescription: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.35)',
+    lineHeight: 15,
   },
-  soundCardCheck: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  radioCardBottom: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  radioLiveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    letterSpacing: 1,
+  },
+  radioSelectedBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-end',
-    marginTop: 8,
+  },
+  radioPlayBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCredit: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.2)',
+    textAlign: 'center',
+    marginTop: 14,
   },
 });
