@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { safeGoBack } from '@/utils/safe-navigation';
-import { ArrowLeft, X, Sparkles } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowLeft, X } from 'lucide-react-native';
+import { GoalAnalysisLoader } from '@/components/GoalAnalysisLoader';
 import { theme } from '@/constants/theme';
 import { Button } from '@/components/Button';
 import { useGoalStore } from '@/hooks/use-goal-store';
@@ -56,7 +56,6 @@ export function GoalCreationModal() {
   const [answers, setAnswers] = useState<string[]>(Array(questions.length).fill(''));
   const [currentAnswer, setCurrentAnswer] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [loadingMessageIndex, setLoadingMessageIndex] = useState<number>(0);
   const [showDetailsEditor, setShowDetailsEditor] = useState<boolean>(false);
   const [detailsDraft, setDetailsDraft] = useState<string>('');
   
@@ -66,9 +65,6 @@ export function GoalCreationModal() {
   const translateYAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const loadingOpacity = useRef(new Animated.Value(1)).current;
-  const loadingScale = useRef(new Animated.Value(1)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef<TextInput>(null);
 
   
@@ -152,7 +148,6 @@ export function GoalCreationModal() {
 
   const generatePlan = async (finalAnswers: string[]) => {
     setIsGenerating(true);
-    setLoadingMessageIndex(0);
     
     try {
       const prompt = `
@@ -344,64 +339,7 @@ export function GoalCreationModal() {
     }).start();
   }, [currentQuestion, progressAnim]);
 
-  useEffect(() => {
-    if (isGenerating) {
-      const interval = setInterval(() => {
-        Animated.sequence([
-          Animated.parallel([
-            Animated.timing(loadingOpacity, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.timing(loadingScale, {
-              toValue: 0.9,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.timing(loadingOpacity, { toValue: 0, duration: 50, useNativeDriver: true }),
-        ]).start(() => {
-          setLoadingMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-          Animated.parallel([
-            Animated.timing(loadingOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.spring(loadingScale, {
-              toValue: 1,
-              friction: 8,
-              tension: 40,
-              useNativeDriver: true,
-            }),
-          ]).start();
-        });
-      }, 2500);
 
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-
-      return () => {
-        clearInterval(interval);
-        pulseAnim.stopAnimation();
-      };
-    }
-  }, [isGenerating, loadingOpacity, loadingScale, pulseAnim]);
 
   
 
@@ -446,61 +384,7 @@ export function GoalCreationModal() {
         </View>
 
         {isGenerating ? (
-          <View style={styles.loadingContainer}>
-            <Animated.View
-              style={[
-                styles.loadingIconContainer,
-                {
-                  transform: [
-                    { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) },
-                  ],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={['#FFD600', '#FF9500']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.loadingIconGradient}
-              >
-                <Sparkles size={40} color="#000" />
-              </LinearGradient>
-            </Animated.View>
-            
-            <Animated.View
-              style={[
-                styles.loadingMessageContainer,
-                {
-                  opacity: loadingOpacity,
-                  transform: [{ scale: loadingScale }],
-                },
-              ]}
-            >
-              <Text style={styles.loadingEmoji}>
-                {LOADING_MESSAGES[loadingMessageIndex].emoji}
-              </Text>
-              <Text style={styles.loadingText}>
-                {LOADING_MESSAGES[loadingMessageIndex].text}
-              </Text>
-            </Animated.View>
-            
-            <View style={styles.loadingProgressContainer}>
-              <View style={styles.loadingProgressBar}>
-                <Animated.View
-                  style={[
-                    styles.loadingProgressFill,
-                    {
-                      width: pulseAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['30%', '70%'],
-                      }),
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.loadingSubtext}>Building your starter plan</Text>
-            </View>
-          </View>
+          <GoalAnalysisLoader />
         ) : (
           <ScrollView 
             contentContainerStyle={styles.content}
@@ -742,57 +626,7 @@ const styles = StyleSheet.create({
   nextButton: {
     flex: 2,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xl,
-  },
-  loadingIconContainer: {
-    marginBottom: 32,
-  },
-  loadingIconGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingMessageContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  loadingEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  loadingText: {
-    fontSize: 22,
-    fontWeight: '600' as const,
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  loadingProgressContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  loadingProgressBar: {
-    width: '80%',
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  loadingProgressFill: {
-    height: '100%',
-    backgroundColor: '#FFD600',
-    borderRadius: 3,
-  },
-  loadingSubtext: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.textSecondary,
-  },
+
 
   detailsContainer: {
     flex: 1,
