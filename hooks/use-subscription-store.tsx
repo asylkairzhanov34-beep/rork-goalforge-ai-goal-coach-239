@@ -36,8 +36,11 @@ export interface SubscriptionPackage {
 const ENTITLEMENT_ID = 'Premium Subscriptions';
 const PREMIUM_STORAGE_KEY = 'subscription_premium_confirmed';
 const PREMIUM_EXPIRY_KEY = 'subscription_premium_expiry';
+const PREMIUM_PURCHASE_DATE_KEY = 'subscription_premium_purchase_date';
 const TRIAL_START_KEY = 'trialStartISO';
 const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
+const DOWNGRADE_CONFIRM_COUNT_KEY = 'subscription_downgrade_confirms';
+const REQUIRED_DOWNGRADE_CONFIRMS = 3;
 
 interface FirebaseSubscriptionData {
   isPremium: boolean;
@@ -66,6 +69,11 @@ const savePremiumToStorage = async (isPremium: boolean, expiryDate?: string | nu
       if (expiryDate) {
         await AsyncStorage.setItem(PREMIUM_EXPIRY_KEY, expiryDate);
       }
+      const existing = await AsyncStorage.getItem(PREMIUM_PURCHASE_DATE_KEY);
+      if (!existing) {
+        await AsyncStorage.setItem(PREMIUM_PURCHASE_DATE_KEY, new Date().toISOString());
+      }
+      await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
       console.log('[Subscription] Premium status SAVED to storage, expiry:', expiryDate ?? 'none');
     }
   } catch (e) {
@@ -94,11 +102,29 @@ const isPremiumStillValidLocally = (expiryDate: string | null): boolean => {
   try {
     const expiry = new Date(expiryDate).getTime();
     const now = Date.now();
-    const gracePeriod = 7 * 24 * 60 * 60 * 1000;
+    const gracePeriod = 16 * 24 * 60 * 60 * 1000;
     return now < expiry + gracePeriod;
   } catch {
     return true;
   }
+};
+
+const incrementDowngradeConfirms = async (): Promise<number> => {
+  try {
+    const current = await AsyncStorage.getItem(DOWNGRADE_CONFIRM_COUNT_KEY);
+    const count = (current ? parseInt(current, 10) : 0) + 1;
+    await AsyncStorage.setItem(DOWNGRADE_CONFIRM_COUNT_KEY, count.toString());
+    console.log('[Subscription] Downgrade confirm count:', count, '/', REQUIRED_DOWNGRADE_CONFIRMS);
+    return count;
+  } catch {
+    return 0;
+  }
+};
+
+const resetDowngradeConfirms = async () => {
+  try {
+    await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
+  } catch {}
 };
 
 const checkEntitlements = (info: RevenueCatCustomerInfo): boolean => {
@@ -208,6 +234,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     setPremiumEverConfirmed(true);
     setStatus('premium');
     savePremiumToStorage(true, expiryDate);
+    resetDowngradeConfirms();
   }, []);
 
   const syncSubscriptionToFirebase = useCallback(async (
@@ -298,15 +325,26 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
               }
             }
           } catch (restoreErr) {
-            console.warn('[Subscription] Auto-restore failed:', restoreErr);
+            console.warn('[Subscription] Auto-restore failed — keeping premium as safety:', restoreErr);
+            setStatus('premium');
+            return 'premium' as const;
           }
 
-          console.log('[Subscription] Subscription truly expired — downgrading');
+          const confirmCount = await incrementDowngradeConfirms();
+          if (confirmCount < REQUIRED_DOWNGRADE_CONFIRMS) {
+            console.log('[Subscription] Not enough downgrade confirmations yet (' + confirmCount + '/' + REQUIRED_DOWNGRADE_CONFIRMS + ') — keeping premium');
+            setStatus('premium');
+            return 'premium' as const;
+          }
+
+          console.log('[Subscription] Subscription confirmed expired after ' + REQUIRED_DOWNGRADE_CONFIRMS + ' checks — downgrading');
           setStatus('free');
           setPremiumEverConfirmed(false);
           try {
             await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
             await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
+            await AsyncStorage.removeItem(PREMIUM_PURCHASE_DATE_KEY);
+            await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
           } catch {}
           await syncSubscriptionToFirebase('free', info, true);
           return 'free' as const;
@@ -337,14 +375,24 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       const timeoutId = setTimeout(async () => {
         if (!isInitialized) {
           console.warn('[Subscription] Init timeout — using local state');
-          if (premiumEverConfirmed || status === 'premium') {
+          const stored = await loadPremiumFromStorage();
+          if (stored.confirmed && isPremiumStillValidLocally(stored.expiryDate)) {
+            console.log('[Subscription] Timeout: found premium in storage — keeping premium');
             setStatus('premium');
+            setPremiumEverConfirmed(true);
           } else {
-            const stored = await loadPremiumFromStorage();
-            if (stored.confirmed && isPremiumStillValidLocally(stored.expiryDate)) {
+            const fbData = await loadSubscriptionFromFirebase().catch(() => null);
+            if (fbData?.isPremium) {
+              console.log('[Subscription] Timeout: Firebase says premium — keeping premium');
               setStatus('premium');
               setPremiumEverConfirmed(true);
-            } else if (status === 'loading') {
+              savePremiumToStorage(true, fbData.latestExpirationDate);
+            } else if (stored.confirmed) {
+              console.log('[Subscription] Timeout: storage confirmed but may be expired — keeping premium as safety');
+              setStatus('premium');
+              setPremiumEverConfirmed(true);
+            } else {
+              console.log('[Subscription] Timeout: no premium evidence — setting free');
               setStatus('free');
             }
           }
@@ -416,14 +464,22 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
                 confirmPremium(restored.latestExpirationDate);
                 syncSubscriptionToFirebase('premium', restored, true).catch(() => {});
               } else {
-                console.log('[Subscription] Restore did not recover premium — subscription truly expired');
-                setStatus('free');
-                setPremiumEverConfirmed(false);
-                try {
-                  await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
-                  await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
-                } catch {}
-                syncSubscriptionToFirebase('free', info, true).catch(() => {});
+                const confirmCount = await incrementDowngradeConfirms();
+                if (confirmCount < REQUIRED_DOWNGRADE_CONFIRMS) {
+                  console.log('[Subscription] RC+restore say free but not enough confirms (' + confirmCount + '/' + REQUIRED_DOWNGRADE_CONFIRMS + ') — keeping premium');
+                  setStatus('premium');
+                } else {
+                  console.log('[Subscription] Subscription confirmed expired after ' + REQUIRED_DOWNGRADE_CONFIRMS + ' init checks — downgrading');
+                  setStatus('free');
+                  setPremiumEverConfirmed(false);
+                  try {
+                    await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
+                    await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
+                    await AsyncStorage.removeItem(PREMIUM_PURCHASE_DATE_KEY);
+                    await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
+                  } catch {}
+                  syncSubscriptionToFirebase('free', info, true).catch(() => {});
+                }
               }
             } catch (restoreErr) {
               console.warn('[Subscription] Auto-restore failed, keeping premium as safety:', restoreErr);
@@ -521,13 +577,18 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
               setCustomerInfo(info);
               confirmPremium(info.latestExpirationDate);
             } else if (premiumEverConfirmed) {
-              console.log('[Subscription] RC says free on resume but was premium — keeping premium (will verify next full check)');
+              console.log('[Subscription] RC says free on resume but was premium — keeping premium');
+              setStatus('premium');
             }
           } else if (premiumEverConfirmed) {
             console.log('[Subscription] RC unavailable on resume — keeping premium');
+            setStatus('premium');
           }
         } catch (err) {
-          console.warn('[Subscription] Error on resume:', err);
+          console.warn('[Subscription] Error on resume — keeping current status:', err);
+          if (premiumEverConfirmed) {
+            setStatus('premium');
+          }
         }
       }
     };

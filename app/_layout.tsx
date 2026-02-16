@@ -122,25 +122,36 @@ function RewardUnlockOverlay() {
 }
 
 function TrialGate() {
-  const { isTrialExpired, isPremium, isInitialized, status, refreshStatus, premiumEverConfirmed } = useSubscription();
+  const { isTrialExpired, isPremium, isInitialized, status, refreshStatus, premiumEverConfirmed, restorePurchases: restore } = useSubscription();
   const router = useRouter();
   const [showDelayed, setShowDelayed] = useState(false);
+  const checkCountRef = useRef(0);
   const hasCheckedRef = useRef(false);
 
   useEffect(() => {
     if (isPremium || premiumEverConfirmed || status === 'premium') {
       setShowDelayed(false);
       hasCheckedRef.current = false;
+      checkCountRef.current = 0;
       return;
     }
 
     if (isInitialized && isTrialExpired && !hasCheckedRef.current) {
       hasCheckedRef.current = true;
-      console.log('[TrialGate] Trial appears expired, doing final check');
+      checkCountRef.current += 1;
+      console.log('[TrialGate] Trial appears expired, doing verification #' + checkCountRef.current);
       refreshStatus().then(() => {
         setTimeout(() => {
-          setShowDelayed(true);
-        }, 1000);
+          refreshStatus().then(() => {
+            setTimeout(() => {
+              setShowDelayed(true);
+            }, 2000);
+          }).catch(() => {
+            setTimeout(() => setShowDelayed(true), 2000);
+          });
+        }, 2000);
+      }).catch(() => {
+        setTimeout(() => setShowDelayed(true), 3000);
       });
     }
   }, [isInitialized, isTrialExpired, isPremium, status, refreshStatus, premiumEverConfirmed]);
@@ -149,6 +160,19 @@ function TrialGate() {
     router.push('/subscription' as any);
   }, [router]);
 
+  const handleRestore = useCallback(async (): Promise<boolean> => {
+    try {
+      const success = await restore();
+      if (success) {
+        setShowDelayed(false);
+        hasCheckedRef.current = false;
+      }
+      return success;
+    } catch {
+      return false;
+    }
+  }, [restore]);
+
   if (!isInitialized || isPremium || premiumEverConfirmed || status === 'loading' || status === 'premium') return null;
   if (!isTrialExpired || !showDelayed) return null;
 
@@ -156,6 +180,7 @@ function TrialGate() {
     <TrialExpiredModal
       visible={true}
       onGetPremium={handleGetPremium}
+      onRestore={handleRestore}
       testID="trial-expired-modal"
     />
   );

@@ -17,6 +17,7 @@ import { Lock, Crown } from 'lucide-react-native';
 type TrialExpiredModalProps = {
   visible: boolean;
   onGetPremium: () => void | Promise<void>;
+  onRestore?: () => Promise<boolean>;
   testID?: string;
 };
 
@@ -28,12 +29,14 @@ const TRIAL_START_KEY = 'trialStartISO';
 function TrialExpiredModal({
   visible,
   onGetPremium,
+  onRestore,
   testID,
 }: TrialExpiredModalProps) {
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
   const ctaScale = useRef(new Animated.Value(1)).current;
   const [tapCount, setTapCount] = useState(0);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -56,6 +59,29 @@ function TrialExpiredModal({
   const handleGetPremium = async () => {
     await vibrate();
     await onGetPremium();
+  };
+
+  const handleRestore = async () => {
+    if (!onRestore || isRestoring) return;
+    setIsRestoring(true);
+    try {
+      await vibrate();
+      const success = await onRestore();
+      if (success) {
+        console.log('[TrialExpiredModal] Restore successful');
+      } else {
+        Alert.alert(
+          'No Purchases Found',
+          'We could not find any active subscriptions linked to your account. If you believe this is an error, please try again or contact support.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (e) {
+      console.error('[TrialExpiredModal] Restore error:', e);
+      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   const handleDevReset = async () => {
@@ -172,6 +198,20 @@ function TrialExpiredModal({
               <Text style={styles.primaryLabel}>Get Premium</Text>
             </TouchableOpacity>
           </Animated.View>
+
+          {onRestore && (
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={handleRestore}
+              disabled={isRestoring}
+              activeOpacity={0.7}
+              accessibilityLabel="Restore Purchases"
+            >
+              <Text style={styles.restoreLabel}>
+                {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -279,6 +319,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#000',
+  },
+  restoreButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  restoreLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+    textDecorationLine: 'underline',
   },
 });
 
