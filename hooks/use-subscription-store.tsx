@@ -39,8 +39,9 @@ const PREMIUM_EXPIRY_KEY = 'subscription_premium_expiry';
 const PREMIUM_PURCHASE_DATE_KEY = 'subscription_premium_purchase_date';
 const TRIAL_START_KEY = 'trialStartISO';
 const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
+const GRACE_PERIOD_MS = 1 * 24 * 60 * 60 * 1000;
 const DOWNGRADE_CONFIRM_COUNT_KEY = 'subscription_downgrade_confirms';
-const REQUIRED_DOWNGRADE_CONFIRMS = 3;
+const REQUIRED_DOWNGRADE_CONFIRMS = 5;
 
 interface FirebaseSubscriptionData {
   isPremium: boolean;
@@ -102,8 +103,7 @@ const isPremiumStillValidLocally = (expiryDate: string | null): boolean => {
   try {
     const expiry = new Date(expiryDate).getTime();
     const now = Date.now();
-    const gracePeriod = 16 * 24 * 60 * 60 * 1000;
-    return now < expiry + gracePeriod;
+    return now < expiry + GRACE_PERIOD_MS;
   } catch {
     return true;
   }
@@ -301,6 +301,16 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
   const checkAndUpdateStatus = useCallback(async (forceFirebaseSync: boolean = false) => {
     console.log('[Subscription] Checking status...');
+
+    if (premiumEverConfirmed) {
+      const stored = await loadPremiumFromStorage();
+      if (stored.confirmed && isPremiumStillValidLocally(stored.expiryDate)) {
+        console.log('[Subscription] Local expiry still valid (grace period) — skipping RC downgrade check');
+        setStatus('premium');
+        return 'premium' as const;
+      }
+    }
+
     const { hasPremium, info, success } = await verifyWithRevenueCat();
 
     if (success && info) {
@@ -455,35 +465,44 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
             console.log('[Subscription] RC confirmed: PREMIUM');
             syncSubscriptionToFirebase('premium', info, true).catch(() => {});
           } else if (premiumEverConfirmed || firebaseData?.isPremium || status === 'premium') {
-            console.log('[Subscription] RC says free but local/firebase says premium — trying restore...');
-            try {
-              const restored = await withTimeout(restorePurchases(), 5000, null);
-              if (restored && checkEntitlements(restored)) {
-                console.log('[Subscription] Restore recovered premium on init!');
-                setCustomerInfo(restored);
-                confirmPremium(restored.latestExpirationDate);
-                syncSubscriptionToFirebase('premium', restored, true).catch(() => {});
-              } else {
-                const confirmCount = await incrementDowngradeConfirms();
-                if (confirmCount < REQUIRED_DOWNGRADE_CONFIRMS) {
-                  console.log('[Subscription] RC+restore say free but not enough confirms (' + confirmCount + '/' + REQUIRED_DOWNGRADE_CONFIRMS + ') — keeping premium');
-                  setStatus('premium');
-                } else {
-                  console.log('[Subscription] Subscription confirmed expired after ' + REQUIRED_DOWNGRADE_CONFIRMS + ' init checks — downgrading');
-                  setStatus('free');
-                  setPremiumEverConfirmed(false);
-                  try {
-                    await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
-                    await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
-                    await AsyncStorage.removeItem(PREMIUM_PURCHASE_DATE_KEY);
-                    await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
-                  } catch {}
-                  syncSubscriptionToFirebase('free', info, true).catch(() => {});
-                }
-              }
-            } catch (restoreErr) {
-              console.warn('[Subscription] Auto-restore failed, keeping premium as safety:', restoreErr);
+            const storedData = await loadPremiumFromStorage();
+            const localStillValid = storedData.confirmed && isPremiumStillValidLocally(storedData.expiryDate);
+
+            if (localStillValid) {
+              console.log('[Subscription] RC says free on init but local expiry still valid — keeping premium');
               setStatus('premium');
+              resetDowngradeConfirms();
+            } else {
+              console.log('[Subscription] RC says free, local expired — trying restore...');
+              try {
+                const restored = await withTimeout(restorePurchases(), 5000, null);
+                if (restored && checkEntitlements(restored)) {
+                  console.log('[Subscription] Restore recovered premium on init!');
+                  setCustomerInfo(restored);
+                  confirmPremium(restored.latestExpirationDate);
+                  syncSubscriptionToFirebase('premium', restored, true).catch(() => {});
+                } else {
+                  const confirmCount = await incrementDowngradeConfirms();
+                  if (confirmCount < REQUIRED_DOWNGRADE_CONFIRMS) {
+                    console.log('[Subscription] RC+restore say free but not enough confirms (' + confirmCount + '/' + REQUIRED_DOWNGRADE_CONFIRMS + ') — keeping premium');
+                    setStatus('premium');
+                  } else {
+                    console.log('[Subscription] Subscription confirmed expired after ' + REQUIRED_DOWNGRADE_CONFIRMS + ' init checks — downgrading');
+                    setStatus('free');
+                    setPremiumEverConfirmed(false);
+                    try {
+                      await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
+                      await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
+                      await AsyncStorage.removeItem(PREMIUM_PURCHASE_DATE_KEY);
+                      await AsyncStorage.removeItem(DOWNGRADE_CONFIRM_COUNT_KEY);
+                    } catch {}
+                    syncSubscriptionToFirebase('free', info, true).catch(() => {});
+                  }
+                }
+              } catch (restoreErr) {
+                console.warn('[Subscription] Auto-restore failed, keeping premium as safety:', restoreErr);
+                setStatus('premium');
+              }
             }
           } else {
             setStatus('free');
