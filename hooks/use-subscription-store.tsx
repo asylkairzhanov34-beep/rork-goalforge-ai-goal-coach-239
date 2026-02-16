@@ -34,6 +34,10 @@ export interface SubscriptionPackage {
 }
 
 const ENTITLEMENT_ID = 'Premium Subscriptions';
+const PREMIUM_STORAGE_KEY = 'subscription_premium_confirmed';
+const PREMIUM_EXPIRY_KEY = 'subscription_premium_expiry';
+const TRIAL_START_KEY = 'trialStartISO';
+const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
 
 interface FirebaseSubscriptionData {
   isPremium: boolean;
@@ -46,11 +50,7 @@ interface FirebaseSubscriptionData {
   platform?: string;
 }
 
-const INIT_TIMEOUT = Platform.OS === 'web' ? 3000 : 10000;
-
-const TRIAL_START_KEY = 'trialStartISO';
-const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000;
-const PREMIUM_CONFIRMED_KEY = 'subscription_premium_confirmed';
+const INIT_TIMEOUT = Platform.OS === 'web' ? 3000 : 12000;
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
   return Promise.race([
@@ -59,16 +59,56 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
   ]);
 };
 
-const markPremiumConfirmed = async () => {
+const savePremiumToStorage = async (isPremium: boolean, expiryDate?: string | null) => {
   try {
-    await AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true');
-    console.log('[Subscription] Premium confirmed flag saved to storage');
+    if (isPremium) {
+      await AsyncStorage.setItem(PREMIUM_STORAGE_KEY, 'true');
+      if (expiryDate) {
+        await AsyncStorage.setItem(PREMIUM_EXPIRY_KEY, expiryDate);
+      }
+      console.log('[Subscription] Premium status SAVED to storage, expiry:', expiryDate ?? 'none');
+    }
   } catch (e) {
-    console.error('[Subscription] Failed to save premium flag:', e);
-    setTimeout(() => {
-      AsyncStorage.setItem(PREMIUM_CONFIRMED_KEY, 'true').catch(() => {});
-    }, 500);
+    console.error('[Subscription] Failed to save premium to storage:', e);
   }
+};
+
+const loadPremiumFromStorage = async (): Promise<{ confirmed: boolean; expiryDate: string | null }> => {
+  try {
+    const [confirmed, expiry] = await Promise.all([
+      AsyncStorage.getItem(PREMIUM_STORAGE_KEY),
+      AsyncStorage.getItem(PREMIUM_EXPIRY_KEY),
+    ]);
+    return {
+      confirmed: confirmed === 'true',
+      expiryDate: expiry,
+    };
+  } catch (e) {
+    console.error('[Subscription] Failed to load premium from storage:', e);
+    return { confirmed: false, expiryDate: null };
+  }
+};
+
+const isPremiumStillValidLocally = (expiryDate: string | null): boolean => {
+  if (!expiryDate) return true;
+  try {
+    const expiry = new Date(expiryDate).getTime();
+    const now = Date.now();
+    const gracePeriod = 7 * 24 * 60 * 60 * 1000;
+    return now < expiry + gracePeriod;
+  } catch {
+    return true;
+  }
+};
+
+const checkEntitlements = (info: RevenueCatCustomerInfo): boolean => {
+  if (!info?.entitlements?.active) return false;
+  return (
+    info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
+    info.entitlements.active['premium'] !== undefined ||
+    info.entitlements.active['Premium'] !== undefined ||
+    Object.keys(info.entitlements.active).length > 0
+  );
 };
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
@@ -82,74 +122,57 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [trialStartISO, setTrialStartISO] = useState<string | null>(null);
   const [trialLoaded, setTrialLoaded] = useState(false);
   const [premiumEverConfirmed, setPremiumEverConfirmed] = useState(false);
-  const [premiumConfirmedLoaded, setPremiumConfirmedLoaded] = useState(false);
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
   const lastSyncedStatus = useRef<SubscriptionStatus | null>(null);
   const firebaseUserId = useRef<string | null>(null);
   const revenueCatInitialized = useRef(false);
   const initStarted = useRef(false);
+  const statusSetByRC = useRef(false);
 
   useEffect(() => {
-    const loadTrial = async () => {
+    const load = async () => {
       try {
-        const [stored, premiumVal] = await Promise.all([
+        const [premiumData, trialStart] = await Promise.all([
+          loadPremiumFromStorage(),
           AsyncStorage.getItem(TRIAL_START_KEY),
-          AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY),
         ]);
-        if (premiumVal === 'true') {
+
+        if (premiumData.confirmed) {
           setPremiumEverConfirmed(true);
-          console.log('[Trial] Previously confirmed premium user');
+          const stillValid = isPremiumStillValidLocally(premiumData.expiryDate);
+          if (stillValid) {
+            console.log('[Subscription] Locally confirmed premium user — setting premium immediately');
+            setStatus('premium');
+          } else {
+            console.log('[Subscription] Premium expired locally, will verify with RevenueCat');
+          }
         }
-        setPremiumConfirmedLoaded(true);
-        if (stored) {
-          console.log('[Trial] Loaded trial start:', stored);
-          setTrialStartISO(stored);
+
+        if (trialStart) {
+          setTrialStartISO(trialStart);
         } else {
           const now = new Date().toISOString();
-          console.log('[Trial] First launch — starting trial:', now);
           await AsyncStorage.setItem(TRIAL_START_KEY, now);
           setTrialStartISO(now);
         }
       } catch (e) {
-        console.error('[Trial] Failed to load/set trial start:', e);
-        const fallback = new Date().toISOString();
-        setTrialStartISO(fallback);
-        setPremiumConfirmedLoaded(true);
+        console.error('[Subscription] Storage load error:', e);
       } finally {
+        setStorageLoaded(true);
         setTrialLoaded(true);
       }
     };
-    loadTrial();
+    load();
   }, []);
 
   const isTrialExpired = useMemo(() => {
-    if (!trialLoaded) {
-      console.log('[Trial] Trial not loaded yet, suppressing');
-      return false;
-    }
-    if (!premiumConfirmedLoaded) {
-      console.log('[Trial] Premium confirmed not loaded yet, suppressing');
-      return false;
-    }
-    if (!trialStartISO) {
-      console.log('[Trial] No trial start date, suppressing');
-      return false;
-    }
-    if (status === 'premium') {
-      console.log('[Trial] Status is premium, suppressing');
-      return false;
-    }
-    if (status === 'loading') {
-      console.log('[Trial] Status is loading, suppressing');
-      return false;
-    }
-    if (!isInitialized) {
-      console.log('[Trial] Not initialized yet, suppressing trial expired');
-      return false;
-    }
-    if (premiumEverConfirmed) {
-      console.log('[Trial] Previously confirmed premium user - never showing trial expired');
-      return false;
-    }
+    if (!trialLoaded || !storageLoaded) return false;
+    if (!trialStartISO) return false;
+    if (status === 'premium' || status === 'loading') return false;
+    if (!isInitialized) return false;
+    if (premiumEverConfirmed) return false;
+
     const start = new Date(trialStartISO).getTime();
     const now = Date.now();
     const expired = now - start >= TRIAL_DURATION_MS;
@@ -157,12 +180,12 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       console.log('[Trial] EXPIRED | elapsed:', Math.round((now - start) / 1000 / 60), 'min');
     }
     return expired;
-  }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
+  }, [trialLoaded, storageLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
   const [trialExpiredLive, setTrialExpiredLive] = useState(false);
 
   useEffect(() => {
-    if (!trialLoaded || !premiumConfirmedLoaded || !trialStartISO || status === 'premium' || status === 'loading' || !isInitialized) {
+    if (!trialLoaded || !storageLoaded || !trialStartISO || status === 'premium' || status === 'loading' || !isInitialized) {
       setTrialExpiredLive(false);
       return;
     }
@@ -173,18 +196,18 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     const check = () => {
       const start = new Date(trialStartISO).getTime();
       const now = Date.now();
-      const expired = now - start >= TRIAL_DURATION_MS;
-      setTrialExpiredLive(expired);
+      setTrialExpiredLive(now - start >= TRIAL_DURATION_MS);
     };
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
-  }, [trialLoaded, premiumConfirmedLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
+  }, [trialLoaded, storageLoaded, trialStartISO, status, premiumEverConfirmed, isInitialized]);
 
-  const confirmPremium = useCallback(() => {
-    console.log('[Subscription] Confirming premium status permanently');
+  const confirmPremium = useCallback((expiryDate?: string | null) => {
+    console.log('[Subscription] Confirming premium permanently');
     setPremiumEverConfirmed(true);
-    markPremiumConfirmed();
+    setStatus('premium');
+    savePremiumToStorage(true, expiryDate);
   }, []);
 
   const syncSubscriptionToFirebase = useCallback(async (
@@ -194,15 +217,8 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   ) => {
     try {
       const firebaseUser = getCurrentUser();
-      if (!firebaseUser) {
-        console.log('[Subscription] No Firebase user - skipping sync');
-        return;
-      }
-
-      if (!forceSync && lastSyncedStatus.current === newStatus) {
-        console.log('[Subscription] Status unchanged - skipping sync');
-        return;
-      }
+      if (!firebaseUser) return;
+      if (!forceSync && lastSyncedStatus.current === newStatus) return;
 
       const subscriptionData: FirebaseSubscriptionData = {
         isPremium: newStatus === 'premium',
@@ -215,11 +231,10 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         platform: Platform.OS,
       };
 
-      console.log('[Subscription] 🔄 Syncing to Firebase:', subscriptionData);
       await saveUserSubscription(firebaseUser.uid, subscriptionData);
       lastSyncedStatus.current = newStatus;
       firebaseUserId.current = firebaseUser.uid;
-      console.log('[Subscription] ✅ Synced to Firebase for user:', firebaseUser.uid);
+      console.log('[Subscription] Synced to Firebase:', newStatus);
     } catch (err) {
       console.error('[Subscription] Firebase sync error:', err);
     }
@@ -228,15 +243,10 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const loadSubscriptionFromFirebase = useCallback(async (): Promise<FirebaseSubscriptionData | null> => {
     try {
       const firebaseUser = getCurrentUser();
-      if (!firebaseUser) {
-        console.log('[Subscription] No Firebase user - skipping load');
-        return null;
-      }
-
-      console.log('[Subscription] 📥 Loading from Firebase...');
+      if (!firebaseUser) return null;
       const data = await getUserSubscription(firebaseUser.uid);
       if (data) {
-        console.log('[Subscription] Found Firebase data:', data);
+        console.log('[Subscription] Firebase data loaded, isPremium:', data.isPremium);
         return data as FirebaseSubscriptionData;
       }
       return null;
@@ -246,59 +256,97 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     }
   }, []);
 
-  const checkAndUpdateStatus = useCallback(async (forceFirebaseSync: boolean = false) => {
-    console.log('[Subscription] 🔍 Checking subscription status...');
-    
+  const verifyWithRevenueCat = useCallback(async (): Promise<{ hasPremium: boolean; info: RevenueCatCustomerInfo | null; success: boolean }> => {
     try {
       const info = await getCustomerInfo();
-      
-      if (info) {
-        setCustomerInfo(info);
-        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
-                          info.entitlements.active['premium'] !== undefined;
-        const newStatus = hasPremium ? 'premium' : 'free';
-        
-        console.log('[Subscription] RevenueCat status:', hasPremium ? 'PREMIUM' : 'FREE');
-        setStatus(newStatus);
-        if (hasPremium) {
-          confirmPremium();
-        }
-        
-        await syncSubscriptionToFirebase(newStatus, info, forceFirebaseSync);
-        return newStatus;
+      if (!info) {
+        console.log('[Subscription] RevenueCat returned null — network or init issue');
+        return { hasPremium: false, info: null, success: false };
       }
-      
-      return null;
+      const hasPremium = checkEntitlements(info);
+      console.log('[Subscription] RevenueCat check:', hasPremium ? 'PREMIUM' : 'FREE');
+      return { hasPremium, info, success: true };
     } catch (err) {
-      console.error('[Subscription] Check status error:', err);
-      return null;
+      console.error('[Subscription] RevenueCat check error:', err);
+      return { hasPremium: false, info: null, success: false };
     }
-  }, [syncSubscriptionToFirebase, confirmPremium]);
+  }, []);
+
+  const checkAndUpdateStatus = useCallback(async (forceFirebaseSync: boolean = false) => {
+    console.log('[Subscription] Checking status...');
+    const { hasPremium, info, success } = await verifyWithRevenueCat();
+
+    if (success && info) {
+      setCustomerInfo(info);
+      if (hasPremium) {
+        confirmPremium(info.latestExpirationDate);
+        await syncSubscriptionToFirebase('premium', info, forceFirebaseSync);
+        return 'premium' as const;
+      } else {
+        if (premiumEverConfirmed) {
+          console.log('[Subscription] RC says free but user was premium — trying restore...');
+          try {
+            const restored = await restorePurchases();
+            if (restored) {
+              const restoredPremium = checkEntitlements(restored);
+              if (restoredPremium) {
+                console.log('[Subscription] Restore recovered premium!');
+                setCustomerInfo(restored);
+                confirmPremium(restored.latestExpirationDate);
+                await syncSubscriptionToFirebase('premium', restored, true);
+                return 'premium' as const;
+              }
+            }
+          } catch (restoreErr) {
+            console.warn('[Subscription] Auto-restore failed:', restoreErr);
+          }
+
+          console.log('[Subscription] Subscription truly expired — downgrading');
+          setStatus('free');
+          setPremiumEverConfirmed(false);
+          try {
+            await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
+            await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
+          } catch {}
+          await syncSubscriptionToFirebase('free', info, true);
+          return 'free' as const;
+        } else {
+          setStatus('free');
+          await syncSubscriptionToFirebase('free', info, forceFirebaseSync);
+          return 'free' as const;
+        }
+      }
+    }
+
+    if (!success && premiumEverConfirmed) {
+      console.log('[Subscription] RC failed but user is confirmed premium — keeping premium');
+      setStatus('premium');
+      return 'premium' as const;
+    }
+
+    return null;
+  }, [verifyWithRevenueCat, syncSubscriptionToFirebase, confirmPremium, premiumEverConfirmed]);
 
   useEffect(() => {
     if (initStarted.current) return;
     initStarted.current = true;
-    
+
     const init = async () => {
-      console.log('[Subscription] 🚀 Initializing...');
-      console.log('[Subscription] Platform:', Platform.OS);
+      console.log('[Subscription] Initializing... Platform:', Platform.OS);
 
       const timeoutId = setTimeout(async () => {
         if (!isInitialized) {
-          console.warn('[Subscription] Init timeout reached, forcing completion');
-          try {
-            const premiumVal = await AsyncStorage.getItem(PREMIUM_CONFIRMED_KEY);
-            if (premiumVal === 'true') {
-              console.log('[Subscription] Timeout but previously premium - keeping premium status');
+          console.warn('[Subscription] Init timeout — using local state');
+          if (premiumEverConfirmed || status === 'premium') {
+            setStatus('premium');
+          } else {
+            const stored = await loadPremiumFromStorage();
+            if (stored.confirmed && isPremiumStillValidLocally(stored.expiryDate)) {
               setStatus('premium');
               setPremiumEverConfirmed(true);
-            } else {
-              console.log('[Subscription] Timeout - no premium flag found, setting free');
+            } else if (status === 'loading') {
               setStatus('free');
             }
-          } catch (e) {
-            console.error('[Subscription] Error reading premium flag on timeout:', e);
-            setStatus('free');
           }
           setIsInitialized(true);
         }
@@ -310,22 +358,24 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           Platform.OS === 'web' ? 1000 : 2000,
           null
         );
-        
+
         if (firebaseData?.isPremium) {
-          console.log('[Subscription] 📥 Found premium status in Firebase');
+          console.log('[Subscription] Firebase says premium');
           setStatus('premium');
-          confirmPremium();
+          confirmPremium(firebaseData.latestExpirationDate);
           lastSyncedStatus.current = 'premium';
         }
 
         const rcInitialized = Platform.OS === 'web'
           ? false
-          : await withTimeout(initializeRevenueCat(), 3000, false);
+          : await withTimeout(initializeRevenueCat(), 5000, false);
         revenueCatInitialized.current = rcInitialized;
-        
+
         if (!rcInitialized) {
-          console.warn('[Subscription] RevenueCat init failed or timed out or web');
-          if (!firebaseData?.isPremium) {
+          console.warn('[Subscription] RevenueCat not available');
+          if (premiumEverConfirmed || status === 'premium' || firebaseData?.isPremium) {
+            setStatus('premium');
+          } else {
             setStatus('free');
           }
           clearTimeout(timeoutId);
@@ -335,15 +385,14 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
         const firebaseUser = getCurrentUser();
         if (firebaseUser) {
-          console.log('[Subscription] Identifying user in RevenueCat:', firebaseUser.uid);
           try {
-            await withTimeout(identifyUser(firebaseUser.uid), 2000, undefined);
+            await withTimeout(identifyUser(firebaseUser.uid), 3000, undefined);
           } catch (identifyErr) {
-            console.warn('[Subscription] RevenueCat identify failed:', identifyErr);
+            console.warn('[Subscription] RC identify failed:', identifyErr);
           }
         }
 
-        const rcTimeout = Platform.OS === 'web' ? 1500 : 3000;
+        const rcTimeout = Platform.OS === 'web' ? 1500 : 5000;
         const [info, offerings] = await Promise.all([
           withTimeout(getCustomerInfo(), rcTimeout, null),
           withTimeout(getOfferings(), rcTimeout, null),
@@ -351,24 +400,48 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
         if (info) {
           setCustomerInfo(info);
-          const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
-                            info.entitlements.active['premium'] !== undefined;
-          
+          const hasPremium = checkEntitlements(info);
+
           if (hasPremium) {
-            setStatus('premium');
-            confirmPremium();
-            console.log('[Subscription] Status from RevenueCat: PREMIUM');
+            confirmPremium(info.latestExpirationDate);
+            console.log('[Subscription] RC confirmed: PREMIUM');
             syncSubscriptionToFirebase('premium', info, true).catch(() => {});
-          } else if (firebaseData?.isPremium) {
-            console.log('[Subscription] RevenueCat says FREE but Firebase has PREMIUM - keeping premium');
+          } else if (premiumEverConfirmed || firebaseData?.isPremium || status === 'premium') {
+            console.log('[Subscription] RC says free but local/firebase says premium — trying restore...');
+            try {
+              const restored = await withTimeout(restorePurchases(), 5000, null);
+              if (restored && checkEntitlements(restored)) {
+                console.log('[Subscription] Restore recovered premium on init!');
+                setCustomerInfo(restored);
+                confirmPremium(restored.latestExpirationDate);
+                syncSubscriptionToFirebase('premium', restored, true).catch(() => {});
+              } else {
+                console.log('[Subscription] Restore did not recover premium — subscription truly expired');
+                setStatus('free');
+                setPremiumEverConfirmed(false);
+                try {
+                  await AsyncStorage.removeItem(PREMIUM_STORAGE_KEY);
+                  await AsyncStorage.removeItem(PREMIUM_EXPIRY_KEY);
+                } catch {}
+                syncSubscriptionToFirebase('free', info, true).catch(() => {});
+              }
+            } catch (restoreErr) {
+              console.warn('[Subscription] Auto-restore failed, keeping premium as safety:', restoreErr);
+              setStatus('premium');
+            }
+          } else {
+            setStatus('free');
+            console.log('[Subscription] RC confirmed: FREE');
+            syncSubscriptionToFirebase('free', info, true).catch(() => {});
+          }
+        } else {
+          console.log('[Subscription] RC returned null info');
+          if (premiumEverConfirmed || firebaseData?.isPremium || status === 'premium') {
+            console.log('[Subscription] Keeping premium due to local/firebase confirmation');
             setStatus('premium');
           } else {
             setStatus('free');
-            console.log('[Subscription] Status from RevenueCat: FREE');
-            syncSubscriptionToFirebase('free', info, true).catch(() => {});
           }
-        } else if (!firebaseData?.isPremium) {
-          setStatus('free');
         }
 
         if (offerings?.current?.availablePackages && offerings.current.availablePackages.length > 0) {
@@ -389,75 +462,72 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
         clearTimeout(timeoutId);
         setIsInitialized(true);
-        console.log('[Subscription] ✅ Initialization complete');
+        statusSetByRC.current = true;
+        console.log('[Subscription] Init complete, status:', status);
       } catch (err) {
         console.error('[Subscription] Init error:', err);
         clearTimeout(timeoutId);
-        setStatus('free');
+        if (premiumEverConfirmed || status === 'premium') {
+          console.log('[Subscription] Init failed but premium confirmed — keeping premium');
+          setStatus('premium');
+        } else {
+          setStatus('free');
+        }
         setIsInitialized(true);
       }
     };
 
     init();
-  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase, confirmPremium, isInitialized]);
+  }, [loadSubscriptionFromFirebase, syncSubscriptionToFirebase, confirmPremium, isInitialized, premiumEverConfirmed, status]);
 
   useEffect(() => {
     if (!isInitialized) return;
 
-    console.log('[Subscription] Setting up Firebase auth listener for sync...');
-    
     const unsubscribe = subscribeToAuthState(async (user) => {
       if (user && user.uid !== firebaseUserId.current) {
-        console.log('[Subscription] Firebase user changed, re-syncing:', user.uid);
+        console.log('[Subscription] Firebase user changed:', user.uid);
         firebaseUserId.current = user.uid;
-        
+
         if (revenueCatInitialized.current) {
           try {
             await identifyUser(user.uid);
-            console.log('[Subscription] Re-identified user in RevenueCat');
           } catch (err) {
-            console.warn('[Subscription] RevenueCat re-identify failed:', err);
+            console.warn('[Subscription] RC re-identify failed:', err);
           }
         }
-        
+
         await checkAndUpdateStatus(true);
       } else if (!user) {
-        console.log('[Subscription] Firebase user logged out');
         firebaseUserId.current = null;
         lastSyncedStatus.current = null;
       }
     });
 
-    return () => {
-      console.log('[Subscription] Cleaning up auth listener');
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [isInitialized, checkAndUpdateStatus]);
 
   useEffect(() => {
     if (!isInitialized || Platform.OS === 'web') return;
 
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        console.log('[Subscription] App became active - refreshing status');
+      if (nextAppState === 'active' && revenueCatInitialized.current) {
+        console.log('[Subscription] App resumed — checking status');
         try {
-          if (revenueCatInitialized.current) {
-            const info = await getCustomerInfo();
-            if (info) {
-              const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
-                                info.entitlements.active['premium'] !== undefined;
-              if (hasPremium) {
-                console.log('[Subscription] Confirmed premium on app resume');
-                setStatus('premium');
-                setCustomerInfo(info);
-                confirmPremium();
-              } else if (!premiumEverConfirmed) {
-                setStatus('free');
-              }
+          const info = await withTimeout(getCustomerInfo(), 5000, null);
+          if (info) {
+            const hasPremium = checkEntitlements(info);
+            if (hasPremium) {
+              console.log('[Subscription] Confirmed premium on resume');
+              setCustomerInfo(info);
+              confirmPremium(info.latestExpirationDate);
+            } else if (premiumEverConfirmed) {
+              console.log('[Subscription] RC says free on resume but was premium — keeping premium (will verify next full check)');
             }
+          } else if (premiumEverConfirmed) {
+            console.log('[Subscription] RC unavailable on resume — keeping premium');
           }
         } catch (err) {
-          console.warn('[Subscription] Error refreshing on app resume:', err);
+          console.warn('[Subscription] Error on resume:', err);
         }
       }
     };
@@ -467,11 +537,10 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [isInitialized, confirmPremium, premiumEverConfirmed]);
 
   const handlePurchase = useCallback(async (packageIdentifier: string): Promise<boolean> => {
-    console.log('[Subscription] 🛒 Purchase requested:', packageIdentifier);
-    
+    console.log('[Subscription] Purchase requested:', packageIdentifier);
+
     const pkg = findPackageByIdentifier(packageIdentifier);
     if (!pkg) {
-      console.error('[Subscription] Package not found:', packageIdentifier);
       Alert.alert('Error', 'Package not found. Please try again.');
       return false;
     }
@@ -481,23 +550,18 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
     try {
       const info = await purchasePackage(pkg);
-      
+
       if (info) {
         setCustomerInfo(info);
-        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
-                          info.entitlements.active['premium'] !== undefined;
+        const hasPremium = checkEntitlements(info);
         if (hasPremium) {
-          setStatus('premium');
-          confirmPremium();
-          console.log('[Subscription] ✅ Purchase successful - now PREMIUM');
-          
-          await syncSubscriptionToFirebase('premium', info);
-          
+          confirmPremium(info.latestExpirationDate);
+          console.log('[Subscription] Purchase successful — PREMIUM');
+          await syncSubscriptionToFirebase('premium', info, true);
           return true;
         }
       }
-      
-      console.log('[Subscription] Purchase cancelled or no entitlement');
+
       return false;
     } catch (err: any) {
       console.error('[Subscription] Purchase error:', err);
@@ -512,28 +576,24 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [syncSubscriptionToFirebase, confirmPremium]);
 
   const handleRestore = useCallback(async (): Promise<boolean> => {
-    console.log('[Subscription] 🔄 Restore requested');
+    console.log('[Subscription] Restore requested');
     setIsPurchasing(true);
     setError(null);
 
     try {
       const info = await restorePurchases();
-      
+
       if (info) {
         setCustomerInfo(info);
-        const hasPremium = info.entitlements.active[ENTITLEMENT_ID] !== undefined ||
-                          info.entitlements.active['premium'] !== undefined;
+        const hasPremium = checkEntitlements(info);
         if (hasPremium) {
-          setStatus('premium');
-          confirmPremium();
-          console.log('[Subscription] ✅ Restore successful - now PREMIUM');
-          
-          await syncSubscriptionToFirebase('premium', info);
-          
+          confirmPremium(info.latestExpirationDate);
+          console.log('[Subscription] Restore successful — PREMIUM');
+          await syncSubscriptionToFirebase('premium', info, true);
           return true;
         }
       }
-      
+
       console.log('[Subscription] No purchases to restore');
       return false;
     } catch (err: any) {
@@ -546,17 +606,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [syncSubscriptionToFirebase, confirmPremium]);
 
   const refreshStatus = useCallback(async () => {
-    console.log('[Subscription] 🔄 Refreshing status...');
+    console.log('[Subscription] Manual refresh...');
     try {
-      const result = await checkAndUpdateStatus(true);
-      console.log('[Subscription] Refresh complete, status:', result);
+      await checkAndUpdateStatus(true);
     } catch (err) {
       console.error('[Subscription] Refresh error:', err);
     }
   }, [checkAndUpdateStatus]);
 
   const reloadOfferings = useCallback(async () => {
-    console.log('[Subscription] Reloading offerings...');
     setError(null);
     try {
       const offerings = await getOfferings();
@@ -573,7 +631,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
           },
         }));
         setPackages(formatted);
-        console.log('[Subscription] Reloaded', formatted.length, 'packages');
       } else {
         setError('No subscription plans found');
       }
@@ -583,6 +640,8 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     }
   }, []);
 
+  const isPremium = status === 'premium' || (premiumEverConfirmed && status === 'loading');
+
   return {
     isInitialized,
     status,
@@ -591,9 +650,10 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     isPurchasing,
     error,
     isFirstLaunch,
-    isPremium: status === 'premium',
-    isTrialExpired: isTrialExpired || trialExpiredLive,
+    isPremium,
+    isTrialExpired: (isTrialExpired || trialExpiredLive) && !premiumEverConfirmed && !isPremium,
     trialStartISO,
+    premiumEverConfirmed,
     purchasePackage: handlePurchase,
     restorePurchases: handleRestore,
     refreshStatus,

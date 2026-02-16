@@ -122,36 +122,39 @@ function RewardUnlockOverlay() {
 }
 
 function TrialGate() {
-  const { isTrialExpired, isPremium, isInitialized, status, refreshStatus } = useSubscription();
+  const { isTrialExpired, isPremium, isInitialized, status, refreshStatus, premiumEverConfirmed } = useSubscription();
   const router = useRouter();
   const [showDelayed, setShowDelayed] = useState(false);
   const hasCheckedRef = useRef(false);
 
   useEffect(() => {
-    if (isInitialized && isTrialExpired && !isPremium && status !== 'premium' && !hasCheckedRef.current) {
+    if (isPremium || premiumEverConfirmed || status === 'premium') {
+      setShowDelayed(false);
+      hasCheckedRef.current = false;
+      return;
+    }
+
+    if (isInitialized && isTrialExpired && !hasCheckedRef.current) {
       hasCheckedRef.current = true;
-      console.log('[TrialGate] Trial appears expired, doing final check before showing modal');
+      console.log('[TrialGate] Trial appears expired, doing final check');
       refreshStatus().then(() => {
         setTimeout(() => {
           setShowDelayed(true);
-        }, 500);
+        }, 1000);
       });
-    } else if (isPremium || status === 'premium') {
-      setShowDelayed(false);
-      hasCheckedRef.current = false;
     }
-  }, [isInitialized, isTrialExpired, isPremium, status, refreshStatus]);
+  }, [isInitialized, isTrialExpired, isPremium, status, refreshStatus, premiumEverConfirmed]);
 
   const handleGetPremium = useCallback(() => {
     router.push('/subscription' as any);
   }, [router]);
 
-  if (!isInitialized || isPremium || status === 'loading' || status === 'premium') return null;
-  if (!showDelayed) return null;
+  if (!isInitialized || isPremium || premiumEverConfirmed || status === 'loading' || status === 'premium') return null;
+  if (!isTrialExpired || !showDelayed) return null;
 
   return (
     <TrialExpiredModal
-      visible={isTrialExpired && showDelayed}
+      visible={true}
       onGetPremium={handleGetPremium}
       testID="trial-expired-modal"
     />
