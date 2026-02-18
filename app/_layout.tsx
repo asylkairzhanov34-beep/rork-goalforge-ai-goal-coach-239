@@ -21,7 +21,7 @@ import { StreakCelebrationProvider, useStreakCelebration } from '@/hooks/use-str
 import { RewardUnlockProvider, useRewardUnlock } from '@/hooks/use-reward-unlock';
 import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { useAppBackgroundInit } from '@/hooks/use-app-background-init';
-import { VideoSplashScreen } from '@/components/VideoSplashScreen';
+
 import TrialExpiredModal from '@/components/TrialExpiredModal';
 import { GlobalNotificationsGate } from '@/components/GlobalNotificationsGate';
 import { useSmartNotifications } from '@/hooks/use-smart-notifications';
@@ -456,22 +456,13 @@ function DeferredProviders({ children }: { children: ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [showVideoSplash, setShowVideoSplash] = useState(true);
-
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
-  const handleSplashFinish = useCallback(() => {
-    setShowVideoSplash(false);
   }, []);
 
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
-        {showVideoSplash && (
-          <VideoSplashScreen onFinish={handleSplashFinish} />
-        )}
         <QueryClientProvider client={queryClient}>
           <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
             <SubscriptionProvider>
