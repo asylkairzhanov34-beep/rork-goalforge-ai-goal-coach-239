@@ -158,6 +158,10 @@ export default function FirstOpenSubscriptionModal({
             <Text style={styles.secondaryLabel}>Skip</Text>
           </TouchableOpacity>
 
+          <Text style={styles.autoRenewText}>
+            Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period.
+          </Text>
+
           <View style={styles.legalLinks}>
             <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/TERMS-OF-USE-2c54e106d5d080f1b7bdce1028935488?source=copy_link')}>
               <Text style={styles.legalLinkText}>Terms of Use</Text>
@@ -165,6 +169,10 @@ export default function FirstOpenSubscriptionModal({
             <Text style={styles.legalDot}>·</Text>
             <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539?source=copy_link')}>
               <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+              <Text style={styles.legalLinkText}>EULA</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -283,5 +291,12 @@ const styles = StyleSheet.create({
   legalDot: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.2)',
+  },
+  autoRenewText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginTop: 8,
   },
 });

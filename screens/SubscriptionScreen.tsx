@@ -436,7 +436,11 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                   <ActivityIndicator color="#0C0C1A" />
                 ) : (
                   <>
-                    <Text style={styles.ctaText}>Start Premium</Text>
+                    <Text style={styles.ctaText}>
+                      {selectedPackage && packages.length > 0
+                        ? `Subscribe — ${packages.find(p => p.identifier === selectedPackage)?.product.priceString ?? 'Start Premium'}`
+                        : 'Start Premium'}
+                    </Text>
                     <Animated.View style={{ opacity: ctaGlowOpacity }}>
                       <Crown size={18} color="#0C0C1A" />
                     </Animated.View>
@@ -444,6 +448,10 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                 )}
               </LinearGradient>
             </TouchableOpacity>
+
+            <Text style={styles.autoRenewText}>
+              Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. You can manage or cancel anytime in Settings.
+            </Text>
 
             <View style={styles.linksRow}>
               <TouchableOpacity onPress={handleRestore}>
@@ -456,6 +464,10 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
               <Text style={styles.linkDot}>·</Text>
               <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539?source=copy_link')}>
                 <Text style={styles.linkText}>Privacy</Text>
+              </TouchableOpacity>
+              <Text style={styles.linkDot}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+                <Text style={styles.linkText}>EULA</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -772,6 +784,14 @@ const styles = StyleSheet.create({
   linkDot: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.2)',
+  },
+  autoRenewText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginBottom: 10,
+    paddingHorizontal: 8,
   },
   premiumActiveContainer: {
     flex: 1,

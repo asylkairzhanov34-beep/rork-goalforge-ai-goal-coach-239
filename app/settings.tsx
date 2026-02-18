@@ -551,6 +551,13 @@ export default function SettingsScreen() {
               showArrow
               iconColor="#6366F1"
             />
+            <SettingItem
+              icon={FileText}
+              title="EULA (License Agreement)"
+              onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
+              showArrow
+              iconColor="#6366F1"
+            />
           </View>
 
           <View style={styles.appInfo}>
