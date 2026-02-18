@@ -10,6 +10,7 @@ import {
   StatusBar,
   useWindowDimensions,
   ScrollView,
+  Linking,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -727,7 +728,11 @@ export function WelcomeOnboardingScreen() {
           <Text style={styles.termsText}>
             {isLastSlide
               ? '3-day free trial, then $4.99/week. Cancel anytime.'
-              : 'By continuing, you agree to our Terms of Service'}
+              : <Text>By continuing, you agree to our{' '}
+                  <Text style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://www.notion.so/TERMS-OF-USE-2c54e106d5d080f1b7bdce1028935488?source=copy_link')}>
+                    Terms of Use
+                  </Text>
+                </Text>}
           </Text>
         </View>
       </SafeAreaView>

@@ -158,7 +158,7 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   };
 
   const handleTermsPress = () => {
-    Linking.openURL('https://www.notion.so/Terms-of-Use-2c54e106d5d080f1b7bdce1028935488?source=copy_link');
+    Linking.openURL('https://www.notion.so/TERMS-OF-USE-2c54e106d5d080f1b7bdce1028935488?source=copy_link');
   };
 
   const isAppleSignInAvailable = Platform.OS === 'ios';

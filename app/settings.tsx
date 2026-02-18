@@ -262,7 +262,7 @@ export default function SettingsScreen() {
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://www.notion.so/Terms-of-Use-2c54e106d5d080f1b7bdce1028935488');
+    Linking.openURL('https://www.notion.so/TERMS-OF-USE-2c54e106d5d080f1b7bdce1028935488?source=copy_link');
   };
 
   const handleManageSubscription = () => {
