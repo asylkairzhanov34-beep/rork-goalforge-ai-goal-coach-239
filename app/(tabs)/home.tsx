@@ -489,14 +489,7 @@ export default function TodayScreen() {
             </View>
           </View>
 
-          <DailyStreakBanner
-            currentStreak={currentStreak}
-            weekProgress={progress?.weekProgress ?? [false, false, false, false, false, false, false]}
-            totalCompletedTasks={completedTasksCount}
-            focusTimeMinutes={progress?.focusTimeMinutes ?? 0}
-            visible={showStreakBanner}
-            onDismiss={handleDismissStreakBanner}
-          />
+
 
           {isDevMode && (
             <TouchableOpacity
