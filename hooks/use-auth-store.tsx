@@ -24,7 +24,8 @@ const AUTH_STORAGE_KEY = 'auth_user_firebase';
 const AUTH_LOGIN_GATE_KEY = 'auth_login_gate_v1';
 const FIRST_LAUNCH_KEY = 'app_first_launch_v1';
 const WELCOME_ONBOARDING_KEY = 'welcome_onboarding_completed_v1';
-const AUTH_INIT_TIMEOUT = Platform.OS === 'web' ? 2000 : 4000;
+const AUTH_INIT_TIMEOUT = Platform.OS === 'web' ? 3000 : 6000;
+const AUTH_NULL_DEBOUNCE = 1500;
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const queryClient = useQueryClient();
@@ -39,8 +40,33 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [requiresFirstLogin, setRequiresFirstLogin] = useState<boolean>(false);
   const [welcomeOnboardingCompleted, setWelcomeOnboardingCompletedState] = useState<boolean>(false);
   const prevUserIdRef = useRef<string | null>(null);
+  const hadAuthenticatedUserRef = useRef(false);
+  const nullDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cachedUserRestoredRef = useRef(false);
 
   useEffect(() => {
+    const restoreCachedAuth = async () => {
+      try {
+        const cached = await safeStorageGet<User | null>(AUTH_STORAGE_KEY, null);
+        if (cached && cached.id && cached.email) {
+          console.log('[Auth] Restored cached user:', cached.id.substring(0, 12) + '...');
+          const normalized = normalizeUser(cached);
+          hadAuthenticatedUserRef.current = true;
+          cachedUserRestoredRef.current = true;
+          prevUserIdRef.current = cached.id;
+          setAuthState({
+            user: normalized,
+            isLoading: true,
+            isAuthenticated: true,
+          });
+        }
+      } catch {
+        console.warn('[Auth] Failed to restore cached auth');
+      }
+    };
+
+    restoreCachedAuth();
+
     console.log('[Auth] Initializing Firebase...');
     try {
       initializeFirebase();
@@ -108,7 +134,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       authReceived = true;
       clearTimeout(timeoutId);
 
+      if (nullDebounceRef.current) {
+        clearTimeout(nullDebounceRef.current);
+        nullDebounceRef.current = null;
+      }
+
       if (firebaseUser) {
+        hadAuthenticatedUserRef.current = true;
         const user = normalizeUser(firebaseUserToUser(firebaseUser));
         
         const isNewUser = prevUserIdRef.current !== null && prevUserIdRef.current !== firebaseUser.uid;
@@ -156,6 +188,22 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         return;
       }
 
+      if (hadAuthenticatedUserRef.current) {
+        console.log('[Auth] Received null after authenticated user - debouncing for token refresh...');
+        nullDebounceRef.current = setTimeout(() => {
+          console.log('[Auth] Null auth confirmed after debounce - user logged out');
+          hadAuthenticatedUserRef.current = false;
+          setNeedsLoginGate(false);
+          safeStorageSet(AUTH_STORAGE_KEY, null).catch(() => {});
+          setAuthState({
+            user: null,
+            isLoading: false,
+            isAuthenticated: false,
+          });
+        }, AUTH_NULL_DEBOUNCE);
+        return;
+      }
+
       setNeedsLoginGate(false);
       safeStorageSet(AUTH_STORAGE_KEY, null).catch(() => {});
 
@@ -168,6 +216,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     return () => {
       clearTimeout(timeoutId);
+      if (nullDebounceRef.current) {
+        clearTimeout(nullDebounceRef.current);
+      }
       unsubscribe();
     };
   }, [firebaseInitialized]);
@@ -375,13 +426,23 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, [firebaseInitialized, initError, markLoginGateSeen]);
 
   const logout = useCallback(async (): Promise<void> => {
-    console.log('[Auth] Logging out...');
+    console.log('[Auth] Logging out (intentional)...');
+    hadAuthenticatedUserRef.current = false;
+    if (nullDebounceRef.current) {
+      clearTimeout(nullDebounceRef.current);
+      nullDebounceRef.current = null;
+    }
     try {
-      await firebaseSignOut();
       await safeStorageSet(AUTH_STORAGE_KEY, null);
       await safeStorageSet(AUTH_LOGIN_GATE_KEY, false);
+      await firebaseSignOut();
       setNeedsLoginGate(false);
       setRequiresFirstLogin(false);
+      setAuthState({
+        user: null,
+        isLoading: false,
+        isAuthenticated: false,
+      });
       console.log('[Auth] Logout complete');
     } catch (error) {
       console.error('[Auth] Logout error:', error);

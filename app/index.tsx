@@ -5,10 +5,12 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
-const MAX_LOADING_TIMEOUT = 4000;
+const MAX_LOADING_TIMEOUT = 7000;
+const SETUP_LOADING_TIMEOUT = 3000;
 
 export default function Index() {
   const [forceReady, setForceReady] = useState(false);
+  const [setupForceReady, setSetupForceReady] = useState(false);
   const hasLoggedRouting = useRef(false);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
@@ -24,12 +26,22 @@ export default function Index() {
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      console.warn('[Index] Loading timeout reached, forcing proceed');
+      console.warn('[Index] Auth loading timeout reached, forcing proceed');
       setForceReady(true);
     }, MAX_LOADING_TIMEOUT);
-    
+
     return () => clearTimeout(timeoutId);
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      console.warn('[Index] Setup loading timeout reached, forcing proceed');
+      setSetupForceReady(true);
+    }, SETUP_LOADING_TIMEOUT);
+
+    return () => clearTimeout(timeoutId);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated || !profile?.isCompleted || welcomeOnboardingCompleted) return;
@@ -38,13 +50,24 @@ export default function Index() {
   }, [isAuthenticated, profile?.isCompleted, setWelcomeOnboardingCompleted, welcomeOnboardingCompleted]);
 
   const route = useMemo(() => {
-    if (authLoading && !forceReady) return 'loading';
-    if (!isAuthenticated || needsLoginGate || requiresFirstLogin) return 'auth';
+    if (authLoading && !isAuthenticated && !forceReady) return 'loading';
+
+    if (!isAuthenticated && !authLoading) {
+      return 'auth';
+    }
+    if (!isAuthenticated && forceReady) {
+      return 'auth';
+    }
+
+    if (needsLoginGate || requiresFirstLogin) return 'auth';
+
     if (!welcomeOnboardingCompleted) return 'video-intro';
-    if (setupLoading && !forceReady) return 'loading-setup';
+
+    if (setupLoading && !setupForceReady && !forceReady) return 'loading-setup';
     if (!profile || !profile.nickname || !profile.isCompleted) return 'first-time-setup';
+
     return 'home';
-  }, [authLoading, forceReady, isAuthenticated, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted, setupLoading, profile]);
+  }, [authLoading, forceReady, setupForceReady, isAuthenticated, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted, setupLoading, profile]);
 
   if (route === 'loading' || route === 'loading-setup') {
     return <AppLoadingScreen testID="app-loading" />;
@@ -69,4 +92,3 @@ export default function Index() {
   console.log('[Index] All checks passed, routing to home');
   return <Redirect href={"/(tabs)/home" as any} />;
 }
-
