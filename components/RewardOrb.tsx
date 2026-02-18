@@ -14,7 +14,7 @@ interface RewardOrbProps {
   color?: string;
 }
 
-const LOAD_TIMEOUT = 5000;
+const LOAD_TIMEOUT = 15000;
 
 const RewardOrbInner: React.FC<RewardOrbProps> = ({
   videoUri,
