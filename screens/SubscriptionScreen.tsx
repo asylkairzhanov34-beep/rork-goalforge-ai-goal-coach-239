@@ -454,7 +454,7 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                 <Text style={styles.linkText}>Terms</Text>
               </TouchableOpacity>
               <Text style={styles.linkDot}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/privacy/')}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539?source=copy_link')}>
                 <Text style={styles.linkText}>Privacy</Text>
               </TouchableOpacity>
             </View>

@@ -154,7 +154,7 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   };
 
   const handlePrivacyPress = () => {
-    Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539');
+    Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539?source=copy_link');
   };
 
   const handleTermsPress = () => {
