@@ -8,6 +8,7 @@ import {
   View,
   Animated,
   Platform,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -156,6 +157,16 @@ export default function FirstOpenSubscriptionModal({
           >
             <Text style={styles.secondaryLabel}>Skip</Text>
           </TouchableOpacity>
+
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/TERMS-OF-USE-2c54e106d5d080f1b7bdce1028935488?source=copy_link')}>
+              <Text style={styles.legalLinkText}>Terms of Use</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.notion.so/PRIVACY-POLICY-AND-COOKIES-2b44e106d5d0807aaff8e5765d4b8539?source=copy_link')}>
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -256,5 +267,21 @@ const styles = StyleSheet.create({
   secondaryLabel: {
     fontSize: 15,
     color: 'rgba(255,255,255,0.7)',
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  legalLinkText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textDecorationLine: 'underline',
+  },
+  legalDot: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.2)',
   },
 });
