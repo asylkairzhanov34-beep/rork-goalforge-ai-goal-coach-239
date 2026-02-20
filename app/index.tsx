@@ -3,14 +3,17 @@ import { Redirect } from 'expo-router';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 import { useAuth } from '@/hooks/use-auth-store';
 import { useSubscription } from '@/hooks/use-subscription-store';
+import { useGoalStore } from '@/hooks/use-goal-store';
 import { AppLoadingScreen } from '@/components/AppLoadingScreen';
 
 const MAX_LOADING_TIMEOUT = 7000;
 const SETUP_LOADING_TIMEOUT = 3000;
+const DATA_LOADING_TIMEOUT = 10000;
 
 export default function Index() {
   const [forceReady, setForceReady] = useState(false);
   const [setupForceReady, setSetupForceReady] = useState(false);
+  const [dataForceReady, setDataForceReady] = useState(false);
   const hasLoggedRouting = useRef(false);
 
   const { profile, isLoading: setupLoading } = useFirstTimeSetup();
@@ -23,6 +26,7 @@ export default function Index() {
     setWelcomeOnboardingCompleted,
   } = useAuth();
   const { isInitialized: subInitialized } = useSubscription();
+  const { isReady: goalDataReady, isLoading: goalDataLoading } = useGoalStore();
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -42,6 +46,23 @@ export default function Index() {
 
     return () => clearTimeout(timeoutId);
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !profile?.isCompleted) return;
+    console.log('[Index] Waiting for Firebase data (goals, tasks, profile)...');
+    const timeoutId = setTimeout(() => {
+      console.warn('[Index] Data loading timeout reached, forcing proceed to home');
+      setDataForceReady(true);
+    }, DATA_LOADING_TIMEOUT);
+
+    return () => clearTimeout(timeoutId);
+  }, [isAuthenticated, profile?.isCompleted]);
+
+  useEffect(() => {
+    if (goalDataReady && isAuthenticated && profile?.isCompleted) {
+      console.log('[Index] ✅ Firebase data loaded successfully, ready to navigate home');
+    }
+  }, [goalDataReady, isAuthenticated, profile?.isCompleted]);
 
   useEffect(() => {
     if (!isAuthenticated || !profile?.isCompleted || welcomeOnboardingCompleted) return;
@@ -66,10 +87,15 @@ export default function Index() {
     if (setupLoading && !setupForceReady && !forceReady) return 'loading-setup';
     if (!profile || !profile.nickname || !profile.isCompleted) return 'first-time-setup';
 
-    return 'home';
-  }, [authLoading, forceReady, setupForceReady, isAuthenticated, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted, setupLoading, profile]);
+    if (goalDataLoading && !goalDataReady && !dataForceReady) {
+      console.log('[Index] Waiting for Firebase data to load before navigating home...');
+      return 'loading-data';
+    }
 
-  if (route === 'loading' || route === 'loading-setup') {
+    return 'home';
+  }, [authLoading, forceReady, setupForceReady, dataForceReady, isAuthenticated, needsLoginGate, requiresFirstLogin, welcomeOnboardingCompleted, setupLoading, profile, goalDataReady, goalDataLoading]);
+
+  if (route === 'loading' || route === 'loading-setup' || route === 'loading-data') {
     return <AppLoadingScreen testID="app-loading" />;
   }
 
