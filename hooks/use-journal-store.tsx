@@ -47,9 +47,7 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
             await AsyncStorage.setItem(storageKey, JSON.stringify(firebaseEntries));
             return firebaseEntries;
           } else {
-            console.log('[JournalStore] No entries in Firebase - new user');
-            await AsyncStorage.removeItem(storageKey);
-            return [] as JournalEntry[];
+            console.log('[JournalStore] No entries in Firebase, checking local cache...');
           }
         } catch (error) {
           console.warn('[JournalStore] Firebase load failed, falling back to local:', error);

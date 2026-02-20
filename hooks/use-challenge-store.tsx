@@ -88,9 +88,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
             }
             return firebaseData.challenges;
           } else {
-            console.log('[ChallengeStore] No challenges in Firebase - new user');
-            await safeStorageSet(STORAGE_KEYS.ACTIVE_CHALLENGES, []);
-            return [];
+            console.log('[ChallengeStore] No challenges in Firebase, checking local cache...');
           }
         } catch (error) {
           console.warn('[ChallengeStore] Firebase load failed, falling back to local:', error);
@@ -126,8 +124,7 @@ export const [ChallengeProvider, useChallengeStore] = createContextHook(() => {
             await safeStorageSet(STORAGE_KEYS.CHALLENGE_STATS, firebaseData.stats);
             return firebaseData.stats as ChallengeStats;
           } else {
-            console.log('[ChallengeStore] No stats in Firebase - new user');
-            return DEFAULT_STATS;
+            console.log('[ChallengeStore] No stats in Firebase, checking local cache...');
           }
         } catch (error) {
           console.warn('[ChallengeStore] Firebase stats load failed:', error);

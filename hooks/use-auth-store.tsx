@@ -19,6 +19,7 @@ import {
   firebaseSyncStatus,
   FirebaseUser
 } from '@/lib/firebase';
+import { restoreAllUserDataFromFirebase } from '@/lib/firebase-restore';
 
 const AUTH_STORAGE_KEY = 'auth_user_firebase';
 const AUTH_LOGIN_GATE_KEY = 'auth_login_gate_v1';
@@ -43,6 +44,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const hadAuthenticatedUserRef = useRef(false);
   const nullDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cachedUserRestoredRef = useRef(false);
+  const dataRestorationDoneRef = useRef(false);
+  const loginInProgressRef = useRef(false);
 
   useEffect(() => {
     const restoreCachedAuth = async () => {
@@ -146,6 +149,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const isNewUser = prevUserIdRef.current !== null && prevUserIdRef.current !== firebaseUser.uid;
         if (isNewUser) {
           queryClient.clear();
+          dataRestorationDoneRef.current = false;
           await AsyncStorage.multiRemove([
             `goals_${prevUserIdRef.current}`,
             `daily_tasks_${prevUserIdRef.current}`,
@@ -160,24 +164,34 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const gateSeen = await safeStorageGet<boolean>(AUTH_LOGIN_GATE_KEY, false);
         setNeedsLoginGate(!gateSeen);
 
-        try {
-          const existingProfile = await getUserProfile(firebaseUser.uid);
-          
-          if (existingProfile?.firstTimeSetup?.isCompleted) {
-            await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
-            setWelcomeOnboardingCompletedState(true);
-            await safeStorageSet(FIRST_LAUNCH_KEY, true);
-            await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
-            setNeedsLoginGate(false);
-            setRequiresFirstLogin(false);
-          } else if (existingProfile?.onboardingCompleted) {
-            await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
-            setWelcomeOnboardingCompletedState(true);
-            await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
-            setNeedsLoginGate(false);
+        if (!dataRestorationDoneRef.current && !loginInProgressRef.current && !firebaseUser.uid.startsWith('dev_guest_')) {
+          console.log('[Auth] subscribeToAuthState: Running full data restoration for user:', firebaseUser.uid);
+          try {
+            const restorationResult = await restoreAllUserDataFromFirebase(firebaseUser.uid);
+            dataRestorationDoneRef.current = true;
+            
+            if (restorationResult.success && restorationResult.restoredFields.length > 0) {
+              console.log('[Auth] ✅ Data restored via auth state listener, invalidating queries...');
+              queryClient.invalidateQueries();
+            }
+
+            const existingProfile = await getUserProfile(firebaseUser.uid);
+            if (existingProfile?.firstTimeSetup?.isCompleted) {
+              await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+              setWelcomeOnboardingCompletedState(true);
+              await safeStorageSet(FIRST_LAUNCH_KEY, true);
+              await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
+              setNeedsLoginGate(false);
+              setRequiresFirstLogin(false);
+            } else if (existingProfile?.onboardingCompleted) {
+              await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
+              setWelcomeOnboardingCompletedState(true);
+              await safeStorageSet(AUTH_LOGIN_GATE_KEY, true);
+              setNeedsLoginGate(false);
+            }
+          } catch (restoreErr: any) {
+            console.warn('[Auth] Data restoration in auth listener failed:', restoreErr?.message);
           }
-        } catch {
-          // non-fatal
         }
 
         setAuthState({
@@ -321,60 +335,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       try {
-        console.log('[Auth] ======= CHECKING EXISTING USER DATA IN FIREBASE =======');
-        const existingProfile = await getUserProfile(firebaseUser.uid);
+        console.log('[Auth] ======= FULL DATA RESTORATION FROM FIREBASE =======');
+        loginInProgressRef.current = true;
         
-        console.log('[Auth] Firebase profile check result:', JSON.stringify({
-          exists: !!existingProfile,
-          hasSetup: !!existingProfile?.firstTimeSetup,
-          isCompleted: existingProfile?.firstTimeSetup?.isCompleted,
-          hasNickname: !!existingProfile?.firstTimeSetup?.nickname,
-          nickname: existingProfile?.firstTimeSetup?.nickname,
-          hasGoals: !!existingProfile?.goals,
-          goalsCount: existingProfile?.goals?.length || 0,
-          hasTasks: !!existingProfile?.tasks,
-          tasksCount: existingProfile?.tasks?.length || 0,
-          syncWorking: firebaseSyncStatus.isWorking,
+        const restorationResult = await restoreAllUserDataFromFirebase(firebaseUser.uid);
+        dataRestorationDoneRef.current = true;
+        
+        console.log('[Auth] Restoration result:', JSON.stringify({
+          success: restorationResult.success,
+          fieldsCount: restorationResult.restoredFields.length,
+          fields: restorationResult.restoredFields,
         }, null, 2));
         
+        const existingProfile = await getUserProfile(firebaseUser.uid);
+        
         if (existingProfile?.firstTimeSetup?.isCompleted) {
-          console.log('[Auth] ✅ RETURNING USER DETECTED - restoring all data');
-          
-          // Restore onboarding flags
+          console.log('[Auth] ✅ RETURNING USER DETECTED');
           await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
           setWelcomeOnboardingCompletedState(true);
           await safeStorageSet(FIRST_LAUNCH_KEY, true);
           setRequiresFirstLogin(false);
-          
-          // Cache profile setup to local storage
-          if (existingProfile.firstTimeSetup.nickname) {
-            const setupKey = `first_time_setup_${firebaseUser.uid}`;
-            await safeStorageSet(setupKey, existingProfile.firstTimeSetup);
-            console.log('[Auth] ✅ Cached profile setup to local storage');
-          }
-          
-          // Cache goals to local storage
-          if (existingProfile.goals && existingProfile.goals.length > 0) {
-            const goalsKey = `goals_${firebaseUser.uid}`;
-            await safeStorageSet(goalsKey, existingProfile.goals);
-            console.log('[Auth] ✅ Cached', existingProfile.goals.length, 'goals to local storage');
-          }
-          
-          // Cache tasks to local storage
-          if (existingProfile.tasks && existingProfile.tasks.length > 0) {
-            const tasksKey = `daily_tasks_${firebaseUser.uid}`;
-            await safeStorageSet(tasksKey, existingProfile.tasks);
-            console.log('[Auth] ✅ Cached', existingProfile.tasks.length, 'tasks to local storage');
-          }
-          
-          // Cache profile to local storage
-          if (existingProfile.profile) {
-            const profileKey = `user_profile_${firebaseUser.uid}`;
-            await safeStorageSet(profileKey, existingProfile.profile);
-            console.log('[Auth] ✅ Cached user profile to local storage');
-          }
-          
-          console.log('[Auth] ✅ All Firebase data restored to local cache');
         } else if (existingProfile?.onboardingCompleted) {
           console.log('[Auth] Partial profile found (onboarding completed but setup incomplete)');
           await safeStorageSet(WELCOME_ONBOARDING_KEY, true);
@@ -385,9 +365,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           console.log('[Auth] New user or incomplete setup - no data to restore');
         }
         
-        console.log('[Auth] ======= USER DATA CHECK COMPLETE =======');
+        if (restorationResult.success && restorationResult.restoredFields.length > 0) {
+          console.log('[Auth] ✅ Invalidating all queries after data restoration...');
+          queryClient.invalidateQueries();
+        }
+        
+        loginInProgressRef.current = false;
+        console.log('[Auth] ======= DATA RESTORATION COMPLETE =======');
       } catch (profileCheckError: any) {
-        console.error('[Auth] ❌ Failed to check existing profile:', profileCheckError?.message || profileCheckError);
+        loginInProgressRef.current = false;
+        console.error('[Auth] ❌ Failed to restore data:', profileCheckError?.message || profileCheckError);
       }
 
       await markLoginGateSeen();
