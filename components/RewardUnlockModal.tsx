@@ -284,11 +284,12 @@ const styles = StyleSheet.create({
 
   buttonContainer: {
     width: '100%',
-    paddingHorizontal: 8,
+    paddingHorizontal: 24,
   },
   claimButton: {
-    height: 54,
-    borderRadius: 27,
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 32,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
