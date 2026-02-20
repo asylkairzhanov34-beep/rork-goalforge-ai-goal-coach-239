@@ -410,32 +410,27 @@ function RootLayoutNav() {
 
 const MemoizedRootLayoutNav = memo(RootLayoutNav);
 
-function DeferredProviders({ children }: { children: ReactNode }) {
-  const [tier2Ready, setTier2Ready] = useState(false);
+function DeferredOverlays() {
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const handle = InteractionManager.runAfterInteractions(() => {
-      setTier2Ready(true);
+      setReady(true);
     });
     return () => handle.cancel();
   }, []);
 
-  if (!tier2Ready) {
-    return (
-      <ChatProvider>
-        <ManifestationProvider>
-          <JournalProvider>
-            <FocusShieldProvider>
-              <RewardUnlockProvider>
-                {children}
-              </RewardUnlockProvider>
-            </FocusShieldProvider>
-          </JournalProvider>
-        </ManifestationProvider>
-      </ChatProvider>
-    );
-  }
+  if (!ready) return null;
 
+  return (
+    <>
+      <StreakCelebrationOverlay />
+      <RewardUnlockOverlay />
+    </>
+  );
+}
+
+function DeferredProviders({ children }: { children: ReactNode }) {
   return (
     <ChatProvider>
       <ManifestationProvider>
@@ -444,8 +439,7 @@ function DeferredProviders({ children }: { children: ReactNode }) {
             <StreakCelebrationProvider>
               <RewardUnlockProvider>
                 {children}
-                <StreakCelebrationOverlay />
-                <RewardUnlockOverlay />
+                <DeferredOverlays />
               </RewardUnlockProvider>
             </StreakCelebrationProvider>
           </FocusShieldProvider>

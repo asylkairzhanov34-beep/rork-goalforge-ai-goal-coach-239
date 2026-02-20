@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { generateText } from '@rork-ai/toolkit-sdk';
 import { JournalEntry, DAILY_PROMPTS } from '@/types/journal';
 import { useAuth } from '@/hooks/use-auth-store';
@@ -10,13 +11,14 @@ const getStorageKey = (userId: string) => `journal_entries_${userId}`;
 
 export const [JournalProvider, useJournal] = createContextHook(() => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   const userId = user?.id || 'default';
   const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
+  const storageKey = getStorageKey(userId);
 
   useEffect(() => {
     const currentUserId = user?.id ?? null;
@@ -27,18 +29,14 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
     if (prevUserIdRef.current !== currentUserId) {
       console.log('[JournalStore] User changed from', prevUserIdRef.current, 'to', currentUserId, '- resetting');
       setEntries([]);
-      setIsLoading(true);
+      queryClient.removeQueries({ queryKey: ['journal'] });
       prevUserIdRef.current = currentUserId;
     }
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
 
-  useEffect(() => {
-    loadEntries();
-  }, [userId]);
-
-  const loadEntries = async () => {
-    setIsLoading(true);
-    try {
+  const entriesQuery = useQuery({
+    queryKey: ['journal', userId, storageKey],
+    queryFn: async () => {
       console.log('[JournalStore] Loading entries for user:', userId);
 
       if (isRealUser) {
@@ -46,27 +44,22 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
           const firebaseEntries = await getUserJournal(userId);
           if (firebaseEntries && firebaseEntries.length > 0) {
             console.log('[JournalStore] Loaded from Firebase:', firebaseEntries.length);
-            setEntries(firebaseEntries);
-            await AsyncStorage.setItem(getStorageKey(userId), JSON.stringify(firebaseEntries));
-            setIsLoading(false);
-            return;
+            await AsyncStorage.setItem(storageKey, JSON.stringify(firebaseEntries));
+            return firebaseEntries;
           } else {
             console.log('[JournalStore] No entries in Firebase - new user');
-            setEntries([]);
-            await AsyncStorage.removeItem(getStorageKey(userId));
-            setIsLoading(false);
-            return;
+            await AsyncStorage.removeItem(storageKey);
+            return [] as JournalEntry[];
           }
         } catch (error) {
           console.warn('[JournalStore] Firebase load failed, falling back to local:', error);
         }
       }
 
-      const stored = await AsyncStorage.getItem(getStorageKey(userId));
+      const stored = await AsyncStorage.getItem(storageKey);
       if (stored) {
-        const localEntries = JSON.parse(stored);
+        const localEntries = JSON.parse(stored) as JournalEntry[];
         console.log('[JournalStore] Loaded from local:', localEntries.length);
-        setEntries(localEntries);
 
         if (isRealUser && localEntries.length > 0) {
           console.log('[JournalStore] Syncing local entries to Firebase...');
@@ -74,30 +67,38 @@ export const [JournalProvider, useJournal] = createContextHook(() => {
             console.warn('[JournalStore] Background sync failed:', e)
           );
         }
-      } else {
-        setEntries([]);
+        return localEntries;
       }
-    } catch (error) {
-      console.log('[JournalStore] Error loading journal entries:', error);
-      setEntries([]);
-    } finally {
-      setIsLoading(false);
+
+      return [] as JournalEntry[];
+    },
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    enabled: !!userId,
+    refetchOnMount: 'always',
+  });
+
+  useEffect(() => {
+    if (entriesQuery.data) {
+      setEntries(entriesQuery.data);
     }
-  };
+  }, [entriesQuery.data]);
 
-  const saveEntries = async (newEntries: JournalEntry[]) => {
-    try {
-      await AsyncStorage.setItem(getStorageKey(userId), JSON.stringify(newEntries));
-      setEntries(newEntries);
-
+  const saveEntriesMutation = useMutation({
+    mutationFn: async (newEntries: JournalEntry[]) => {
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newEntries));
       if (isRealUser) {
         saveUserJournal(userId, newEntries).catch(e =>
           console.warn('[JournalStore] Firebase save failed:', e)
         );
       }
-    } catch (error) {
-      console.log('[JournalStore] Error saving journal entries:', error);
-    }
+      return newEntries;
+    },
+  });
+
+  const saveEntries = async (newEntries: JournalEntry[]) => {
+    setEntries(newEntries);
+    saveEntriesMutation.mutate(newEntries);
   };
 
   const getTodayPrompt = useCallback(() => {
@@ -208,7 +209,7 @@ Provide a short, personalized insight (like "Your motivation is up 20%!" or "I n
 
   return {
     entries,
-    isLoading,
+    isLoading: entriesQuery.isLoading,
     isGeneratingInsight,
     getTodayPrompt,
     getTodayEntry,

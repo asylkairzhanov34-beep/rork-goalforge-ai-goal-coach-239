@@ -311,11 +311,12 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
   }, []);
 
   useEffect(() => {
+    const tasks = tasksQuery.data ?? dailyTasks;
     if (goalsQuery.data && Array.isArray(goalsQuery.data) && goalsQuery.data.length > 0) {
       const goals = goalsQuery.data as Goal[];
       const activeGoal = goals.find((g: Goal) => g.isActive);
       if (activeGoal) {
-        const goalTasks = dailyTasks.filter(task => task.goalId === activeGoal.id);
+        const goalTasks = tasks.filter(task => task.goalId === activeGoal.id);
         const completedCount = goalTasks.filter(task => task.completed).length;
         const totalCount = goalTasks.length;
         
@@ -329,7 +330,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
       } else {
         const lastGoal = goals[goals.length - 1];
         if (lastGoal) {
-          const goalTasks = dailyTasks.filter(task => task.goalId === lastGoal.id);
+          const goalTasks = tasks.filter(task => task.goalId === lastGoal.id);
           const completedCount = goalTasks.filter(task => task.completed).length;
           const totalCount = goalTasks.length;
           
@@ -343,21 +344,19 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
             g.id === lastGoal.id ? updatedGoal : { ...g, isActive: false }
           );
           
-          (async () => {
-            await safeStorageSet(STORAGE_KEYS.GOALS, updatedGoals);
-            await saveUserGoals(user?.id || 'default', updatedGoals).catch((err: Error) => {
+          safeStorageSet(STORAGE_KEYS.GOALS, updatedGoals).then(() => {
+            saveUserGoals(user?.id || 'default', updatedGoals).catch((err: Error) => {
               console.error('[GoalStore] Failed to sync goals to Firebase:', err);
             });
-          })();
+          });
           
           setCurrentGoal(updatedGoal);
-          queryClient.invalidateQueries({ queryKey: ['goals', user?.id] });
         }
       }
     } else {
       setCurrentGoal(null);
     }
-  }, [goalsQuery.data, dailyTasks, queryClient, user?.id, STORAGE_KEYS.GOALS]);
+  }, [goalsQuery.data, tasksQuery.data, dailyTasks, queryClient, user?.id, STORAGE_KEYS.GOALS]);
 
   useEffect(() => {
     if (tasksQuery.data) {

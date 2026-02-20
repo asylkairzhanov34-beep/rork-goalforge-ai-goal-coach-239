@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { FocusSession, FocusShieldSettings, FocusStats, DistractionLog } from '@/types/focus-shield';
@@ -71,14 +72,21 @@ const STRICT_MODE_MESSAGES = [
   "🔐 Strict Mode protects your focus. Keep going!",
 ];
 
+interface FocusShieldData {
+  settings: FocusShieldSettings;
+  stats: FocusStats;
+  sessions: FocusSession[];
+  logs: DistractionLog[];
+}
+
 function useFocusShieldProvider() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [settings, setSettings] = useState<FocusShieldSettings>(DEFAULT_SETTINGS);
   const [stats, setStats] = useState<FocusStats>(DEFAULT_STATS);
   const [currentSession, setCurrentSession] = useState<FocusSession | null>(null);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [distractionLogs, setDistractionLogs] = useState<DistractionLog[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   
   const userId = user?.id || 'default';
   const isRealUser = !!user?.id && !user.id.startsWith('dev_guest_');
@@ -86,7 +94,6 @@ function useFocusShieldProvider() {
 
   const scheduledNotificationIdsRef = useRef<string[]>([]);
   const isInitializedRef = useRef(false);
-  const isMountedRef = useRef(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const lastExitNotificationRef = useRef<number>(0);
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
@@ -106,10 +113,95 @@ function useFocusShieldProvider() {
       setDistractionLogs([]);
       setCurrentSession(null);
       isInitializedRef.current = false;
-      setIsLoading(true);
+      queryClient.removeQueries({ queryKey: ['focusShield'] });
       prevUserIdRef.current = currentUserId;
     }
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
+
+  const dataQuery = useQuery({
+    queryKey: ['focusShield', userId, STORAGE_KEYS.DATA],
+    queryFn: async (): Promise<FocusShieldData> => {
+      console.log('[FocusShield] Loading data for user:', userId);
+
+      if (isRealUser) {
+        try {
+          const firebaseData = await getUserFocusShield(userId);
+          if (firebaseData && (firebaseData.sessions.length > 0 || firebaseData.settings)) {
+            console.log('[FocusShield] Loaded from Firebase');
+            const result: FocusShieldData = {
+              settings: { ...DEFAULT_SETTINGS, ...firebaseData.settings },
+              stats: { ...DEFAULT_STATS, ...firebaseData.stats },
+              sessions: firebaseData.sessions || [],
+              logs: firebaseData.logs || [],
+            };
+            await Promise.all([
+              AsyncStorage.setItem(STORAGE_KEYS.DATA, JSON.stringify({ settings: result.settings, stats: result.stats })),
+              AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(result.sessions)),
+              AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(result.logs)),
+            ]);
+            return result;
+          }
+        } catch (error) {
+          console.warn('[FocusShield] Firebase load failed, falling back to local:', error);
+        }
+      }
+
+      const [settingsData, sessionsData, logsData] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.DATA),
+        AsyncStorage.getItem(STORAGE_KEYS.SESSIONS),
+        AsyncStorage.getItem(STORAGE_KEYS.LOGS),
+      ]);
+
+      let loadedSettings = DEFAULT_SETTINGS;
+      let loadedStats = DEFAULT_STATS;
+      let loadedSessions: FocusSession[] = [];
+      let loadedLogs: DistractionLog[] = [];
+
+      if (settingsData) {
+        try {
+          const parsed = JSON.parse(settingsData);
+          loadedSettings = { ...DEFAULT_SETTINGS, ...parsed.settings };
+          loadedStats = { ...DEFAULT_STATS, ...parsed.stats };
+        } catch (e) {
+          console.error('[FocusShield] Error parsing settings:', e);
+        }
+      }
+
+      if (sessionsData) {
+        try { loadedSessions = JSON.parse(sessionsData); } catch (e) { console.error('[FocusShield] Error parsing sessions:', e); }
+      }
+
+      if (logsData) {
+        try { loadedLogs = JSON.parse(logsData); } catch (e) { console.error('[FocusShield] Error parsing logs:', e); }
+      }
+
+      if (isRealUser && (loadedSessions.length > 0 || settingsData)) {
+        saveUserFocusShield(userId, {
+          settings: loadedSettings,
+          stats: loadedStats,
+          sessions: loadedSessions,
+          logs: loadedLogs,
+        }).catch(e => console.warn('[FocusShield] Background sync failed:', e));
+      }
+
+      console.log('[FocusShield] Data loaded successfully from local');
+      return { settings: loadedSettings, stats: loadedStats, sessions: loadedSessions, logs: loadedLogs };
+    },
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    enabled: !!userId,
+    refetchOnMount: 'always',
+  });
+
+  useEffect(() => {
+    if (dataQuery.data) {
+      setSettings(dataQuery.data.settings);
+      setStats(dataQuery.data.stats);
+      setSessions(dataQuery.data.sessions);
+      setDistractionLogs(dataQuery.data.logs);
+      isInitializedRef.current = true;
+    }
+  }, [dataQuery.data]);
 
   const syncToFirebase = useCallback(() => {
     if (!isRealUser || !isInitializedRef.current) return;
@@ -129,116 +221,7 @@ function useFocusShieldProvider() {
   }, [isRealUser, userId, settings, stats, sessions, distractionLogs]);
 
   useEffect(() => {
-    isMountedRef.current = true;
-    
-    const loadData = async () => {
-      try {
-        console.log('[FocusShield] Loading data for user:', userId);
-
-        if (isRealUser) {
-          try {
-            const firebaseData = await getUserFocusShield(userId);
-            if (firebaseData && (firebaseData.sessions.length > 0 || firebaseData.settings)) {
-              console.log('[FocusShield] Loaded from Firebase');
-              if (!isMountedRef.current) return;
-              if (firebaseData.settings) {
-                setSettings(prev => ({ ...prev, ...firebaseData.settings }));
-              }
-              if (firebaseData.stats) {
-                setStats(prev => ({ ...prev, ...firebaseData.stats }));
-              }
-              if (firebaseData.sessions) {
-                setSessions(firebaseData.sessions);
-              }
-              if (firebaseData.logs) {
-                setDistractionLogs(firebaseData.logs);
-              }
-              await Promise.all([
-                AsyncStorage.setItem(STORAGE_KEYS.DATA, JSON.stringify({ settings: firebaseData.settings || DEFAULT_SETTINGS, stats: firebaseData.stats || DEFAULT_STATS })),
-                AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(firebaseData.sessions || [])),
-                AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(firebaseData.logs || [])),
-              ]);
-              console.log('[FocusShield] Firebase data cached locally');
-              isInitializedRef.current = true;
-              setIsLoading(false);
-              return;
-            }
-          } catch (error) {
-            console.warn('[FocusShield] Firebase load failed, falling back to local:', error);
-          }
-        }
-
-        const [settingsData, sessionsData, logsData] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEYS.DATA),
-          AsyncStorage.getItem(STORAGE_KEYS.SESSIONS),
-          AsyncStorage.getItem(STORAGE_KEYS.LOGS),
-        ]);
-
-        if (!isMountedRef.current) return;
-
-        if (settingsData) {
-          try {
-            const parsed = JSON.parse(settingsData);
-            setSettings(prev => ({ ...prev, ...parsed.settings }));
-            setStats(prev => ({ ...prev, ...parsed.stats }));
-          } catch (e) {
-            console.error('[FocusShield] Error parsing settings:', e);
-          }
-        }
-
-        if (sessionsData) {
-          try {
-            setSessions(JSON.parse(sessionsData));
-          } catch (e) {
-            console.error('[FocusShield] Error parsing sessions:', e);
-          }
-        }
-
-        if (logsData) {
-          try {
-            setDistractionLogs(JSON.parse(logsData));
-          } catch (e) {
-            console.error('[FocusShield] Error parsing logs:', e);
-          }
-        }
-
-        if (isRealUser) {
-          const localSettings = settingsData ? JSON.parse(settingsData) : { settings: DEFAULT_SETTINGS, stats: DEFAULT_STATS };
-          const localSessions = sessionsData ? JSON.parse(sessionsData) : [];
-          const localLogs = logsData ? JSON.parse(logsData) : [];
-          if (localSessions.length > 0 || localSettings.settings) {
-            saveUserFocusShield(userId, {
-              settings: localSettings.settings || DEFAULT_SETTINGS,
-              stats: localSettings.stats || DEFAULT_STATS,
-              sessions: localSessions,
-              logs: localLogs,
-            }).catch(e => console.warn('[FocusShield] Background sync failed:', e));
-          }
-        }
-
-        console.log('[FocusShield] Data loaded successfully');
-      } catch (error) {
-        console.error('[FocusShield] Error loading data:', error);
-      } finally {
-        if (isMountedRef.current) {
-          isInitializedRef.current = true;
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadData();
-    
-    return () => {
-      isMountedRef.current = false;
-      if (firebaseSyncTimeoutRef.current) {
-        clearTimeout(firebaseSyncTimeoutRef.current);
-      }
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    if (!isInitializedRef.current || isLoading) return;
+    if (!isInitializedRef.current || dataQuery.isLoading) return;
     
     const saveData = async () => {
       try {
@@ -254,14 +237,22 @@ function useFocusShieldProvider() {
     
     saveData();
     syncToFirebase();
-  }, [settings, stats, sessions, distractionLogs, isLoading, STORAGE_KEYS.DATA, STORAGE_KEYS.SESSIONS, STORAGE_KEYS.LOGS, syncToFirebase]);
+  }, [settings, stats, sessions, distractionLogs, dataQuery.isLoading, STORAGE_KEYS.DATA, STORAGE_KEYS.SESSIONS, STORAGE_KEYS.LOGS, syncToFirebase]);
+
+  useEffect(() => {
+    return () => {
+      if (firebaseSyncTimeoutRef.current) {
+        clearTimeout(firebaseSyncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isSessionActive = currentSession?.isActive ?? false;
   const reminderInterval = settings.reminderInterval;
   const isEnabled = settings.isEnabled;
 
   useEffect(() => {
-    if (Platform.OS === 'web' || isLoading) return;
+    if (Platform.OS === 'web' || dataQuery.isLoading) return;
 
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       const prevState = appStateRef.current;
@@ -307,14 +298,12 @@ function useFocusShieldProvider() {
     return () => {
       subscription.remove();
     };
-  }, [isSessionActive, isLoading]);
+  }, [isSessionActive, dataQuery.isLoading]);
 
   useEffect(() => {
-    if (Platform.OS === 'web' || isLoading) return;
+    if (Platform.OS === 'web' || dataQuery.isLoading) return;
 
     const setupReminders = async () => {
-      if (!isMountedRef.current) return;
-      
       if (isEnabled && isSessionActive) {
         try {
           const { status } = await Notifications.getPermissionsAsync();
@@ -331,8 +320,6 @@ function useFocusShieldProvider() {
           }
           scheduledNotificationIdsRef.current = [];
 
-          if (!isMountedRef.current) return;
-
           const id = await Notifications.scheduleNotificationAsync({
             content: {
               title: 'Focus Shield Active',
@@ -347,7 +334,7 @@ function useFocusShieldProvider() {
             },
           });
 
-          if (id && isMountedRef.current) {
+          if (id) {
             scheduledNotificationIdsRef.current = [id];
             console.log('[FocusShield] Reminders scheduled');
           }
@@ -366,7 +353,7 @@ function useFocusShieldProvider() {
     };
 
     setupReminders();
-  }, [isEnabled, reminderInterval, isSessionActive, isLoading]);
+  }, [isEnabled, reminderInterval, isSessionActive, dataQuery.isLoading]);
 
   const getRandomMessage = useCallback(() => {
     return MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)];
@@ -518,7 +505,7 @@ function useFocusShieldProvider() {
     currentSession,
     sessions,
     distractionLogs,
-    isLoading,
+    isLoading: dataQuery.isLoading,
     startSession,
     endSession,
     logDistraction,

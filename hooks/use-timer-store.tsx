@@ -709,47 +709,64 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
   }, [cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
 
+  const prevTimerUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (prevTimerUserIdRef.current === userId && prevTimerUserIdRef.current !== null) {
+      return;
+    }
+    prevTimerUserIdRef.current = userId;
+
+    const currentUserId = userId;
+    const currentIsRealUser = isRealUser;
+    const currentTimerKeys = TIMER_KEYS;
+    let cancelled = false;
+
     const initializeStore = async () => {
       await SoundManager.configure();
-      console.log('[TimerStore] SoundManager initialized');
+      console.log('[TimerStore] SoundManager initialized for user:', currentUserId);
 
       await setupNotificationCategories();
 
       let sessions: TimerSession[] = [];
 
-      if (isRealUser) {
+      if (currentIsRealUser) {
         try {
-          const firebaseSessions = await getUserTimerSessions(userId);
+          const firebaseSessions = await getUserTimerSessions(currentUserId);
+          if (cancelled) return;
           if (firebaseSessions && firebaseSessions.length > 0) {
             console.log('[TimerStore] Loaded sessions from Firebase:', firebaseSessions.length);
             sessions = firebaseSessions.map((session: any) => ({
               ...session,
               completedAt: session.completedAt ? new Date(session.completedAt) : undefined
             }));
-            await safeStorageSet(TIMER_KEYS.SESSIONS, firebaseSessions);
+            await safeStorageSet(currentTimerKeys.SESSIONS, firebaseSessions);
           }
         } catch (error) {
           console.warn('[TimerStore] Firebase load failed, falling back to local:', error);
         }
       }
 
+      if (cancelled) return;
+
       if (sessions.length === 0) {
-        const stored = await safeStorageGet<TimerSession[]>(TIMER_KEYS.SESSIONS, []);
+        const stored = await safeStorageGet<TimerSession[]>(currentTimerKeys.SESSIONS, []);
+        if (cancelled) return;
         sessions = stored.map((session: any) => ({
           ...session,
           completedAt: session.completedAt ? new Date(session.completedAt) : undefined
         }));
 
-        if (isRealUser && sessions.length > 0) {
+        if (currentIsRealUser && sessions.length > 0) {
           console.log('[TimerStore] Syncing local sessions to Firebase...');
-          saveUserTimerSessions(userId, stored).catch(e =>
+          saveUserTimerSessions(currentUserId, stored).catch(e =>
             console.warn('[TimerStore] Background sync failed:', e)
           );
         }
       }
       
-      const storedSound = await safeStorageGet<SoundId>(TIMER_KEYS.SOUND, DEFAULT_SOUND_ID);
+      const storedSound = await safeStorageGet<SoundId>(currentTimerKeys.SOUND, DEFAULT_SOUND_ID);
+      if (cancelled) return;
       console.log('[TimerStore] Loaded sound:', storedSound);
       
       setState(prev => ({ 
@@ -760,6 +777,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
       if (Platform.OS !== 'web') {
         const bgState = await getBackgroundState();
+        if (cancelled) return;
         if (bgState && bgState.isActive) {
           console.log('[TimerStore] Restoring from background:', bgState);
           
@@ -784,7 +802,11 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     };
     
     initializeStore();
-  }, [getBackgroundState, clearBackgroundState, setupNotificationCategories]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isRealUser, TIMER_KEYS.SESSIONS, TIMER_KEYS.SOUND, getBackgroundState, clearBackgroundState, setupNotificationCategories]);
 
   const backgroundDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInBackground = useRef<boolean>(false);
