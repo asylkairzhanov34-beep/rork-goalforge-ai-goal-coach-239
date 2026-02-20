@@ -47,8 +47,10 @@ export default function ProgressScreen() {
   const activeChallenge = challengeStore?.getActiveChallenge?.();
 
   const goalTasks = useMemo(() => {
-    if (!currentGoal?.id) return [];
-    return dailyTasks.filter((task) => task.goalId === currentGoal.id);
+    if (currentGoal?.id) {
+      return dailyTasks.filter((task) => task.goalId === currentGoal.id);
+    }
+    return dailyTasks;
   }, [currentGoal?.id, dailyTasks]);
 
   const completedTasks = useMemo(() => {
@@ -67,15 +69,16 @@ export default function ProgressScreen() {
     let goalCompleted = 0;
     let goalTotal = 0;
 
-    if (currentGoal?.id) {
-      const todayTasks = dailyTasks.filter((t) => {
-        const taskDate = new Date(t.date);
-        taskDate.setHours(0, 0, 0, 0);
+    const todayGoalTasks = dailyTasks.filter((t) => {
+      const taskDate = new Date(t.date);
+      taskDate.setHours(0, 0, 0, 0);
+      if (currentGoal?.id) {
         return t.goalId === currentGoal.id && taskDate.getTime() === today.getTime();
-      });
-      goalCompleted = todayTasks.filter((t) => t.completed).length;
-      goalTotal = todayTasks.length;
-    }
+      }
+      return taskDate.getTime() === today.getTime();
+    });
+    goalCompleted = todayGoalTasks.filter((t) => t.completed).length;
+    goalTotal = todayGoalTasks.length;
 
     const challengeCompleted = challengeTodayTasks.filter((t) => t.completed).length;
     const challengeTotal = challengeTodayTasks.length;
@@ -102,13 +105,14 @@ export default function ProgressScreen() {
     const target = 30;
     let goalCompleted = 0;
 
-    if (currentGoal?.id) {
-      const monthTasks = dailyTasks.filter((t) => {
-        const taskDate = new Date(t.date);
+    const monthTasks = dailyTasks.filter((t) => {
+      const taskDate = new Date(t.date);
+      if (currentGoal?.id) {
         return t.goalId === currentGoal.id && taskDate >= monthStart && taskDate <= monthEnd;
-      });
-      goalCompleted = monthTasks.filter((t) => t.completed).length;
-    }
+      }
+      return taskDate >= monthStart && taskDate <= monthEnd;
+    });
+    goalCompleted = monthTasks.filter((t) => t.completed).length;
 
     let challengeMonthCompleted = 0;
     if (activeChallenge) {
@@ -196,15 +200,16 @@ export default function ProgressScreen() {
       let completed = 0;
       let total = 0;
       
-      if (currentGoal?.id) {
-        const dayTasks = dailyTasks.filter(t => {
-          const taskDate = new Date(t.date);
-          taskDate.setHours(0, 0, 0, 0);
+      const dayTasks = dailyTasks.filter(t => {
+        const taskDate = new Date(t.date);
+        taskDate.setHours(0, 0, 0, 0);
+        if (currentGoal?.id) {
           return t.goalId === currentGoal.id && taskDate.getTime() === date.getTime();
-        });
-        completed += dayTasks.filter(t => t.completed).length;
-        total += dayTasks.length;
-      }
+        }
+        return taskDate.getTime() === date.getTime();
+      });
+      completed += dayTasks.filter(t => t.completed).length;
+      total += dayTasks.length;
       
       if (activeChallenge) {
         const challengeDay = activeChallenge.days.find(d => {
@@ -337,7 +342,7 @@ export default function ProgressScreen() {
             })}
           </View>
 
-          {currentGoal ? (
+          {(currentGoal || dailyTasks.length > 0 || activeChallenge) ? (
             <>
               <Animated.View style={[styles.progressCard, { opacity: fadeAnim }]}>
                 <ProgressRing progress={periodStats.percentage} size={120} />
@@ -377,11 +382,11 @@ export default function ProgressScreen() {
               <View style={styles.calendarSection}>
                 <ActivityCalendar 
                   completedDates={dailyTasks
-                    .filter((t) => t.goalId === currentGoal?.id && t.completed)
+                    .filter((t) => currentGoal?.id ? (t.goalId === currentGoal.id && t.completed) : t.completed)
                     .map((t) => getTaskLocalDateKey(t.date))
                     .filter((k): k is LocalDateKey => k != null)}
                   currentStreak={streakData.currentStreak}
-                  tasks={dailyTasks.filter((t) => t.goalId === currentGoal?.id)}
+                  tasks={currentGoal?.id ? dailyTasks.filter((t) => t.goalId === currentGoal.id) : dailyTasks}
                   journalEntries={journalEntries}
                 />
               </View>

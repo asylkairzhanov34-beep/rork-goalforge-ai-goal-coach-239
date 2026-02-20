@@ -445,7 +445,9 @@ export default function TodayScreen() {
     );
   }
 
-  if (!currentGoal) {
+  const hasAnyContent = todayTasks.length > 0 || activeChallenge != null || (store?.dailyTasks?.length ?? 0) > 0;
+
+  if (!currentGoal && !hasAnyContent) {
     return (
       <GradientBackground>
         <View style={[styles.container, { paddingTop: insets.top }]}>

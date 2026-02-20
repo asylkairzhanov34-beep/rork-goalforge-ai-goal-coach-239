@@ -681,7 +681,7 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     const todayKey = getLocalDateKey(today);
 
     return dailyTasks.filter((task) => {
-      if (task.goalId !== currentGoal?.id) return false;
+      if (currentGoal?.id && task.goalId !== currentGoal.id) return false;
       const key = getTaskLocalDateKeyUtil(task.date);
       if (!key) return false;
       return key === todayKey;
