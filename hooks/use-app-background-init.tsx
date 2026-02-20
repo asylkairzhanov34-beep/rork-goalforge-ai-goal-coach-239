@@ -1,12 +1,16 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { useQueryClient } from '@tanstack/react-query';
 import { safeStorageGet } from '@/utils/storage-helper';
 import { FirstTimeProfile } from '@/types/first-time-setup';
 
 export function useAppBackgroundInit() {
   const isInitialized = useRef(false);
   const notificationsScheduled = useRef(false);
+  const queryClient = useQueryClient();
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const lastRefetchTimeRef = useRef<number>(0);
 
   const requestNotificationPermissions = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -195,19 +199,41 @@ export function useAppBackgroundInit() {
   }, [requestNotificationPermissions, setupNotificationChannels, configureNotificationHandler, scheduleGoalReminderForUser]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && isInitialized.current) {
-        console.log('[BackgroundInit] App became active, checking permissions...');
-        requestNotificationPermissions();
+      const previousState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        nextAppState === 'active' &&
+        (previousState === 'background' || previousState === 'inactive')
+      ) {
+        const now = Date.now();
+        const timeSinceLastRefetch = now - lastRefetchTimeRef.current;
+        const MIN_REFETCH_INTERVAL = 10_000;
+
+        if (timeSinceLastRefetch > MIN_REFETCH_INTERVAL) {
+          console.log('[BackgroundInit] App became active from background, invalidating all data queries...');
+          lastRefetchTimeRef.current = now;
+
+          queryClient.invalidateQueries({ queryKey: ['profile'] });
+          queryClient.invalidateQueries({ queryKey: ['goals'] });
+          queryClient.invalidateQueries({ queryKey: ['tasks'] });
+          queryClient.invalidateQueries({ queryKey: ['pomodoro'] });
+          console.log('[BackgroundInit] All data queries invalidated for refetch');
+        } else {
+          console.log('[BackgroundInit] App became active but skipping refetch (too soon)');
+        }
+
+        if (Platform.OS !== 'web' && isInitialized.current) {
+          requestNotificationPermissions();
+        }
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [requestNotificationPermissions]);
+  }, [requestNotificationPermissions, queryClient]);
 
   return {
     requestNotificationPermissions,

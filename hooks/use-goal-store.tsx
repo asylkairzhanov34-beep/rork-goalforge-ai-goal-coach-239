@@ -458,13 +458,26 @@ export const [GoalProvider, useGoalStore] = createContextHook(() => {
     debouncedRecalculateStreak();
   }, [dailyTasks, tasksQuery.data, currentGoal?.id, activeChallengesForStreak, debouncedRecalculateStreak]);
 
+  const queriesFinishedRef = useRef(false);
+
   useEffect(() => {
-    if (!profileQuery.isLoading && !goalsQuery.isLoading && !tasksQuery.isLoading && currentGoal?.id) {
-      console.log('[Streak] All queries loaded, forcing immediate recalculation');
+    const allQueriesLoaded = !profileQuery.isLoading && !goalsQuery.isLoading && !tasksQuery.isLoading;
+    
+    if (allQueriesLoaded && currentGoal?.id) {
+      console.log('[Streak] All queries loaded + currentGoal ready, forcing immediate recalculation');
       streakCheckedRef.current = null;
+      queriesFinishedRef.current = true;
       recalculateStreakRef.current();
     }
   }, [profileQuery.isLoading, goalsQuery.isLoading, tasksQuery.isLoading, currentGoal?.id]);
+
+  useEffect(() => {
+    if (currentGoal?.id && queriesFinishedRef.current) {
+      console.log('[Streak] currentGoal became available after queries loaded, recalculating...');
+      streakCheckedRef.current = null;
+      recalculateStreakRef.current();
+    }
+  }, [currentGoal?.id]);
 
   const saveTasksMutation = useMutation({
     mutationFn: async (tasks: DailyTask[]) => {

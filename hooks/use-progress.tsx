@@ -157,7 +157,7 @@ export const [ProgressProvider, useProgress] = createContextHook(() => {
 
   const weekProgress = useMemo(() => {
     return goalStore?.getCurrentWeekProgress?.() || [false, false, false, false, false, false, false];
-  }, [goalStore]);
+  }, [goalStore?.dailyTasks, goalStore?.currentGoal?.id]);
 
   const recalculateStreak = useCallback(() => {
     syncChallengesForStreak();

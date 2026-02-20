@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, router, useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, PanResponder, Easing, AppState, Platform } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RewardOrb } from '@/components/RewardOrb';
 
@@ -397,12 +398,25 @@ export default function TodayScreen() {
   
 
 
-  const onRefresh = React.useCallback(() => {
+  const queryClient = useQueryClient();
+
+  const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    // Change quote on refresh
     setCurrentQuoteIndex(Math.floor(Math.random() * getQuotes().length));
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['profile'] }),
+        queryClient.invalidateQueries({ queryKey: ['goals'] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['pomodoro'] }),
+      ]);
+      console.log('[Home] Pull-to-refresh: all queries invalidated');
+    } catch (err) {
+      console.error('[Home] Pull-to-refresh error:', err);
+    } finally {
+      setTimeout(() => setRefreshing(false), 500);
+    }
+  }, [queryClient]);
 
   // Calculate values that are used in multiple places
   const completedToday = todayTasks.filter(t => t.completed).length;
