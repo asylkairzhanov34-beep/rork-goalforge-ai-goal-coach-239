@@ -18,6 +18,8 @@ import {
 } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
+import { ProgressScreenSkeleton } from '@/components/SkeletonLoader';
+import { PressableScale } from '@/components/PressableScale';
 import { ProgressRing } from '@/components/ProgressRing';
 import { ProgressChart } from '@/components/ProgressChart';
 import { ActivityCalendar } from '@/components/ActivityCalendar';
@@ -234,9 +236,7 @@ export default function ProgressScreen() {
     return (
       <GradientBackground>
         <View style={[styles.container, { paddingTop: insets.top }]}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
+          <ProgressScreenSkeleton />
         </View>
       </GradientBackground>
     );
@@ -316,6 +316,8 @@ export default function ProgressScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
         >
           <View style={styles.periodSelector}>
             {(
@@ -327,17 +329,18 @@ export default function ProgressScreen() {
             ).map(({ key, label, Icon }) => {
               const active = selectedPeriod === key;
               return (
-                <TouchableOpacity
+                <PressableScale
                   key={key}
                   style={[styles.periodButton, active && styles.periodButtonActive]}
                   onPress={() => handlePeriodChange(key)}
-                  activeOpacity={0.8}
+                  haptic="selection"
+                  scaleValue={0.95}
                 >
                   <Icon size={16} color={active ? '#000' : 'rgba(255,255,255,0.5)'} />
                   <Text style={[styles.periodButtonText, active && styles.periodButtonTextActive]}>
                     {label}
                   </Text>
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>

@@ -1,31 +1,56 @@
-import React from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { Tabs } from 'expo-router';
-import { View, StyleSheet, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, StyleSheet, Platform, useWindowDimensions, Pressable, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Home, Target, Timer, TrendingUp, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
+const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, focused }: { icon: any; focused: boolean }) {
+  const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
+  const glowOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const bgOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
-function TabBarIcon({ icon: Icon, focused }: { icon: any; focused: boolean }) {
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: focused ? 1 : 0.92,
+        useNativeDriver: true,
+        speed: 28,
+        bounciness: focused ? 12 : 4,
+      }),
+      Animated.timing(glowOpacity, {
+        toValue: focused ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bgOpacity, {
+        toValue: focused ? 1 : 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [focused, scale, glowOpacity, bgOpacity]);
+
   return (
     <View style={styles.iconContainer}>
-      <View style={[
+      <Animated.View style={[
         styles.iconWrapper,
-        focused && styles.activeIconWrapper
+        {
+          transform: [{ scale }],
+        },
       ]}>
-        <Icon 
-          size={26} 
+        <Animated.View style={[styles.activeIconBg, { opacity: bgOpacity }]} />
+        <Icon
+          size={26}
           color={focused ? '#FFD600' : '#FFFFFF'}
           strokeWidth={focused ? 2.5 : 2}
         />
-        {focused && (
-          <View style={styles.glowEffect} />
-        )}
-      </View>
+        <Animated.View style={[styles.glowEffect, { opacity: glowOpacity }]} />
+      </Animated.View>
     </View>
   );
-}
+});
 
 const MAX_TAB_BAR_WIDTH = 500;
 
@@ -87,19 +112,42 @@ export default function TabLayout() {
           }
         ],
         tabBarBackground: () => <TabBarBackground />,
-        tabBarButton: ({ onPress, children, style, accessibilityState, testID }) => (
-          <Pressable
-            style={style}
-            accessibilityState={accessibilityState}
-            testID={testID}
-            onPress={(e) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onPress?.(e);
-            }}
-          >
-            {children}
-          </Pressable>
-        ),
+        tabBarButton: ({ onPress, children, style, accessibilityState, testID }) => {
+          const pressScale = useRef(new Animated.Value(1)).current;
+          const handlePressIn = useCallback(() => {
+            Animated.spring(pressScale, {
+              toValue: 0.88,
+              useNativeDriver: true,
+              speed: 50,
+              bounciness: 4,
+            }).start();
+          }, [pressScale]);
+          const handlePressOut = useCallback(() => {
+            Animated.spring(pressScale, {
+              toValue: 1,
+              useNativeDriver: true,
+              speed: 30,
+              bounciness: 8,
+            }).start();
+          }, [pressScale]);
+          return (
+            <Pressable
+              style={style}
+              accessibilityState={accessibilityState}
+              testID={testID}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              onPress={(e) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onPress?.(e);
+              }}
+            >
+              <Animated.View style={{ transform: [{ scale: pressScale }], flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                {children}
+              </Animated.View>
+            </Pressable>
+          );
+        },
       }}
     >
 
@@ -107,7 +155,7 @@ export default function TabLayout() {
         name="home"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon icon={Home} focused={focused} />
+            <AnimatedTabBarIcon icon={Home} focused={focused} />
           ),
         }}
       />
@@ -115,7 +163,7 @@ export default function TabLayout() {
         name="plan"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon icon={Target} focused={focused} />
+            <AnimatedTabBarIcon icon={Target} focused={focused} />
           ),
         }}
       />
@@ -123,7 +171,7 @@ export default function TabLayout() {
         name="progress"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon icon={TrendingUp} focused={focused} />
+            <AnimatedTabBarIcon icon={TrendingUp} focused={focused} />
           ),
         }}
       />
@@ -131,7 +179,7 @@ export default function TabLayout() {
         name="timer"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon icon={Timer} focused={focused} />
+            <AnimatedTabBarIcon icon={Timer} focused={focused} />
           ),
         }}
       />
@@ -139,7 +187,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon icon={User} focused={focused} />
+            <AnimatedTabBarIcon icon={User} focused={focused} />
           ),
         }}
       />
@@ -215,8 +263,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     position: 'relative',
   },
-  activeIconWrapper: {
+  activeIconBg: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255, 214, 0, 0.1)',
+    borderRadius: 24,
   },
   glowEffect: {
     position: 'absolute',

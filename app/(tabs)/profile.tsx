@@ -7,6 +7,8 @@ import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, E
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
+import { ProfileScreenSkeleton } from '@/components/SkeletonLoader';
+import { PressableScale } from '@/components/PressableScale';
 
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useAuth } from '@/hooks/use-auth-store';
@@ -72,9 +74,7 @@ export default function ProfileScreen() {
     return (
       <GradientBackground>
         <View style={[styles.container, { paddingTop: insets.top }]}> 
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
+          <ProfileScreenSkeleton />
         </View>
       </GradientBackground>
     );
@@ -251,6 +251,8 @@ export default function ProfileScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
         >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
@@ -435,11 +437,12 @@ export default function ProfileScreen() {
 
           <View style={[styles.menuSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             {menuItems.map((item, index) => (
-              <TouchableOpacity
+              <PressableScale
                 key={index}
                 style={styles.menuItem}
                 onPress={item.onPress}
-                activeOpacity={0.7}
+                haptic="light"
+                scaleValue={0.98}
               >
                 <View style={[styles.menuIcon, { backgroundColor: `${item.iconColor}15` }]}>
                   <item.icon size={18} color={item.iconColor} />
@@ -449,7 +452,7 @@ export default function ProfileScreen() {
                   <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
                 </View>
                 <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
-              </TouchableOpacity>
+              </PressableScale>
             ))}
           </View>
 

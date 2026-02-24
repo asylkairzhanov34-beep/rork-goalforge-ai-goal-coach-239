@@ -208,8 +208,11 @@ function RootLayoutNav() {
     <Stack 
       screenOptions={{ 
         headerBackTitle: "Back",
-        animation: 'fade',
-        animationDuration: 200,
+        animation: 'ios_from_right',
+        animationDuration: 250,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        fullScreenGestureEnabled: true,
       }}
     >
       <Stack.Screen 

@@ -12,6 +12,10 @@ import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
 import { GradientBackground } from '@/components/GradientBackground';
+import { HomeScreenSkeleton } from '@/components/SkeletonLoader';
+import { PressableScale } from '@/components/PressableScale';
+import { useStaggeredFadeIn } from '@/hooks/use-fade-in';
+import * as Haptics from 'expo-haptics';
 import { LOCKED_ORB_VIDEO, getUnlockedRewards, getProgressText, REWARDS, getNextLockedReward, getRewardProgress, formatFocusTime } from '@/constants/rewards';
 import { RewardUnlockModal } from '@/components/RewardUnlockModal';
 import { BREATHING_TECHNIQUES } from '@/constants/breathing';
@@ -437,9 +441,7 @@ export default function TodayScreen() {
     return (
       <GradientBackground>
         <View style={[styles.container, { paddingTop: insets.top }]}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
+          <HomeScreenSkeleton />
         </View>
       </GradientBackground>
     );
@@ -457,16 +459,17 @@ export default function TodayScreen() {
             <Text style={styles.emptyDescription}>
               Start your journey by setting a goal and let AI create a personalized plan
             </Text>
-            <TouchableOpacity
+            <PressableScale
               style={styles.createGoalButton}
               onPress={() => router.push('/goal-creation' as any)}
-              activeOpacity={0.9}
+              haptic="medium"
+              scaleValue={0.95}
             >
               <View style={styles.createGoalButtonInner}>
                 <Sparkles size={24} color="#000" style={{ marginRight: 8 }} />
                 <Text style={styles.createGoalButtonText}>Create First Goal</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </View>
       </GradientBackground>
@@ -492,6 +495,8 @@ export default function TodayScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -661,10 +666,11 @@ export default function TodayScreen() {
             )}
           </View>
 
-          <TouchableOpacity 
+          <PressableScale 
             style={styles.coachCard}
             onPress={() => router.push('/chat' as any)}
-            activeOpacity={0.9}
+            scaleValue={0.98}
+            haptic="light"
           >
             <LinearGradient
               colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.02)', 'transparent']}
@@ -689,53 +695,57 @@ export default function TodayScreen() {
                 <View style={styles.coachArrow} />
               </View>
             </View>
-          </TouchableOpacity>
+          </PressableScale>
 
           <View style={[styles.quickActionsSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.quickActionsRow}>
-              <TouchableOpacity
+              <PressableScale
                 style={styles.quickActionItem}
                 onPress={() => router.push('/manifestation' as any)}
                 testID="quick-action-manifestation"
-                activeOpacity={0.8}
+                haptic="light"
+                scaleValue={0.93}
               >
                 <View style={styles.quickActionIconWrap}>
                   <Sparkles size={22} color={theme.colors.primary} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.quickActionText}>Manifest</Text>
-              </TouchableOpacity>
+              </PressableScale>
 
-              <TouchableOpacity
+              <PressableScale
                 style={styles.quickActionItem}
                 onPress={() => router.push('/timer' as any)}
                 testID="quick-action-focus"
-                activeOpacity={0.8}
+                haptic="light"
+                scaleValue={0.93}
               >
                 <View style={styles.quickActionIconWrap}>
                   <Shield size={22} color={theme.colors.primary} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.quickActionText}>Focus</Text>
-              </TouchableOpacity>
+              </PressableScale>
 
-              <TouchableOpacity
+              <PressableScale
                 style={styles.quickActionItem}
                 onPress={() => router.push('/reflection' as any)}
                 testID="quick-action-journal"
-                activeOpacity={0.8}
+                haptic="light"
+                scaleValue={0.93}
               >
                 <View style={styles.quickActionIconWrap}>
                   <BookOpen size={22} color={theme.colors.primary} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.quickActionText}>Reflect</Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
           </View>
 
-          <TouchableOpacity
+          <PressableScale
             style={[styles.meditationFeedCard, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}
             onPress={() => router.push('/meditation-feed' as any)}
-            activeOpacity={0.9}
+            scaleValue={0.98}
+            haptic="light"
           >
             <Image
               source={{ uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80' }}
@@ -758,7 +768,7 @@ export default function TodayScreen() {
                 <ChevronRight size={16} color="#000" />
               </View>
             </View>
-          </TouchableOpacity>
+          </PressableScale>
 
           <View style={[styles.forYouSection, isTablet && { maxWidth: contentMaxWidth, alignSelf: 'center' as const, width: '100%' }]}>
             <Text style={styles.sectionTitle}>For You</Text>
@@ -770,11 +780,12 @@ export default function TodayScreen() {
               style={styles.forYouScroll}
             >
               {BREATHING_TECHNIQUES.slice(0, 4).map((technique, index) => (
-                  <TouchableOpacity
+                  <PressableScale
                     key={technique.id}
                     style={styles.forYouCard}
                     onPress={() => router.push({ pathname: '/breathing/[id]', params: { id: technique.id } } as any)}
-                    activeOpacity={0.85}
+                    haptic="light"
+                    scaleValue={0.96}
                   >
                     <View style={styles.forYouCardBorder}>
                       <Image
@@ -809,7 +820,7 @@ export default function TodayScreen() {
                       </View>
                       <View style={styles.forYouCardGlow} />
                     </View>
-                  </TouchableOpacity>
+                  </PressableScale>
                 ))}
             </ScrollView>
           </View>

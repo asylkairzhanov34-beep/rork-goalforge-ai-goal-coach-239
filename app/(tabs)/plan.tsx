@@ -13,6 +13,8 @@ import { DailyTask } from '@/types/goal';
 import { ChallengeTemplate, ChallengeTask } from '@/types/challenge';
 import { CHALLENGE_CATEGORIES, getPopularChallenges } from '@/constants/challenges';
 import { theme } from '@/constants/theme';
+import { PlanScreenSkeleton } from '@/components/SkeletonLoader';
+import { PressableScale } from '@/components/PressableScale';
 
 const getCurrentDayKey = () => {
   const today = new Date();
@@ -466,10 +468,7 @@ export default function PlanScreen() {
   if (!store || !store.isReady) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFD600" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
+        <PlanScreenSkeleton />
       </View>
     );
   }
@@ -712,6 +711,8 @@ export default function PlanScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        removeClippedSubviews={true}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
