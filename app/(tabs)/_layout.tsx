@@ -8,7 +8,8 @@ import { BlurView } from 'expo-blur';
 
 const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, focused }: { icon: any; focused: boolean }) {
   const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
-  const dotOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const bgScale = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const bgOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -18,13 +19,19 @@ const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, 
         speed: 28,
         bounciness: focused ? 12 : 4,
       }),
-      Animated.timing(dotOpacity, {
+      Animated.spring(bgScale, {
+        toValue: focused ? 1 : 0,
+        useNativeDriver: true,
+        speed: 24,
+        bounciness: 8,
+      }),
+      Animated.timing(bgOpacity, {
         toValue: focused ? 1 : 0,
         duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [focused, scale, dotOpacity]);
+  }, [focused, scale, bgScale, bgOpacity]);
 
   return (
     <View style={styles.iconContainer}>
@@ -34,12 +41,18 @@ const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, 
           transform: [{ scale }],
         },
       ]}>
+        <Animated.View style={[
+          styles.activeCircle,
+          {
+            opacity: bgOpacity,
+            transform: [{ scale: bgScale }],
+          },
+        ]} />
         <Icon
           size={24}
-          color={focused ? '#FFD600' : 'rgba(255, 255, 255, 0.5)'}
+          color={focused ? '#000000' : 'rgba(255, 255, 255, 0.5)'}
           strokeWidth={focused ? 2.2 : 1.8}
         />
-        <Animated.View style={[styles.activeDot, { opacity: dotOpacity }]} />
       </Animated.View>
     </View>
   );
@@ -251,15 +264,15 @@ const styles = StyleSheet.create({
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+  activeCircle: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#FFD600',
-    marginTop: 4,
   },
 });
