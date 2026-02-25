@@ -8,8 +8,7 @@ import { BlurView } from 'expo-blur';
 
 const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, focused }: { icon: any; focused: boolean }) {
   const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
-  const glowOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
-  const bgOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const dotOpacity = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -19,18 +18,13 @@ const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, 
         speed: 28,
         bounciness: focused ? 12 : 4,
       }),
-      Animated.timing(glowOpacity, {
+      Animated.timing(dotOpacity, {
         toValue: focused ? 1 : 0,
         duration: 200,
         useNativeDriver: true,
       }),
-      Animated.timing(bgOpacity, {
-        toValue: focused ? 1 : 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
     ]).start();
-  }, [focused, scale, glowOpacity, bgOpacity]);
+  }, [focused, scale, dotOpacity]);
 
   return (
     <View style={styles.iconContainer}>
@@ -40,13 +34,12 @@ const AnimatedTabBarIcon = React.memo(function AnimatedTabBarIcon({ icon: Icon, 
           transform: [{ scale }],
         },
       ]}>
-        <Animated.View style={[styles.activeIconBg, { opacity: bgOpacity }]} />
         <Icon
-          size={26}
-          color={focused ? '#FFD600' : '#FFFFFF'}
-          strokeWidth={focused ? 2.5 : 2}
+          size={24}
+          color={focused ? '#FFD600' : 'rgba(255, 255, 255, 0.5)'}
+          strokeWidth={focused ? 2.2 : 1.8}
         />
-        <Animated.View style={[styles.glowEffect, { opacity: glowOpacity }]} />
+        <Animated.View style={[styles.activeDot, { opacity: dotOpacity }]} />
       </Animated.View>
     </View>
   );
@@ -69,7 +62,7 @@ function TabBarBackground() {
       {
         left: horizontalMargin,
         right: horizontalMargin,
-        bottom: Math.max(insets.bottom, 20),
+        bottom: Math.max(insets.bottom, 16),
       }
     ]}>
       {Platform.OS === 'web' ? (
@@ -107,8 +100,8 @@ export default function TabLayout() {
           {
             paddingHorizontal: tabHorizontalPadding,
             bottom: 0,
-            height: 80 + Math.max(insets.bottom, 20),
-            paddingBottom: Math.max(insets.bottom, 20),
+            height: 64 + Math.max(insets.bottom, 16),
+            paddingBottom: Math.max(insets.bottom, 16),
           }
         ],
         tabBarBackground: () => <TabBarBackground />,
@@ -207,27 +200,27 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: 'transparent',
     borderTopWidth: 0,
-    paddingTop: 20,
+    paddingTop: 14,
     elevation: 0,
     shadowColor: 'transparent',
   },
   tabBarBackgroundContainer: {
     position: 'absolute',
-    height: 80,
-    borderRadius: 40,
+    height: 64,
+    borderRadius: 32,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
       },
       android: {
-        elevation: 16,
+        elevation: 12,
       },
       web: {
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 6px 24px rgba(0, 0, 0, 0.45)',
       },
     }) as any,
   },
@@ -236,59 +229,37 @@ const styles = StyleSheet.create({
   },
   tabBarOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(30, 30, 30, 0.5)',
-    borderRadius: 40,
+    backgroundColor: 'rgba(20, 20, 20, 0.65)',
+    borderRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   tabBarBackgroundWeb: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(30, 30, 30, 0.75)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: 40,
+    backgroundColor: 'rgba(20, 20, 20, 0.8)',
+    backdropFilter: 'blur(24px)',
+    borderRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   } as any,
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    position: 'relative',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
-  activeIconBg: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 214, 0, 0.1)',
-    borderRadius: 24,
-  },
-  glowEffect: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#FFD600',
-    opacity: 0.15,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#FFD600',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 0,
-      },
-      web: {
-        boxShadow: '0 0 16px rgba(255, 214, 0, 0.4)',
-      },
-    }) as any,
+    marginTop: 4,
   },
 });
-
