@@ -274,17 +274,22 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     const currentGoal = goalStore.currentGoal;
     const today = new Date().toISOString().split('T')[0];
 
-    const todayTasks = tasks.filter(t => t.date?.startsWith(today));
+    const goalTasks = currentGoal ? tasks.filter(t => t.goalId === currentGoal.id) : tasks;
+    const todayTasks = goalTasks.filter(t => t.date?.startsWith(today));
     const completedToday = todayTasks.filter(t => t.completed).length;
+    const totalCompleted = goalTasks.filter(t => t.completed).length;
+    const totalPending = goalTasks.filter(t => !t.completed).length;
+    const overdueTasks = goalTasks.filter(t => !t.completed && t.date && t.date.split('T')[0] < today);
 
     const currentStreak = progress?.currentStreak ?? 0;
     const bestStreak = progress?.bestStreak ?? 0;
-    const totalCompletedTasks = progress?.totalCompletedTasks ?? tasks.filter(t => t.completed).length;
+    const totalCompletedTasks = progress?.totalCompletedTasks ?? totalCompleted;
     const focusTimeDisplay = progress?.focusTimeDisplay ?? '0m';
 
-    let prompt = `You are GoalForge AI — a friendly, concise productivity coach. Today: ${today}.\n\n`;
+    let prompt = `You are GoalForge AI — a friendly, concise productivity coach with FULL access to the user's plan. Today: ${today}.\n\n`;
     prompt += `RULES:\n`;
     prompt += `- You have FULL UNRESTRICTED access to ALL user data: tasks, goals, progress, stats. Use tools proactively.\n`;
+    prompt += `- You are the user's plan coordinator. You know every task in their plan and can guide them.\n`;
     prompt += `- When user asks to create/add/generate a task, use createTask immediately. Do NOT ask follow-up questions unless truly ambiguous.\n`;
     prompt += `- When user asks to edit/change/update a task, use editTask tool.\n`;
     prompt += `- When user asks to see tasks, use listTasks tool.\n`;
@@ -299,32 +304,73 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     prompt += `- You can combine multiple tools in one response for complex requests.\n`;
     prompt += `- Be concise (2-4 sentences). Use a friendly, encouraging tone.\n`;
     prompt += `- IMPORTANT: Always respond in the SAME language as the user's message.\n`;
-    prompt += `- When creating a task, pick sensible defaults for any missing fields.\n\n`;
+    prompt += `- When creating a task, pick sensible defaults for any missing fields.\n`;
+    prompt += `- When user asks about their plan, schedule, or what to do next — use the full task list below to advise them.\n`;
+    prompt += `- Proactively suggest what the user should focus on based on priorities, deadlines, and progress.\n\n`;
 
     if (currentGoal) {
-      prompt += `User's goal: "${currentGoal.title}"\n`;
-      if (currentGoal.endDate) {
-        prompt += `Deadline: ${currentGoal.endDate}\n`;
-      }
+      prompt += `GOAL: "${currentGoal.title}"\n`;
+      if (currentGoal.description) prompt += `Description: ${currentGoal.description}\n`;
+      if (currentGoal.category) prompt += `Category: ${currentGoal.category}\n`;
+      if (currentGoal.endDate) prompt += `Deadline: ${currentGoal.endDate}\n`;
+      if (currentGoal.startDate) prompt += `Started: ${currentGoal.startDate}\n`;
+    } else {
+      prompt += `NO ACTIVE GOAL. User needs to create a goal first.\n`;
     }
 
-    prompt += `\nStats: ${totalCompletedTasks} tasks completed, Focus: ${focusTimeDisplay}`;
+    prompt += `\nSTATS: ${totalCompletedTasks} completed, ${totalPending} pending, Focus: ${focusTimeDisplay}`;
     if (currentStreak > 0) {
       prompt += `, ${currentStreak}-day streak (best: ${bestStreak})`;
+    }
+    if (overdueTasks.length > 0) {
+      prompt += `, ⚠️ ${overdueTasks.length} overdue`;
     }
     prompt += `\n`;
 
     if (todayTasks.length > 0) {
-      prompt += `\nToday (${completedToday}/${todayTasks.length} done):\n`;
-      todayTasks.slice(0, 8).forEach((t) => {
-        prompt += `${t.completed ? '✓' : '○'} ${t.title} [id:${t.id}]\n`;
+      prompt += `\nTODAY's TASKS (${completedToday}/${todayTasks.length} done):\n`;
+      todayTasks.forEach((t) => {
+        const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
+        prompt += `${t.completed ? '✅' : '⬜'} ${prio} ${t.title} (${t.duration || '?'}) [id:${t.id}]\n`;
       });
-      if (todayTasks.length > 8) {
-        prompt += `... +${todayTasks.length - 8} more\n`;
-      }
     } else {
-      prompt += `\nNo tasks for today.\n`;
+      prompt += `\nNo tasks scheduled for today.\n`;
     }
+
+    const futureTasks = goalTasks.filter(t => !t.completed && t.date && t.date.split('T')[0] > today);
+    const pastPending = goalTasks.filter(t => !t.completed && t.date && t.date.split('T')[0] < today);
+    const completedTasks = goalTasks.filter(t => t.completed);
+
+    if (pastPending.length > 0) {
+      prompt += `\nOVERDUE TASKS (${pastPending.length}):\n`;
+      pastPending.slice(0, 10).forEach((t) => {
+        const dateStr = t.date ? t.date.split('T')[0] : '';
+        prompt += `⚠️ ${t.title} (due: ${dateStr}) [id:${t.id}]\n`;
+      });
+      if (pastPending.length > 10) prompt += `... +${pastPending.length - 10} more overdue\n`;
+    }
+
+    if (futureTasks.length > 0) {
+      prompt += `\nUPCOMING TASKS (${futureTasks.length}):\n`;
+      const sorted = [...futureTasks].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      sorted.slice(0, 15).forEach((t) => {
+        const dateStr = t.date ? t.date.split('T')[0] : '';
+        const prio = t.priority === 'high' ? '🔴' : t.priority === 'low' ? '🟢' : '🟡';
+        prompt += `${prio} ${t.title} (${dateStr}, ${t.duration || '?'}) [id:${t.id}]\n`;
+      });
+      if (futureTasks.length > 15) prompt += `... +${futureTasks.length - 15} more upcoming\n`;
+    }
+
+    if (completedTasks.length > 0) {
+      prompt += `\nRECENTLY COMPLETED (last 5):\n`;
+      const sorted = [...completedTasks].sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+      sorted.slice(0, 5).forEach((t) => {
+        prompt += `✅ ${t.title} [id:${t.id}]\n`;
+      });
+      if (completedTasks.length > 5) prompt += `... +${completedTasks.length - 5} more completed\n`;
+    }
+
+    prompt += `\nTOTAL PLAN: ${goalTasks.length} tasks (${totalCompleted} done, ${totalPending} remaining)\n`;
 
     return prompt;
   }, [goalStore.dailyTasks, goalStore.currentGoal, progress?.currentStreak, progress?.bestStreak, progress?.totalCompletedTasks, progress?.focusTimeDisplay]);
@@ -565,28 +611,37 @@ export const [ChatProvider, useChat] = createContextHook(() => {
             : 1;
 
           const created: string[] = [];
-          for (const t of input.tasks) {
-            const taskDate = t.date
-              ? new Date(t.date + 'T12:00:00').toISOString()
-              : new Date().toISOString();
+          const createSequentially = async () => {
+            for (const t of input.tasks) {
+              const taskDate = t.date
+                ? new Date(t.date + 'T12:00:00').toISOString()
+                : new Date().toISOString();
 
-            store.addTask({
-              day: nextDay++,
-              date: taskDate,
-              title: t.title,
-              description: t.description || 'Task created via AI assistant',
-              duration: t.duration || '30 minutes',
-              priority: (t.priority || 'medium') as 'high' | 'medium' | 'low',
-              difficulty: (t.difficulty || 'medium') as 'easy' | 'medium' | 'hard',
-              estimatedTime: t.estimatedTime || 30,
-              tips: t.tips || ['Stay focused'],
-            }).catch((err: unknown) => {
-              console.error('[Chat Tool] Failed to create task:', t.title, err);
-            });
-            created.push(t.title);
-          }
+              try {
+                await store.addTask({
+                  day: nextDay++,
+                  date: taskDate,
+                  title: t.title,
+                  description: t.description || 'Task created via AI assistant',
+                  duration: t.duration || '30 minutes',
+                  priority: (t.priority || 'medium') as 'high' | 'medium' | 'low',
+                  difficulty: (t.difficulty || 'medium') as 'easy' | 'medium' | 'hard',
+                  estimatedTime: t.estimatedTime || 30,
+                  tips: t.tips || ['Stay focused'],
+                });
+                created.push(t.title);
+                console.log('[Chat Tool] Bulk task created:', t.title);
+              } catch (err: unknown) {
+                console.error('[Chat Tool] Failed to create bulk task:', t.title, err);
+              }
+            }
+          };
 
-          return `Created ${created.length} tasks: ${created.join(', ')}`;
+          createSequentially().catch((err: unknown) => {
+            console.error('[Chat Tool] bulkCreateTasks sequential error:', err);
+          });
+
+          return `Creating ${input.tasks.length} tasks: ${input.tasks.map((t: { title: string }) => t.title).join(', ')}`;
         }
 
         default:
