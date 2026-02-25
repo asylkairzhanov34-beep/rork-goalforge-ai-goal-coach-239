@@ -1,5 +1,6 @@
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
-const MODEL = 'gpt-5-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
+const MODEL = process.env.EXPO_PUBLIC_OPENAI_MODEL?.trim() || DEFAULT_MODEL;
 
 function getApiKey(): string {
   const key = process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
