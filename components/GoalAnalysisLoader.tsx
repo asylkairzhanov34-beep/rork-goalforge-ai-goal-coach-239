@@ -218,7 +218,7 @@ export function GoalAnalysisLoader({ onComplete }: GoalAnalysisLoaderProps) {
 
   useEffect(() => {
     let cumulativeTime = 0;
-    const timeouts: NodeJS.Timeout[] = [];
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
 
     ANALYSIS_STEPS.forEach((step, index) => {
       const activateTimeout = setTimeout(() => {
