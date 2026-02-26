@@ -296,44 +296,44 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 10, 16, 0.78)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(12, 12, 14, 0.82)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 34,
   },
   webBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 10, 16, 0.92)',
+    backgroundColor: 'rgba(12, 12, 14, 0.95)',
     borderRadius: 34,
   },
   activeBubble: {
     position: 'absolute',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    backgroundColor: 'rgba(246, 211, 0, 0.18)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(180, 160, 0, 0.35)',
+    backgroundColor: 'rgba(80, 70, 0, 0.85)',
     ...Platform.select({
       ios: {
-        shadowColor: '#F6D300',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
+        shadowColor: '#8B7A00',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
       },
       android: {
         elevation: 6,
       },
       web: {
-        boxShadow: '0 4px 14px rgba(246, 211, 0, 0.22)',
+        boxShadow: '0 2px 10px rgba(139, 122, 0, 0.35)',
       },
     }),
   },
   bubbleWebFallback: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(100, 90, 0, 0.6)',
   },
   bubbleTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(246, 211, 0, 0.38)',
+    backgroundColor: 'rgba(120, 105, 0, 0.5)',
   },
   iconFrame: {
     width: 48,
