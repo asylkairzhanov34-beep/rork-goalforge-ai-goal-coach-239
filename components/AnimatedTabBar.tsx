@@ -117,7 +117,7 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
           const icon = options.tabBarIcon?.({
             focused: isFocused,
             color: isFocused ? '#FFD600' : 'rgba(255, 255, 255, 0.6)',
-            size: 32,
+            size: 36,
           });
 
           return (
@@ -178,12 +178,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    marginTop: 3,
   },
   glowEffect: {
     position: 'absolute',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#FFD600',
     shadowColor: '#FFD600',
     shadowOffset: { width: 0, height: 0 },
@@ -194,8 +195,8 @@ const styles = StyleSheet.create({
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 50,
-    height: 50,
+    width: 54,
+    height: 54,
     zIndex: 1,
   },
 
