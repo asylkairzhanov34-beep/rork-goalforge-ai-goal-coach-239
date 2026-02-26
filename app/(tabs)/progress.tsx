@@ -329,18 +329,20 @@ export default function ProgressScreen() {
             ).map(({ key, label, Icon }) => {
               const active = selectedPeriod === key;
               return (
-                <PressableScale
-                  key={key}
-                  style={[styles.periodButton, active && styles.periodButtonActive]}
-                  onPress={() => handlePeriodChange(key)}
-                  haptic="selection"
-                  scaleValue={0.95}
-                >
-                  <Icon size={16} color={active ? '#000' : 'rgba(255,255,255,0.5)'} />
-                  <Text style={[styles.periodButtonText, active && styles.periodButtonTextActive]}>
-                    {label}
-                  </Text>
-                </PressableScale>
+                <View key={key} style={styles.periodButtonSlot}>
+                  <PressableScale
+                    style={[styles.periodButton, active && styles.periodButtonActive]}
+                    onPress={() => handlePeriodChange(key)}
+                    haptic="selection"
+                    scaleValue={0.95}
+                    testID={`progress-period-${key}`}
+                  >
+                    <Icon size={16} color={active ? '#000' : 'rgba(255,255,255,0.5)'} />
+                    <Text style={[styles.periodButtonText, active && styles.periodButtonTextActive]}>
+                      {label}
+                    </Text>
+                  </PressableScale>
+                </View>
               );
             })}
           </View>
@@ -918,8 +920,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  periodButton: {
+  periodButtonSlot: {
     flex: 1,
+  },
+  periodButton: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
