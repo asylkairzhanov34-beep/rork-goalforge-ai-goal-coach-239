@@ -161,6 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
     paddingHorizontal: 24,
+    paddingTop: 8,
   },
   tabButton: {
     flex: 1,
