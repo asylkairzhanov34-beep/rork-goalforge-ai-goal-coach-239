@@ -1,14 +1,16 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Animated, TextInput, ImageBackground, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Calendar, Sparkles, Trophy, ListTodo, Search, Clock, Star, Users, ChevronRight, Flame, Dumbbell, Rocket, Smartphone, BookOpen, Heart, Zap, Leaf, Activity, User, Sunrise, Ban, Code2, Globe, TrendingUp } from 'lucide-react-native';
+import { Calendar, Sparkles, Trophy, ListTodo, Search, Clock, Star, Users, ChevronRight, Flame, Dumbbell, Rocket, Smartphone, BookOpen, Heart, Zap, Leaf, Activity, User, Sunrise, Ban, Code2, Globe, TrendingUp, Lock, Crown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useGoalStore } from '@/hooks/use-goal-store';
 import { useSmartTaskGenerator } from '@/hooks/use-smart-task-generator';
 import { useChallengeStore } from '@/hooks/use-challenge-store';
+import { useSubscription } from '@/hooks/use-subscription-store';
 import { WeeklyPlanView } from '@/components/WeeklyPlanView';
 import { TaskCreationModal } from '@/components/TaskCreationModal';
+import PaywallModal from '@/components/PaywallModal';
 import { DailyTask } from '@/types/goal';
 import { ChallengeTemplate, ChallengeTask } from '@/types/challenge';
 import { CHALLENGE_CATEGORIES, getPopularChallenges } from '@/constants/challenges';
@@ -227,9 +229,13 @@ ChallengeCard.displayName = 'ChallengeCard';
 export default function PlanScreen() {
   const store = useGoalStore();
   const challengeStore = useChallengeStore();
+  const { isTrialExpired, isPremium, isInitialized } = useSubscription();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+  const [showPaywall, setShowPaywall] = useState(false);
+  const lockPulse = useRef(new Animated.Value(1)).current;
+  const lockGlow = useRef(new Animated.Value(0)).current;
   const isTablet = screenWidth >= 768;
   const [selectedDay, setSelectedDay] = useState(getCurrentDayKey());
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -241,6 +247,24 @@ export default function PlanScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const pulseAnim = useState(new Animated.Value(1))[0];
+
+  useEffect(() => {
+    if (isTrialExpired && !isPremium) {
+      setShowPaywall(true);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(lockPulse, { toValue: 1.08, duration: 1200, useNativeDriver: true }),
+          Animated.timing(lockPulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        ])
+      ).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(lockGlow, { toValue: 1, duration: 1500, useNativeDriver: true }),
+          Animated.timing(lockGlow, { toValue: 0.3, duration: 1500, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+  }, [isTrialExpired, isPremium, lockPulse, lockGlow]);
 
   const { 
     analytics, 
@@ -469,6 +493,53 @@ export default function PlanScreen() {
     return (
       <View style={styles.container}>
         <PlanScreenSkeleton />
+      </View>
+    );
+  }
+
+  if (isTrialExpired && !isPremium) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}> 
+        <View style={styles.lockedContainer}>
+          <Animated.View style={[styles.lockedIconOuter, { transform: [{ scale: lockPulse }] }]}>
+            <Animated.View style={[styles.lockedIconGlow, { opacity: lockGlow }]} />
+            <View style={styles.lockedIconInner}>
+              <Lock size={36} color="#FFD600" />
+            </View>
+          </Animated.View>
+          <Text style={styles.lockedTitle}>Trial Ended</Text>
+          <Text style={styles.lockedSubtitle}>
+            Your 24-hour free trial has expired. Upgrade to Premium to unlock your personalized plan, smart tasks, and challenges.
+          </Text>
+          <TouchableOpacity
+            style={styles.lockedUpgradeButton}
+            onPress={() => router.push('/subscription' as any)}
+            activeOpacity={0.8}
+          >
+            <Crown size={20} color="#000" />
+            <Text style={styles.lockedUpgradeText}>Get Premium</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.lockedRestoreButton}
+            onPress={() => setShowPaywall(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.lockedRestoreText}>Already subscribed? Restore</Text>
+          </TouchableOpacity>
+        </View>
+        <PaywallModal
+          visible={showPaywall}
+          variant="feature"
+          featureName="Plan & Smart Tasks"
+          onPrimaryAction={() => {
+            setShowPaywall(false);
+            router.push('/subscription' as any);
+          }}
+          onSecondaryAction={() => setShowPaywall(false)}
+          onRequestClose={() => setShowPaywall(false)}
+          primaryLabel="Get Premium"
+          secondaryLabel="Later"
+        />
       </View>
     );
   }
@@ -1187,5 +1258,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textSecondary,
     marginTop: 4,
+  },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  lockedIconOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  lockedIconGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 214, 0, 0.15)',
+  },
+  lockedIconInner: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 214, 0, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 214, 0, 0.2)',
+  },
+  lockedTitle: {
+    fontSize: 26,
+    fontWeight: 'bold' as const,
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center' as const,
+  },
+  lockedSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center' as const,
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  lockedUpgradeButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: '#FFD600',
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 16,
+    gap: 10,
+    width: '100%' as const,
+    marginBottom: 16,
+  },
+  lockedUpgradeText: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#000000',
+  },
+  lockedRestoreButton: {
+    paddingVertical: 10,
+  },
+  lockedRestoreText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
   },
 });
