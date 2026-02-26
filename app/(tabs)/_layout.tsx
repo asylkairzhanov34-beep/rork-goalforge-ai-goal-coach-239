@@ -29,8 +29,8 @@ interface AppleTabIconProps {
 const BRAND = theme.colors.primary;
 const BAR_HEIGHT = 74;
 const BUBBLE_SIZE = 56;
-const ICON_SIZE = 23;
-const ICON_VERTICAL_OFFSET = 12;
+const ICON_SIZE = 25;
+const ICON_VERTICAL_OFFSET = 17;
 const TAB_ROUTES = ['home', 'plan', 'progress', 'timer', 'profile'] as const;
 const MAX_TAB_BAR_WIDTH = 520;
 
