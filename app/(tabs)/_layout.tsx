@@ -123,7 +123,7 @@ export default function TabLayout() {
   );
 
   const bottomInset = useMemo<number>(() => Math.max(insets.bottom, 8), [insets.bottom]);
-  const barHeight = useMemo<number>(() => 64 + bottomInset, [bottomInset]);
+  const barHeight = useMemo<number>(() => BAR_INNER_HEIGHT + bottomInset, [bottomInset]);
 
   const barInnerWidth = useMemo<number>(() => width - sideInset * 2, [sideInset, width]);
   const tabItemWidth = useMemo<number>(() => {
@@ -169,7 +169,7 @@ export default function TabLayout() {
           {
             paddingHorizontal: sideInset,
             height: barHeight,
-            paddingBottom: bottomInset - 2,
+            paddingBottom: bottomInset,
           },
         ],
         tabBarBackground: () => (
@@ -264,10 +264,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     elevation: 0,
     shadowColor: 'transparent',
-    paddingTop: 8,
+    paddingTop: 0,
   },
   tabBarItem: {
-    height: 56,
+    height: BAR_INNER_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 4,
