@@ -32,6 +32,8 @@ interface AppleTabBarBackgroundProps {
   bubbleWidth: number;
 }
 
+const BAR_INNER_HEIGHT = 64;
+
 const TAB_ROUTES = ['home', 'plan', 'progress', 'timer', 'profile'] as const;
 const MAX_TAB_BAR_WIDTH = 560;
 
@@ -64,6 +66,7 @@ const AppleTabBarBackground = memo(function AppleTabBarBackground({
   bubbleX,
   bubbleWidth,
 }: AppleTabBarBackgroundProps) {
+  const bubbleVerticalOffset = (BAR_INNER_HEIGHT - bubbleWidth) / 2;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" testID="apple-tab-bar-background">
       <View
@@ -73,6 +76,7 @@ const AppleTabBarBackground = memo(function AppleTabBarBackground({
             left: sideInset,
             right: sideInset,
             bottom: bottomInset,
+            height: BAR_INNER_HEIGHT,
           },
         ]}
       >
@@ -89,8 +93,10 @@ const AppleTabBarBackground = memo(function AppleTabBarBackground({
           styles.activeBubble,
           {
             width: bubbleWidth,
-            left: sideInset + 6,
-            bottom: bottomInset + 8,
+            height: bubbleWidth,
+            borderRadius: bubbleWidth / 2,
+            left: sideInset,
+            bottom: bottomInset + bubbleVerticalOffset,
             transform: [{ translateX: bubbleX }],
           },
         ]}
@@ -99,7 +105,7 @@ const AppleTabBarBackground = memo(function AppleTabBarBackground({
         {Platform.OS === 'web' ? (
           <View style={styles.bubbleWebFallback} />
         ) : (
-          <BlurView intensity={65} tint="light" style={styles.blurView} />
+          <BlurView intensity={50} tint="light" style={styles.blurView} />
         )}
         <View style={styles.bubbleTint} />
       </Animated.View>
@@ -116,27 +122,31 @@ export default function TabLayout() {
     [width]
   );
 
-  const bottomInset = useMemo<number>(() => Math.max(insets.bottom, 10), [insets.bottom]);
-  const barHeight = useMemo<number>(() => 72 + bottomInset, [bottomInset]);
+  const bottomInset = useMemo<number>(() => Math.max(insets.bottom, 8), [insets.bottom]);
+  const barHeight = useMemo<number>(() => 64 + bottomInset, [bottomInset]);
 
+  const barInnerWidth = useMemo<number>(() => width - sideInset * 2, [sideInset, width]);
   const tabItemWidth = useMemo<number>(() => {
-    const availableWidth = width - sideInset * 2;
-    return Math.max(availableWidth / TAB_ROUTES.length, 56);
-  }, [sideInset, width]);
+    return Math.max(barInnerWidth / TAB_ROUTES.length, 56);
+  }, [barInnerWidth]);
 
-  const bubbleWidth = useMemo<number>(() => Math.max(tabItemWidth - 12, 52), [tabItemWidth]);
+  const bubbleSize = 52;
 
   const bubbleX = useRef<Animated.Value>(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = useState<number>(0);
 
+  const bubbleOffset = useMemo<number>(() => {
+    return activeIndex * tabItemWidth + (tabItemWidth - bubbleSize) / 2;
+  }, [activeIndex, tabItemWidth]);
+
   useEffect(() => {
     Animated.spring(bubbleX, {
-      toValue: activeIndex * tabItemWidth,
-      tension: 180,
-      friction: 18,
+      toValue: bubbleOffset,
+      tension: 200,
+      friction: 20,
       useNativeDriver: true,
     }).start();
-  }, [activeIndex, bubbleX, tabItemWidth]);
+  }, [bubbleOffset, bubbleX]);
 
   const onTabPress = useCallback(
     (routeName: string, nextIndex: number, originalPress?: ((event: GestureResponderEvent) => void) | undefined) =>
@@ -159,7 +169,7 @@ export default function TabLayout() {
           {
             paddingHorizontal: sideInset,
             height: barHeight,
-            paddingBottom: bottomInset,
+            paddingBottom: bottomInset - 2,
           },
         ],
         tabBarBackground: () => (
@@ -167,7 +177,7 @@ export default function TabLayout() {
             sideInset={sideInset}
             bottomInset={bottomInset}
             bubbleX={bubbleX}
-            bubbleWidth={bubbleWidth}
+            bubbleWidth={bubbleSize}
           />
         ),
         tabBarItemStyle: styles.tabBarItem,
@@ -257,15 +267,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tabBarItem: {
-    height: 62,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 4,
   },
   backgroundWrap: {
     position: 'absolute',
-    height: 72,
-    borderRadius: 38,
+    borderRadius: 34,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -289,34 +298,32 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(8, 10, 16, 0.78)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 38,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 34,
   },
   webBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(8, 10, 16, 0.92)',
-    borderRadius: 38,
+    borderRadius: 34,
   },
   activeBubble: {
     position: 'absolute',
-    height: 56,
-    borderRadius: 28,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.28)',
-    backgroundColor: 'rgba(246, 211, 0, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: 'rgba(246, 211, 0, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#F6D300',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.24,
-        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 7,
+        elevation: 6,
       },
       web: {
-        boxShadow: '0 8px 18px rgba(246, 211, 0, 0.25)',
+        boxShadow: '0 4px 14px rgba(246, 211, 0, 0.22)',
       },
     }),
   },
@@ -326,12 +333,12 @@ const styles = StyleSheet.create({
   },
   bubbleTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(246, 211, 0, 0.46)',
+    backgroundColor: 'rgba(246, 211, 0, 0.38)',
   },
   iconFrame: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
