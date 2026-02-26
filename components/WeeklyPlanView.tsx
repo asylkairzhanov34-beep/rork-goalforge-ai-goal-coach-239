@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Animated, Easing, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, Clock, Target, CheckCircle, Plus, ChevronRight, Lock, Flame, Check } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
@@ -324,8 +324,7 @@ export function WeeklyPlanView({
     });
 
     const challengeTheme = isChallengeTask ? getChallengeTheme(task.challengeName, task.title) : null;
-    const backgroundImage = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tipdit1tsyrunqcm8lzmm';
-    
+
     const borderColor = isChallengeTask && challengeTheme ? challengeTheme.border : 'rgba(80, 80, 80, 0.5)';
     const glowColor = isChallengeTask && challengeTheme ? challengeTheme.glow : 'rgba(255, 214, 0, 0.25)';
     const cardShadowColor = isChallengeTask && challengeTheme ? challengeTheme.primary : '#FFD600';
@@ -461,14 +460,9 @@ export function WeeklyPlanView({
               {renderCardContent()}
             </LinearGradient>
           ) : (
-            <ImageBackground
-              source={{ uri: backgroundImage }}
-              style={styles.taskCardImageBg}
-              imageStyle={styles.taskCardImageStyle}
-              resizeMode="cover"
-            >
+            <View style={styles.taskCardImageBg}>
               {renderCardContent()}
-            </ImageBackground>
+            </View>
           )}
               </View>
       </Animated.View>
@@ -888,13 +882,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   tasksContainer: {
-    gap: 14,
+    gap: 12,
     paddingBottom: 40,
   },
   taskCardWrapper: {
     borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 6,
+    marginBottom: 0,
     borderWidth: 1.5,
     ...Platform.select({
       ios: {
@@ -910,9 +904,7 @@ const styles = StyleSheet.create({
   },
   taskCardImageBg: {
     width: '100%',
-  },
-  taskCardImageStyle: {
-    borderRadius: 18,
+    backgroundColor: '#121212',
   },
   taskCardOverlay: {
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
