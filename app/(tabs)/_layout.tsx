@@ -165,13 +165,19 @@ export default function TabLayout() {
           {
             paddingHorizontal: sideInset,
             height: barTotalHeight,
-            paddingBottom: bottomInset,
+            paddingBottom: 0,
           },
         ],
         tabBarBackground: () => (
           <TabBarBg sideInset={sideInset} bottomInset={bottomInset} bubbleX={bubbleX} />
         ),
-        tabBarItemStyle: styles.tabBarItem,
+        tabBarItemStyle: {
+          height: BAR_HEIGHT,
+          justifyContent: 'center' as const,
+          alignItems: 'center' as const,
+          paddingBottom: bottomInset,
+          zIndex: 4,
+        },
         tabBarButton: ({ accessibilityState, children, onLongPress, onPress, style, testID }) => {
           const routeName = testID?.replace('tab-', '') ?? '';
           const nextIndex = TAB_ROUTES.findIndex((r) => r === routeName);
@@ -249,12 +255,7 @@ const styles = StyleSheet.create({
     shadowColor: 'transparent',
     paddingTop: 0,
   },
-  tabBarItem: {
-    height: BAR_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 4,
-  },
+
   barShape: {
     position: 'absolute',
     borderRadius: BAR_HEIGHT / 2,
