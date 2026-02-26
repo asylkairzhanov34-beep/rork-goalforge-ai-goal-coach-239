@@ -49,11 +49,13 @@ const AppleTabIcon = memo(function AppleTabIcon({ icon: Icon, focused }: AppleTa
       style={[styles.iconFrame, { transform: [{ scale: scaleAnim }] }]}
       testID="apple-tab-icon"
     >
-      <Icon
-        size={22}
-        color={focused ? '#000000' : 'rgba(255,255,255,0.5)'}
-        strokeWidth={focused ? 2.5 : 1.8}
-      />
+      <View style={styles.iconInner}>
+        <Icon
+          size={22}
+          color={focused ? '#000000' : 'rgba(255,255,255,0.5)'}
+          strokeWidth={focused ? 2.5 : 1.8}
+        />
+      </View>
     </Animated.View>
   );
 });
@@ -312,5 +314,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
+  },
+  iconInner: {
+    transform: [{ translateY: Platform.OS === 'ios' ? 1.5 : 0 }],
   },
 });
