@@ -841,7 +841,7 @@ export default function TodayScreen() {
         <Animated.View 
           style={[
             styles.floatingButtonContainer, 
-            { bottom: insets.bottom + 84 },
+            { bottom: insets.bottom + 80 },
             {
               opacity: buttonOpacity,
               transform: [
