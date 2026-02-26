@@ -316,6 +316,6 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   iconInner: {
-    transform: [{ translateY: Platform.OS === 'ios' ? 5 : 0 }],
+    transform: [{ translateY: Platform.OS === 'ios' ? 6 : 0 }],
   },
 });
