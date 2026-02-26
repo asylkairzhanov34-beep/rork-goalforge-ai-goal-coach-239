@@ -7,7 +7,7 @@ import { RewardOrb } from '@/components/RewardOrb';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Target, Wind, Sparkles, Calendar, Shield, Trophy, BookOpen, Leaf, ChevronRight, Gift, Flame, Clock } from 'lucide-react-native';
+import { Target, Wind, Sparkles, Calendar, Shield, Trophy, BookOpen, Leaf, ChevronRight, Gift, Flame, Clock, Bell } from 'lucide-react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/constants/theme';
@@ -737,6 +737,19 @@ export default function TodayScreen() {
                   <BookOpen size={22} color={theme.colors.primary} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.quickActionText}>Reflect</Text>
+              </PressableScale>
+
+              <PressableScale
+                style={styles.quickActionItem}
+                onPress={() => router.push('/notifications' as any)}
+                testID="quick-action-reminders"
+                haptic="light"
+                scaleValue={0.93}
+              >
+                <View style={styles.quickActionIconWrap}>
+                  <Bell size={22} color={theme.colors.primary} strokeWidth={1.5} />
+                </View>
+                <Text style={styles.quickActionText}>Remind</Text>
               </PressableScale>
             </View>
           </View>
