@@ -27,8 +27,8 @@ interface AppleTabIconProps {
 }
 
 const BRAND = theme.colors.primary;
-const BAR_HEIGHT = 56;
-const BUBBLE_SIZE = 44;
+const BAR_HEIGHT = 62;
+const BUBBLE_SIZE = 48;
 const TAB_ROUTES = ['home', 'plan', 'progress', 'timer', 'profile'] as const;
 const MAX_TAB_BAR_WIDTH = 520;
 
@@ -51,7 +51,7 @@ const AppleTabIcon = memo(function AppleTabIcon({ icon: Icon, focused }: AppleTa
     >
       <View style={styles.iconInner}>
         <Icon
-          size={22}
+          size={23}
           color={focused ? '#000000' : 'rgba(255,255,255,0.5)'}
           strokeWidth={focused ? 2.5 : 1.8}
         />
@@ -308,9 +308,9 @@ const styles = StyleSheet.create({
     }),
   },
   iconFrame: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: BUBBLE_SIZE,
+    height: BUBBLE_SIZE,
+    borderRadius: BUBBLE_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
