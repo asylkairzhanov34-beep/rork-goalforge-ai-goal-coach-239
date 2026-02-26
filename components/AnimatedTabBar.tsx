@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
     paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingTop: 14,
   },
   tabButton: {
     flex: 1,
@@ -194,8 +194,8 @@ const styles = StyleSheet.create({
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     zIndex: 1,
   },
 
