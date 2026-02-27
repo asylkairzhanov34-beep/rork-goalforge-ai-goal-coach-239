@@ -375,7 +375,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     return prompt;
   }, [goalStore.dailyTasks, goalStore.currentGoal, progress?.currentStreak, progress?.bestStreak, progress?.totalCompletedTasks, progress?.focusTimeDisplay]);
 
-  const executeTool = useCallback((toolName: string, argsStr: string): string => {
+  const executeTool = useCallback(async (toolName: string, argsStr: string): Promise<string> => {
     try {
       const input = JSON.parse(argsStr);
       console.log('[Chat Tool]', toolName, 'called with:', input);
@@ -416,12 +416,12 @@ export const [ChatProvider, useChat] = createContextHook(() => {
             tips: input.tips || ['Stay focused on the goal', 'Break it into smaller steps if needed'],
           };
 
-          store.addTask(newTaskData).then(() => {
-            console.log('[Chat Tool] Task created successfully:', input.title);
-          }).catch((err: unknown) => {
-            console.error('[Chat Tool] Failed to create task:', err);
-          });
+          if (!store.currentGoal) {
+            return 'No active goal found. Please create or activate a goal first, then I can add tasks to your plan.';
+          }
 
+          await store.addTask(newTaskData);
+          console.log('[Chat Tool] Task created successfully:', input.title);
           return `Task "${input.title}" has been created and added to the plan.`;
         }
 
@@ -438,6 +438,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           if (input.estimatedTime) updates.estimatedTime = input.estimatedTime;
           if (input.tips) updates.tips = input.tips;
           if (input.date) updates.date = new Date(input.date + 'T12:00:00').toISOString();
+
+          if (Object.keys(updates).length === 0) {
+            return `No changes provided for task "${task.title}".`;
+          }
 
           store.updateTask(task.id, updates);
           const changedFields = Object.keys(updates).join(', ');
@@ -483,7 +487,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           if (!task) return 'Task not found. Please check the task name or list your tasks first.';
           if (task.completed) return `Task "${task.title}" is already completed!`;
 
-          store.toggleTaskCompletion(task.id);
+          await store.toggleTaskCompletion(task.id);
           return `Task "${task.title}" marked as completed! Great job! 🎉`;
         }
 
@@ -492,14 +496,14 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           if (!task) return 'Task not found. Please check the task name or list your tasks first.';
           if (!task.completed) return `Task "${task.title}" is not completed yet.`;
 
-          store.toggleTaskCompletion(task.id);
+          await store.toggleTaskCompletion(task.id);
           return `Task "${task.title}" has been reopened (marked as not completed).`;
         }
 
         case 'deleteTask': {
           const task = findTaskByIdOrTitle(input?.taskId, input?.taskTitle);
           if (!task) return 'Task not found. Please check the task name.';
-          store.deleteTask(task.id);
+          await store.deleteTask(task.id);
           return `Task "${task.title}" has been deleted.`;
         }
 
@@ -508,7 +512,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           const tasks = store.dailyTasks || [];
           const goalTasks = tasks.filter(t => t.goalId === store.currentGoal?.id);
           const count = goalTasks.length;
-          goalTasks.forEach(t => store.deleteTask(t.id));
+          await Promise.all(goalTasks.map((t) => store.deleteTask(t.id)));
           return `All ${count} tasks have been deleted.`;
         }
 
@@ -576,7 +580,11 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           if (input.motivation) updates.motivation = input.motivation;
 
           const updatedGoal = { ...goal, ...updates };
-          store.updateGoal?.(updatedGoal);
+          if (Object.keys(updates).length === 0) {
+            return `No changes provided for goal "${goal.title}".`;
+          }
+
+          await store.updateGoal?.(updatedGoal);
           const changedFields = Object.keys(updates).join(', ');
           return `Goal "${updatedGoal.title}" updated (${changedFields}).`;
         }
@@ -584,7 +592,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         case 'resetGoal': {
           if (!input?.confirm) return 'Reset cancelled. Set confirm to true to proceed.';
           const goalTitle = store.currentGoal?.title || 'current goal';
-          store.resetGoal();
+          await store.resetGoal();
           return `Goal "${goalTitle}" and all its tasks have been deleted. User can now create a new goal.`;
         }
 
@@ -602,6 +610,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         case 'bulkCreateTasks': {
           if (!input.tasks || !Array.isArray(input.tasks) || input.tasks.length === 0) {
             return 'No tasks provided.';
+          }
+
+          if (!store.currentGoal) {
+            return 'No active goal found. Please create or activate a goal first, then I can add tasks to your plan.';
           }
 
           const tasks = store.dailyTasks || [];
@@ -661,15 +673,16 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     if (functionCalls.length > 0) {
       console.log('[Chat] Processing', functionCalls.length, 'function calls');
 
-      const toolOutputs: FunctionCallOutput[] = functionCalls.map((fc: FunctionCallItem) => {
-        const result = executeTool(fc.name, fc.arguments);
+      const toolOutputs: FunctionCallOutput[] = [];
+      for (const fc of functionCalls) {
+        const result = await executeTool(fc.name, fc.arguments);
         console.log('[Chat] Tool', fc.name, 'result:', result.substring(0, 100));
-        return {
+        toolOutputs.push({
           type: 'function_call_output' as const,
           call_id: fc.call_id,
           output: result,
-        };
-      });
+        });
+      }
 
       try {
         const followUpResponse = await callOpenAI({
