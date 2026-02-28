@@ -122,9 +122,27 @@ export default function VideoIntroScreen() {
     });
   }, [buttonScale, fadeAnim]);
 
+  const handleSkip = useCallback(() => {
+    console.log('[VideoIntro] Skip pressed');
+    handleContinue();
+  }, [handleContinue]);
+
+  const canContinue = videoFinished || videoError || Platform.OS === 'web';
+  const continueButtonLabel = canContinue ? 'Continue' : 'Skip intro';
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.videoWrapper}>
+        <SafeAreaView style={styles.skipContainer} edges={['top']}>
+          <TouchableOpacity
+            onPress={handleSkip}
+            activeOpacity={0.85}
+            style={styles.skipButton}
+            testID="video-intro-skip"
+          >
+            <Text style={styles.skipButtonText}>Skip</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
         {!videoLoaded && !videoError && (
           <View style={styles.videoLoader}>
             <ActivityIndicator size="large" color="#F59E0B" />
@@ -163,8 +181,8 @@ export default function VideoIntroScreen() {
             <TouchableOpacity
               onPress={handleContinue}
               activeOpacity={0.92}
-              style={[styles.buttonWrapper, !videoFinished && !videoError && Platform.OS !== 'web' && styles.buttonDisabled]}
-              disabled={!videoFinished && !videoError && Platform.OS !== 'web'}
+              style={[styles.buttonWrapper, !canContinue && styles.buttonDisabled]}
+              disabled={false}
               testID="video-intro-continue"
             >
               <LinearGradient
@@ -173,7 +191,7 @@ export default function VideoIntroScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.continueButtonText}>Continue</Text>
+                <Text style={styles.continueButtonText}>{continueButtonLabel}</Text>
                 <ChevronRight size={20} color="#000" strokeWidth={2.5} />
               </LinearGradient>
             </TouchableOpacity>
@@ -194,6 +212,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  skipContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+  },
+  skipButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  skipButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700' as const,
+    letterSpacing: 0.2,
   },
   video: {
     width: '100%',
