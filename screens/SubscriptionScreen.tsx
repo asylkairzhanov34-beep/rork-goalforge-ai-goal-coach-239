@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -137,7 +137,12 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     }
   }, [packages, selectedPackage]);
 
-  const handlePurchase = async () => {
+  const selectedPackageData = useMemo(
+    () => packages.find((p) => p.identifier === selectedPackage) ?? null,
+    [packages, selectedPackage]
+  );
+
+  const handlePurchase = useCallback(async () => {
     if (!selectedPackage) {
       Alert.alert('Select Plan', 'Please select a subscription plan');
       return;
@@ -158,9 +163,9 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
         { text: 'Continue', onPress: () => router.back() }
       ]);
     }
-  };
+  }, [selectedPackage, purchasePackage, router]);
 
-  const handleRestore = async () => {
+  const handleRestore = useCallback(async () => {
     const success = await restorePurchases();
     if (success) {
       Alert.alert('Restored!', 'Your subscription has been restored.', [
@@ -169,11 +174,11 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
     } else {
       Alert.alert('No Purchases Found', 'We couldn\'t find any previous purchases to restore.');
     }
-  };
+  }, [restorePurchases, router]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     router.back();
-  };
+  }, [router]);
 
   const crownRotateInterp = crownRotate.interpolate({
     inputRange: [0, 0.5, 1],
@@ -437,8 +442,8 @@ export default function SubscriptionScreen({ skipButton = false }: SubscriptionS
                 ) : (
                   <>
                     <Text style={styles.ctaText}>
-                      {selectedPackage && packages.length > 0
-                        ? `Subscribe — ${packages.find(p => p.identifier === selectedPackage)?.product.priceString ?? 'Start Premium'}`
+                      {selectedPackageData
+                        ? `Subscribe — ${selectedPackageData.product.priceString}`
                         : 'Start Premium'}
                     </Text>
                     <Animated.View style={{ opacity: ctaGlowOpacity }}>

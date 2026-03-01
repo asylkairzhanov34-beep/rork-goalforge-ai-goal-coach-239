@@ -26,6 +26,8 @@ import { useAuth } from '@/hooks/use-auth-store';
 import { useFirstTimeSetup } from '@/hooks/use-first-time-setup';
 
 import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
+import { useSubscription } from '@/hooks/use-subscription-store';
+import PaywallModal from '@/components/PaywallModal';
 
 
 
@@ -47,6 +49,8 @@ export default function TodayScreen() {
   const challengeStore = useChallengeStore();
   const progress = useProgress();
   const { shouldShowOffer, checking: subscriptionChecking, isPremium, markOfferDismissed } = useSubscriptionStatus();
+  const { isTrialExpired } = useSubscription();
+  const [showPlanPaywall, setShowPlanPaywall] = useState(false);
   const { pendingReward, modalVisible, closeModal, markOfferSeen, showPendingRewards, triggerTestReward, isDeveloper: isDevMode } = useRewardUnlock();
   const { isFirstOpenToday, markAsTriggered } = useDailyFirstOpen();
   const [showStreakBanner, setShowStreakBanner] = useState(false);
@@ -867,7 +871,13 @@ export default function TodayScreen() {
         >
           <TouchableOpacity 
             style={styles.glassmorphismButton}
-            onPress={() => router.push('/plan' as any)}
+            onPress={() => {
+              if (isTrialExpired && !isPremium) {
+                setShowPlanPaywall(true);
+                return;
+              }
+              router.push('/plan' as any);
+            }}
             activeOpacity={0.85}
           >
             <View style={styles.glassmorphismInner}>
@@ -893,6 +903,20 @@ export default function TodayScreen() {
           visible={modalVisible}
           reward={pendingReward}
           onClose={closeModal}
+        />
+
+        <PaywallModal
+          visible={showPlanPaywall}
+          variant="feature"
+          featureName="Plan & Smart Tasks"
+          onPrimaryAction={() => {
+            setShowPlanPaywall(false);
+            router.push('/subscription' as any);
+          }}
+          onSecondaryAction={() => setShowPlanPaywall(false)}
+          onRequestClose={() => setShowPlanPaywall(false)}
+          primaryLabel="Get Premium"
+          secondaryLabel="Later"
         />
       </View>
     </GradientBackground>

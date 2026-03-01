@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@/constants/theme';
+import * as Clipboard from 'expo-clipboard';
 import { getChallengeById } from '@/constants/challenges';
 import { useChallengeStore } from '@/hooks/use-challenge-store';
 import { ChallengeCustomization, ChallengeDifficulty } from '@/types/challenge';
@@ -104,8 +105,55 @@ export default function ChallengeCustomizeScreen() {
   const [healthRestrictions, setHealthRestrictions] = useState<string[]>([]);
   const [motivation, setMotivation] = useState<string[]>([]);
   const [previousExperience, setPreviousExperience] = useState<boolean | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const isFitnessChallenge = challenge?.category === 'fitness';
+
+  const chatGptPrompt = useMemo(() => {
+    const profileLines: string[] = [
+      `Challenge: ${challenge?.name ?? 'My challenge'}`,
+      `Category: ${challenge?.category ?? 'general'}`,
+      `Age range: ${age || 'Not specified'}`,
+      `Experience with similar challenges: ${previousExperience === null ? 'Not specified' : previousExperience ? 'Yes' : 'First time'}`,
+      `Fitness level: ${fitnessLevel ?? 'Not specified'}`,
+      `Preferred training time: ${preferredTime ?? 'Not specified'}`,
+      `Work schedule: ${workSchedule ?? 'Not specified'}`,
+      `Available daily time: ${availableTime} minutes`,
+      `Health restrictions: ${healthRestrictions.length > 0 ? healthRestrictions.join(', ') : 'None'}`,
+      `Motivation: ${motivation.length > 0 ? motivation.join(', ') : 'Not specified'}`,
+    ];
+
+    return [
+      'You are my personal high-performance coach.',
+      'Use my profile below and create a realistic, motivating, and safe daily action plan for the next 7 days.',
+      'Give me: 1) daily focus, 2) exact tasks with duration, 3) fallback lighter version if I am tired, 4) short motivation line for each day.',
+      'Keep it practical and concise.',
+      '',
+      'My profile:',
+      ...profileLines,
+    ].join('\n');
+  }, [
+    challenge?.name,
+    challenge?.category,
+    age,
+    previousExperience,
+    fitnessLevel,
+    preferredTime,
+    workSchedule,
+    availableTime,
+    healthRestrictions,
+    motivation,
+  ]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    try {
+      await Clipboard.setStringAsync(chatGptPrompt);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 1800);
+    } catch (error) {
+      console.error('[ChallengeCustomize] Failed to copy ChatGPT prompt:', error);
+    }
+  }, [chatGptPrompt]);
 
   const steps = useMemo(() => {
     const baseSteps = [
@@ -543,6 +591,29 @@ export default function ChallengeCustomizeScreen() {
           </Text>
         </View>
       )}
+
+      <View style={styles.chatGptPromptCard}>
+        <View style={styles.chatGptPromptHeader}>
+          <Sparkles size={16} color="#FFD600" />
+          <Text style={styles.chatGptPromptTitle}>Bonus: Prompt for ChatGPT</Text>
+        </View>
+        <Text style={styles.chatGptPromptSubtitle}>
+          You can copy this personalized prompt and paste it into ChatGPT.
+        </Text>
+        <View style={styles.chatGptPromptBox}>
+          <Text style={styles.chatGptPromptText} numberOfLines={7}>
+            {chatGptPrompt}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.copyPromptButton}
+          onPress={handleCopyPrompt}
+          activeOpacity={0.8}
+          testID="copy-chatgpt-prompt-button"
+        >
+          <Text style={styles.copyPromptButtonText}>{copySuccess ? 'Copied' : 'Copy Prompt'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -1032,6 +1103,56 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
+  },
+  chatGptPromptCard: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 10,
+  },
+  chatGptPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chatGptPromptTitle: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#FFF',
+  },
+  chatGptPromptSubtitle: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    lineHeight: 18,
+  },
+  chatGptPromptBox: {
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 12,
+  },
+  chatGptPromptText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.86)',
+  },
+  copyPromptButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,214,0,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,214,0,0.4)',
+  },
+  copyPromptButtonText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#FFD600',
   },
   bottomBar: {
     position: 'absolute',
