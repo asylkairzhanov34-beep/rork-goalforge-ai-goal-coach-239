@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Modal, LayoutAnimation } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Settings, Bell, ChevronRight, Info, LogOut, MessageCircle, RotateCcw, Edit3, X, Wrench, Lock, Crown, Target, Clock, Flame, Trophy } from 'lucide-react-native';
@@ -256,13 +256,13 @@ export default function ProfileScreen() {
         >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <Video
-                source={{ uri: lastEarnedRewardVideo }}
+              <MiniVideoPlayer
+                uri={lastEarnedRewardVideo}
                 style={styles.avatarVideo}
-                resizeMode={ResizeMode.COVER}
+                contentFit="cover"
                 shouldPlay
-                isLooping
-                isMuted
+                loop
+                muted
               />
               {isPremium && (
                 <View style={styles.premiumBadge}>
@@ -350,25 +350,25 @@ export default function ProfileScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.compactOrbsScroll} contentContainerStyle={styles.compactOrbsRow}>
               {allRewards.filter(r => r.unlocked).map((reward) => (
                 <View key={reward.id} style={[styles.compactOrbWrap, { borderColor: `${reward.color}60`, shadowColor: reward.color }]}>
-                  <Video
-                    source={{ uri: reward.video }}
+                  <MiniVideoPlayer
+                    uri={reward.video}
                     style={styles.compactOrbVideo}
-                    resizeMode={ResizeMode.COVER}
+                    contentFit="cover"
                     shouldPlay
-                    isLooping
-                    isMuted
+                    loop
+                    muted
                   />
                 </View>
               ))}
               {allRewards.filter(r => !r.unlocked).slice(0, 3).map((reward) => (
                 <View key={reward.id} style={styles.compactOrbWrap}>
-                  <Video
-                    source={{ uri: LOCKED_ORB_VIDEO }}
+                  <MiniVideoPlayer
+                    uri={LOCKED_ORB_VIDEO}
                     style={styles.compactOrbVideo}
-                    resizeMode={ResizeMode.COVER}
+                    contentFit="cover"
                     shouldPlay
-                    isLooping
-                    isMuted
+                    loop
+                    muted
                   />
                   <View style={styles.compactLockedOverlay}>
                     <Lock size={10} color="rgba(255,255,255,0.5)" />
@@ -377,13 +377,13 @@ export default function ProfileScreen() {
               ))}
               {allRewards.filter(r => r.unlocked).length === 0 && allRewards.filter(r => !r.unlocked).length === 0 && (
                 <View style={styles.compactOrbWrap}>
-                  <Video
-                    source={{ uri: LOCKED_ORB_VIDEO }}
+                  <MiniVideoPlayer
+                    uri={LOCKED_ORB_VIDEO}
                     style={styles.compactOrbVideo}
-                    resizeMode={ResizeMode.COVER}
+                    contentFit="cover"
                     shouldPlay
-                    isLooping
-                    isMuted
+                    loop
+                    muted
                   />
                   <View style={styles.compactLockedOverlay}>
                     <Lock size={10} color="rgba(255,255,255,0.5)" />
@@ -404,13 +404,13 @@ export default function ProfileScreen() {
                     activeOpacity={0.8}
                   >
                     <View style={[styles.orbGridWrapper, reward.unlocked && { borderColor: `${reward.color}50`, shadowColor: reward.color, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }]}>
-                      <Video
-                        source={{ uri: reward.unlocked ? reward.video : LOCKED_ORB_VIDEO }}
+                      <MiniVideoPlayer
+                        uri={reward.unlocked ? reward.video : LOCKED_ORB_VIDEO}
                         style={styles.orbGridVideo}
-                        resizeMode={ResizeMode.COVER}
+                        contentFit="cover"
                         shouldPlay
-                        isLooping
-                        isMuted
+                        loop
+                        muted
                       />
                       {!reward.unlocked && (
                         <View style={styles.orbGridLockedOverlay}>

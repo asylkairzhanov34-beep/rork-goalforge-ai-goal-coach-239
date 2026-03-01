@@ -10,9 +10,8 @@ import {
   StatusBar,
   useWindowDimensions,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
-import { Audio } from 'expo-av';
-import type { Video as VideoType } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { setAudioModeAsync } from 'expo-audio';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -32,8 +31,6 @@ interface SlideItemProps {
   screenHeight: number;
 }
 
-
-
 function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideReady, screenWidth, screenHeight }: SlideItemProps) {
   const [timeLeft, setTimeLeft] = useState(item.duration);
   const [isPaused, setIsPaused] = useState(false);
@@ -43,11 +40,58 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const videoRef = useRef<VideoType>(null);
   const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const durationDetected = useRef(false);
 
+  const player = useVideoPlayer(item.videoUrl, (p) => {
+    p.loop = false;
+    p.muted = false;
+    p.timeUpdateEventInterval = 0.5;
+  });
 
+  useEffect(() => {
+    if (!player) return;
+
+    const statusSub = player.addListener('statusChange', (payload) => {
+      if (payload.status === 'readyToPlay' && !durationDetected.current && isActive) {
+        const videoDurationSec = Math.ceil(player.duration);
+        if (videoDurationSec > 0 && videoDurationSec !== actualDuration) {
+          console.log('[MeditationFeed] Video duration detected:', videoDurationSec, 'seconds');
+          durationDetected.current = true;
+          setActualDuration(videoDurationSec);
+          setTimeLeft(videoDurationSec);
+
+          if (progressAnimRef.current) {
+            progressAnimRef.current.stop();
+          }
+          progressAnim.setValue(0);
+          progressAnimRef.current = Animated.timing(progressAnim, {
+            toValue: 1,
+            duration: videoDurationSec * 1000,
+            useNativeDriver: false,
+          });
+          progressAnimRef.current.start();
+        }
+      }
+    });
+
+    const endSub = player.addListener('playToEnd', () => {
+      if (isActive && !isComplete) {
+        console.log('[MeditationFeed] Video finished playing');
+        setIsComplete(true);
+        onSlideReady(true);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        setTimeLeft(0);
+      }
+    });
+
+    return () => {
+      statusSub.remove();
+      endSub.remove();
+    };
+  }, [player, isActive, actualDuration, isComplete, onSlideReady, progressAnim]);
 
   useEffect(() => {
     if (isActive) {
@@ -57,7 +101,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       setIsPaused(false);
       progressAnim.setValue(0);
       onSlideReady(false);
-      
+
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -79,10 +123,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       });
       progressAnimRef.current.start();
 
-      if (videoRef.current) {
-        videoRef.current.setPositionAsync(0);
-        videoRef.current.playAsync();
-      }
+      player.currentTime = 0;
+      player.play();
     } else {
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.95);
@@ -93,10 +135,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       if (progressAnimRef.current) {
         progressAnimRef.current.stop();
       }
-      if (videoRef.current) {
-        videoRef.current.pauseAsync();
-        videoRef.current.setPositionAsync(0);
-      }
+      player.pause();
+      player.currentTime = 0;
     }
 
     return () => {
@@ -107,7 +147,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         progressAnimRef.current.stop();
       }
     };
-  }, [isActive, actualDuration, fadeAnim, progressAnim, scaleAnim, onSlideReady]);
+  }, [isActive, actualDuration, fadeAnim, progressAnim, scaleAnim, onSlideReady, player]);
 
   useEffect(() => {
     if (isActive && !isPaused && timeLeft > 0 && !isComplete) {
@@ -133,54 +173,17 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
     };
   }, [isActive, isPaused, timeLeft, isComplete]);
 
-  const handleVideoPlaybackStatus = useCallback((status: any) => {
-    if (!status.isLoaded) return;
-    
-    if (status.durationMillis && !durationDetected.current && isActive) {
-      const videoDurationSec = Math.ceil(status.durationMillis / 1000);
-      if (videoDurationSec > 0 && videoDurationSec !== actualDuration) {
-        console.log('[MeditationFeed] Video duration detected:', videoDurationSec, 'seconds');
-        durationDetected.current = true;
-        setActualDuration(videoDurationSec);
-        setTimeLeft(videoDurationSec);
-        
-        if (progressAnimRef.current) {
-          progressAnimRef.current.stop();
-        }
-        progressAnim.setValue(0);
-        progressAnimRef.current = Animated.timing(progressAnim, {
-          toValue: 1,
-          duration: videoDurationSec * 1000,
-          useNativeDriver: false,
-        });
-        progressAnimRef.current.start();
-      }
-    }
-    
-    if (status.didJustFinish && isActive && !isComplete) {
-      console.log('[MeditationFeed] Video finished playing');
-      setIsComplete(true);
-      onSlideReady(true);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      setTimeLeft(0);
-    }
-  }, [isActive, actualDuration, progressAnim, isComplete, onSlideReady]);
-
   const togglePause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newPausedState = !isPaused;
     setIsPaused(newPausedState);
-    
-    if (videoRef.current) {
-      if (newPausedState) {
-        videoRef.current.pauseAsync();
-      } else {
-        videoRef.current.playAsync();
-      }
+
+    if (newPausedState) {
+      player.pause();
+    } else {
+      player.play();
     }
-    
+
     if (progressAnimRef.current) {
       if (newPausedState) {
         progressAnimRef.current.stop();
@@ -199,11 +202,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    if (videoRef.current) {
-      videoRef.current.pauseAsync();
-    }
-    
+    player.pause();
     onComplete();
   };
 
@@ -214,24 +213,24 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
 
   return (
     <View style={[styles.slideContainer, { width: screenWidth, height: screenHeight }]}>
-      <Video
-        ref={videoRef}
-        source={{ uri: item.videoUrl }}
-        style={[styles.slideVideo, { width: screenWidth, height: screenHeight }]}
-        resizeMode={ResizeMode.COVER}
-        isLooping={false}
-        isMuted={false}
-        shouldPlay={isActive && !isPaused}
-        onPlaybackStatusUpdate={handleVideoPlaybackStatus}
-      />
-      
+      {Platform.OS !== 'web' ? (
+        <VideoView
+          player={player}
+          style={[styles.slideVideo, { width: screenWidth, height: screenHeight }]}
+          contentFit="cover"
+          nativeControls={false}
+        />
+      ) : (
+        <View style={[styles.slideVideo, { width: screenWidth, height: screenHeight, backgroundColor: '#111' }]} />
+      )}
+
       <LinearGradient
         colors={['rgba(0,0,0,0.3)', 'transparent', 'transparent', 'rgba(0,0,0,0.7)']}
         locations={[0, 0.3, 0.6, 1]}
         style={styles.gradient}
       />
 
-      <Animated.View 
+      <Animated.View
         style={[
           styles.contentContainer,
           {
@@ -254,8 +253,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         </View>
 
         <View style={styles.centerContent}>
-          <TouchableOpacity 
-            style={styles.pauseButton} 
+          <TouchableOpacity
+            style={styles.pauseButton}
             onPress={togglePause}
             activeOpacity={0.8}
           >
@@ -324,10 +323,10 @@ export default function MeditationFeedScreen() {
   useEffect(() => {
     const setupAudio = async () => {
       try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          interruptionModeAndroid: 'duckOthers',
         });
         console.log('[MeditationFeed] Audio mode configured');
       } catch (error) {
@@ -359,7 +358,7 @@ export default function MeditationFeedScreen() {
 
   const handleSlideComplete = useCallback((index: number) => {
     console.log('[MeditationFeed] Slide completed:', index);
-    
+
     if (index === MEDITATION_SLIDES.length - 1) {
       setTimeout(() => {
         router.replace('/timer' as any);
@@ -398,12 +397,12 @@ export default function MeditationFeedScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           headerShown: false,
           presentation: 'fullScreenModal',
           animation: 'fade',
-        }} 
+        }}
       />
       <StatusBar barStyle="light-content" />
 

@@ -9,8 +9,7 @@ import {
   Animated,
   useWindowDimensions,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import type { Video as VideoType } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,9 +23,41 @@ export default function VideoIntro2Screen() {
   const [videoError, setVideoError] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
 
-  const videoRef = useRef<VideoType>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
+
+  const player = useVideoPlayer(VIDEO_URL, (p) => {
+    p.loop = false;
+    p.muted = false;
+    p.play();
+  });
+
+  useEffect(() => {
+    if (!player) return;
+
+    const statusSub = player.addListener('statusChange', (payload) => {
+      if (payload.status === 'readyToPlay' && !videoLoaded) {
+        setVideoLoaded(true);
+        console.log('[VideoIntro2] Video loaded successfully');
+      }
+      if (payload.status === 'error') {
+        setVideoError(true);
+        console.error('[VideoIntro2] Video error');
+      }
+    });
+
+    const endSub = player.addListener('playToEnd', () => {
+      if (!videoFinished) {
+        setVideoFinished(true);
+        console.log('[VideoIntro2] Video ended');
+      }
+    });
+
+    return () => {
+      statusSub.remove();
+      endSub.remove();
+    };
+  }, [player, videoLoaded, videoFinished]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -35,25 +66,6 @@ export default function VideoIntro2Screen() {
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
-
-  const handleVideoLoad = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      if (!videoLoaded) {
-        setVideoLoaded(true);
-        console.log('[VideoIntro2] Video loaded successfully');
-      }
-
-      if (status.didJustFinish && !videoFinished) {
-        setVideoFinished(true);
-        console.log('[VideoIntro2] Video ended');
-      }
-    }
-  }, [videoLoaded, videoFinished]);
-
-  const handleVideoError = useCallback((error: string) => {
-    console.error('[VideoIntro2] Video error:', error);
-    setVideoError(true);
-  }, []);
 
   const handleContinue = useCallback(() => {
     Animated.sequence([
@@ -99,7 +111,7 @@ export default function VideoIntro2Screen() {
             <Text style={styles.skipButtonText}>Skip</Text>
           </TouchableOpacity>
         </SafeAreaView>
-        {!videoLoaded && !videoError && (
+        {!videoLoaded && !videoError && Platform.OS !== 'web' && (
           <View style={styles.videoLoader}>
             <ActivityIndicator size="large" color="#F59E0B" />
             <Text style={styles.videoLoadingText}>Loading...</Text>
@@ -112,17 +124,11 @@ export default function VideoIntro2Screen() {
             <Text style={styles.videoErrorText}>Welcome!</Text>
           </View>
         ) : (
-          <Video
-            ref={videoRef}
-            source={{ uri: VIDEO_URL }}
+          <VideoView
+            player={player}
             style={[styles.video, !videoLoaded && styles.videoHidden]}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay
-            isLooping={false}
-            isMuted={false}
-            progressUpdateIntervalMillis={500}
-            onPlaybackStatusUpdate={handleVideoLoad}
-            onError={(error: string) => handleVideoError(error)}
+            contentFit="contain"
+            nativeControls={false}
           />
         )}
       </View>

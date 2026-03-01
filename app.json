@@ -53,12 +53,6 @@
           "origin": "https://rork.com/"
         }
       ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
-        }
-      ],
       "expo-apple-authentication",
       [
         "expo-notifications",
@@ -84,7 +78,8 @@
           "configureAndroidBackup": true,
           "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

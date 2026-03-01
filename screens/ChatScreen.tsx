@@ -13,7 +13,8 @@ import {
   Easing,
   Image,
 } from 'react-native';
-import { Video, ResizeMode, Audio } from 'expo-av';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -289,13 +290,13 @@ const AnimatedWelcome: React.FC<AnimatedWelcomeProps> = ({ onSuggestionPress, on
       ]}
     >
       <View style={styles.videoSection}>
-        <Video
-          source={{ uri: 'https://res.cloudinary.com/dohdrsflw/video/upload/v1769862793/371759_3_yx4w13.mp4' }}
+        <MiniVideoPlayer
+          uri="https://res.cloudinary.com/dohdrsflw/video/upload/v1769862793/371759_3_yx4w13.mp4"
           style={styles.welcomeVideo}
-          resizeMode={ResizeMode.CONTAIN}
+          contentFit="contain"
           shouldPlay
-          isLooping
-          isMuted
+          loop
+          muted
         />
       </View>
 
@@ -360,10 +361,9 @@ const ChatScreenContent: React.FC = () => {
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const prevMessagesLength = useRef(messages.length);
   
-  // Voice recording state
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   
@@ -440,7 +440,6 @@ const ChatScreenContent: React.FC = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       
       if (Platform.OS === 'web') {
-        // Web: use MediaRecorder API
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -461,52 +460,26 @@ const ChatScreenContent: React.FC = () => {
           throw webError;
         }
       } else {
-        // Mobile: use expo-av with new API
         console.log('[ChatScreen] Requesting audio permissions...');
-        const permissionResponse = await Audio.requestPermissionsAsync();
+        const permissionResponse = await AudioModule.requestRecordingPermissionsAsync();
         console.log('[ChatScreen] Permission response:', permissionResponse);
         
-        if (permissionResponse.status !== 'granted') {
+        if (!permissionResponse.granted) {
           console.error('[ChatScreen] Audio permission not granted');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
           return;
         }
         
         console.log('[ChatScreen] Setting audio mode...');
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
         });
         
         console.log('[ChatScreen] Creating recording...');
-        const recordingOptions = {
-          android: {
-            extension: '.m4a',
-            outputFormat: 2, // MPEG_4
-            audioEncoder: 3, // AAC
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000,
-          },
-          ios: {
-            extension: '.wav',
-            outputFormat: 'lpcm',
-            audioQuality: 127, // MAX
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
-          },
-          web: {
-            mimeType: 'audio/webm',
-            bitsPerSecond: 128000,
-          },
-        };
-        const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
         
-        setRecording(newRecording);
         setIsRecording(true);
         console.log('[ChatScreen] Mobile recording started');
       }
@@ -514,9 +487,8 @@ const ChatScreenContent: React.FC = () => {
       console.error('[ChatScreen] Failed to start recording:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setIsRecording(false);
-      setRecording(null);
     }
-  }, []);
+  }, [audioRecorder]);
 
   const stopRecording = useCallback(async () => {
     try {
@@ -525,11 +497,7 @@ const ChatScreenContent: React.FC = () => {
       setIsRecording(false);
       setIsTranscribing(true);
       
-      let audioBlob: Blob;
-      let fileName: string;
-      
       if (Platform.OS === 'web') {
-        // Web: stop MediaRecorder
         const mediaRecorder = mediaRecorderRef.current;
         if (!mediaRecorder) {
           console.log('[ChatScreen] No web mediaRecorder found');
@@ -542,14 +510,12 @@ const ChatScreenContent: React.FC = () => {
           mediaRecorder.stop();
         });
         
-        // Stop all tracks
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
         
-        audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        fileName = 'recording.webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const fileName = 'recording.webm';
         mediaRecorderRef.current = null;
         
-        // Web: send blob to STT API
         const formData = new FormData();
         formData.append('audio', audioBlob, fileName);
         
@@ -572,18 +538,11 @@ const ChatScreenContent: React.FC = () => {
           setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
         }
       } else {
-        // Mobile: stop expo-av recording
-        if (!recording) {
-          console.log('[ChatScreen] No mobile recording found');
-          setIsTranscribing(false);
-          return;
-        }
-        
         console.log('[ChatScreen] Stopping mobile recording...');
-        await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await audioRecorder.stop();
+        await setAudioModeAsync({ allowsRecording: false });
         
-        const uri = recording.getURI();
+        const uri = audioRecorder.uri;
         console.log('[ChatScreen] Recording URI:', uri);
         
         if (!uri) {
@@ -594,7 +553,6 @@ const ChatScreenContent: React.FC = () => {
         const uriParts = uri.split('.');
         const fileType = uriParts[uriParts.length - 1] || 'm4a';
         
-        // For mobile, send as file object
         const formData = new FormData();
         formData.append('audio', {
           uri,
@@ -620,17 +578,14 @@ const ChatScreenContent: React.FC = () => {
         if (result.text) {
           setInputText(prev => prev ? `${prev} ${result.text}` : result.text);
         }
-        
-        setRecording(null);
       }
     } catch (error) {
       console.error('[ChatScreen] Failed to stop recording:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     } finally {
       setIsTranscribing(false);
-      setRecording(null);
     }
-  }, [recording]);
+  }, [audioRecorder]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {

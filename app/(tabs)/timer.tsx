@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Settings, Volume2, Check, Play, Pause, Headphones, VolumeX, Radio, Waves, Sparkles, Globe, Moon, Orbit, Wind, CloudRain, Coffee } from 'lucide-react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { theme } from '@/constants/theme';
@@ -43,7 +43,7 @@ export default function TimerScreen() {
   
   const [ambientEnabled, setAmbientEnabled] = useState(false);
   const [selectedAmbientId, setSelectedAmbientId] = useState('groovesalad');
-  const ambientSoundRef = useRef<Audio.Sound | null>(null);
+  const ambientSoundRef = useRef<AudioPlayer | null>(null);
   
   const selectedSound = timerStore?.notificationSound || 'bell';
   const setNotificationSound = timerStore?.setNotificationSound;
@@ -85,24 +85,24 @@ export default function TimerScreen() {
         if (!selectedStation) return;
         try {
           if (ambientSoundRef.current) {
-            await ambientSoundRef.current.unloadAsync();
+            try { ambientSoundRef.current.remove(); } catch {}
             ambientSoundRef.current = null;
           }
           setIsBuffering(true);
-          await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: true,
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
           });
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: selectedStation.url },
-            { shouldPlay: true, isLooping: false, volume: 0.6 }
-          );
-          ambientSoundRef.current = sound;
-          sound.setOnPlaybackStatusUpdate((status) => {
+          const player = createAudioPlayer({ uri: selectedStation.url });
+          player.volume = 0.6;
+          player.loop = false;
+          ambientSoundRef.current = player;
+          player.addListener('playbackStatusUpdate', (status) => {
             if (status.isLoaded) {
               setIsBuffering(status.isBuffering);
             }
           });
+          player.play();
           console.log('[Timer] Lo-fi radio started:', selectedStation.name);
         } catch (error) {
           console.log('Error playing lo-fi radio:', error);
@@ -110,14 +110,14 @@ export default function TimerScreen() {
         }
       } else if (isPaused && ambientSoundRef.current) {
         try {
-          await ambientSoundRef.current.pauseAsync();
+          ambientSoundRef.current.pause();
         } catch (error) {
           console.log('Error pausing lo-fi radio:', error);
         }
       } else if (!isRunning && ambientSoundRef.current) {
         try {
-          await ambientSoundRef.current.stopAsync();
-          await ambientSoundRef.current.unloadAsync();
+          ambientSoundRef.current.pause();
+          ambientSoundRef.current.remove();
           ambientSoundRef.current = null;
           setIsBuffering(false);
         } catch (error) {
@@ -131,7 +131,7 @@ export default function TimerScreen() {
   useEffect(() => {
     return () => {
       if (ambientSoundRef.current) {
-        ambientSoundRef.current.unloadAsync();
+        try { ambientSoundRef.current.remove(); } catch {}
       }
     };
   }, []);
@@ -147,8 +147,8 @@ export default function TimerScreen() {
 
     if (!newEnabled && ambientSoundRef.current) {
       try {
-        await ambientSoundRef.current.stopAsync();
-        await ambientSoundRef.current.unloadAsync();
+        ambientSoundRef.current.pause();
+        ambientSoundRef.current.remove();
         ambientSoundRef.current = null;
       } catch (error) {
         console.log('Error stopping ambient:', error);
@@ -169,27 +169,26 @@ export default function TimerScreen() {
     if (isRunning && !isPaused && ambientEnabled) {
       try {
         if (ambientSoundRef.current) {
-          await ambientSoundRef.current.stopAsync();
-          await ambientSoundRef.current.unloadAsync();
+          try { ambientSoundRef.current.remove(); } catch {}
           ambientSoundRef.current = null;
         }
         setIsBuffering(true);
         const newStation = LOFI_STATIONS.find(s => s.id === soundId);
         if (newStation) {
-          await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: true,
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
           });
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: newStation.url },
-            { shouldPlay: true, isLooping: false, volume: 0.6 }
-          );
-          ambientSoundRef.current = sound;
-          sound.setOnPlaybackStatusUpdate((status) => {
+          const player = createAudioPlayer({ uri: newStation.url });
+          player.volume = 0.6;
+          player.loop = false;
+          ambientSoundRef.current = player;
+          player.addListener('playbackStatusUpdate', (status) => {
             if (status.isLoaded) {
               setIsBuffering(status.isBuffering);
             }
           });
+          player.play();
           console.log('[Timer] Switched to lo-fi radio:', newStation.name);
         }
       } catch (error) {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform, ImageBackground, useWindowDimensions } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 import { BlurView } from 'expo-blur';
 import { Play, Pause, Square, ArrowLeft, Wind, Sparkles, Clock, Zap } from 'lucide-react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
@@ -404,13 +404,13 @@ export function BreathingTimer({ technique }: BreathingTimerProps) {
   if (backgroundVideo) {
     return (
       <View style={styles.container}>
-        <Video
-          source={{ uri: backgroundVideo }}
+        <MiniVideoPlayer
+          uri={backgroundVideo}
           style={styles.backgroundVideo}
-          resizeMode={ResizeMode.COVER}
-          isLooping
+          contentFit="cover"
+          loop
           shouldPlay
-          isMuted
+          muted
         />
         {renderContent()}
       </View>

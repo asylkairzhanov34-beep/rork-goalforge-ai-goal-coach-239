@@ -1,16 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   Animated,
-
+  Platform,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
-import type { Video as VideoType } from 'expo-av';
-
-const LOAD_TIMEOUT_MS = 8000;
-const RETRY_DELAY_MS = 3000;
-const MAX_RETRIES = 2;
+import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 
 interface VideoOrbProps {
   uri: string;
@@ -29,13 +24,7 @@ function VideoOrbInner({
   showBorder = false,
   borderColor,
 }: VideoOrbProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [videoKey, setVideoKey] = useState(0);
-  const videoRef = useRef<VideoType>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const [showVideo] = useState(Platform.OS !== 'web');
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -55,66 +44,14 @@ function VideoOrbInner({
     return () => { pulse.stop(); shimmer.stop(); };
   }, [pulseAnim, shimmerAnim]);
 
-  const startTimeout = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      if (!loaded) {
-        console.log('[VideoOrb] Timeout loading:', uri.slice(-30));
-        if (retryCount < MAX_RETRIES) {
-          console.log('[VideoOrb] Retrying...', retryCount + 1);
-          setRetryCount(prev => prev + 1);
-          setVideoKey(prev => prev + 1);
-        } else {
-          setErrored(true);
-        }
-      }
-    }, LOAD_TIMEOUT_MS);
-  }, [loaded, retryCount, uri]);
-
   useEffect(() => {
-    if (!loaded && !errored && shouldPlay) {
-      startTimeout();
+    if (showVideo) {
+      const timer = setTimeout(() => {
+        Animated.timing(fadeAnim, { toValue: 0, duration: 400, useNativeDriver: true }).start();
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [loaded, errored, shouldPlay, startTimeout, videoKey]);
-
-  useEffect(() => {
-    setLoaded(false);
-    setErrored(false);
-    setRetryCount(0);
-    setVideoKey(prev => prev + 1);
-  }, [uri]);
-
-  const handleLoad = useCallback(() => {
-    console.log('[VideoOrb] Loaded:', uri.slice(-30));
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setLoaded(true);
-    Animated.timing(fadeAnim, { toValue: 0, duration: 400, useNativeDriver: true }).start();
-  }, [uri, fadeAnim]);
-
-  const handleError = useCallback((error: string) => {
-    console.log('[VideoOrb] Error:', uri.slice(-30), error);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (retryCount < MAX_RETRIES) {
-      setTimeout(() => {
-        setRetryCount(prev => prev + 1);
-        setVideoKey(prev => prev + 1);
-      }, RETRY_DELAY_MS);
-    } else {
-      setErrored(true);
-    }
-  }, [uri, retryCount]);
-
-  useEffect(() => {
-    if (!shouldPlay && videoRef.current) {
-      videoRef.current.pauseAsync().catch(() => {});
-    }
-    if (shouldPlay && loaded && videoRef.current) {
-      videoRef.current.playAsync().catch(() => {});
-    }
-  }, [shouldPlay, loaded]);
+  }, [showVideo, fadeAnim]);
 
   const borderStyle = showBorder
     ? { borderWidth: 2, borderColor: borderColor || `${color}25` }
@@ -130,18 +67,14 @@ function VideoOrbInner({
       { width: size, height: size, borderRadius: size / 2, overflow: 'hidden' },
       borderStyle,
     ]}>
-      {!errored && (
-        <Video
-          key={videoKey}
-          ref={videoRef}
-          source={{ uri }}
+      {showVideo && (
+        <MiniVideoPlayer
+          uri={uri}
           style={{ width: size, height: size }}
-          resizeMode={ResizeMode.COVER}
+          contentFit="cover"
           shouldPlay={shouldPlay}
-          isLooping
-          isMuted
-          onLoad={handleLoad}
-          onError={(e: string) => handleError(e)}
+          loop
+          muted
         />
       )}
 
@@ -150,7 +83,7 @@ function VideoOrbInner({
         style={[
           StyleSheet.absoluteFill,
           {
-            opacity: errored ? 1 : fadeAnim,
+            opacity: !showVideo ? 1 : fadeAnim,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#0A0A0A',

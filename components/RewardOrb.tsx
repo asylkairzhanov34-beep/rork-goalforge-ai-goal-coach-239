@@ -1,9 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Animated, Easing } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { Lock, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 
 interface RewardOrbProps {
   videoUri: string;
@@ -14,8 +13,6 @@ interface RewardOrbProps {
   color?: string;
 }
 
-const LOAD_TIMEOUT = 15000;
-
 const RewardOrbInner: React.FC<RewardOrbProps> = ({
   videoUri,
   size,
@@ -24,37 +21,18 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
   isScreenFocused,
   color = '#FFD700',
 }) => {
-  const [videoError, setVideoError] = useState(false);
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
-  const videoRef = useRef<Video | null>(null);
+  const [showFallback, setShowFallback] = useState(Platform.OS === 'web');
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
   const glowAnim = useRef(new Animated.Value(0.4)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const retryCount = useRef(0);
-  const maxRetries = 1;
-  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const shouldPlay = isActive && isScreenFocused && !videoError && !showFallback;
+  const shouldPlay = isActive && isScreenFocused;
 
   useEffect(() => {
-    if (loadTimeoutRef.current) {
-      clearTimeout(loadTimeoutRef.current);
+    if (Platform.OS === 'web') {
+      setShowFallback(true);
     }
-    
-    if (!videoLoaded && !videoError && !showFallback) {
-      loadTimeoutRef.current = setTimeout(() => {
-        console.log('[RewardOrb] Load timeout, showing fallback');
-        setShowFallback(true);
-      }, LOAD_TIMEOUT);
-    }
-    
-    return () => {
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-      }
-    };
-  }, [videoLoaded, videoError, showFallback, videoUri]);
+  }, []);
 
   useEffect(() => {
     const glow = Animated.loop(
@@ -73,7 +51,7 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
         }),
       ])
     );
-    
+
     const rotate = Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -82,17 +60,17 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
         useNativeDriver: true,
       })
     );
-    
-    if (showFallback || videoError) {
+
+    if (showFallback) {
       glow.start();
       rotate.start();
     }
-    
+
     return () => {
       glow.stop();
       rotate.stop();
     };
-  }, [showFallback, videoError, glowAnim, rotateAnim]);
+  }, [showFallback, glowAnim, rotateAnim]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -111,70 +89,16 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
         }),
       ])
     );
-    if (!videoLoaded && !videoError && !showFallback) {
+    if (!showFallback) {
       pulse.start();
     } else {
       pulse.stop();
     }
     return () => pulse.stop();
-  }, [videoLoaded, videoError, showFallback, pulseAnim]);
-
-  useEffect(() => {
-    if (!isActive && videoRef.current) {
-      videoRef.current.pauseAsync().catch(() => {});
-    }
-    if (isActive && videoRef.current && videoLoaded && !videoError) {
-      videoRef.current.playAsync().catch(() => {});
-    }
-  }, [isActive, videoLoaded, videoError]);
-
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      if (!videoLoaded) {
-        console.log('[RewardOrb] Video loaded successfully');
-        setVideoLoaded(true);
-        setVideoError(false);
-      }
-    }
-    if (!status.isLoaded && status.error) {
-      console.warn('[RewardOrb] Playback error:', status.error);
-      if (retryCount.current < maxRetries) {
-        retryCount.current += 1;
-        console.log('[RewardOrb] Retrying...', retryCount.current);
-        setTimeout(() => {
-          setVideoError(false);
-          setVideoLoaded(false);
-        }, 1500 * retryCount.current);
-      } else {
-        setVideoError(true);
-      }
-    }
-  }, [videoLoaded]);
-
-  const handleError = useCallback((error: string) => {
-    console.warn('[RewardOrb] Video error:', error);
-    if (retryCount.current < maxRetries) {
-      retryCount.current += 1;
-      setTimeout(() => {
-        setVideoError(false);
-        setVideoLoaded(false);
-      }, 1500 * retryCount.current);
-    } else {
-      setVideoError(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    retryCount.current = 0;
-    setVideoError(false);
-    setVideoLoaded(false);
-    setShowFallback(false);
-  }, [videoUri]);
+  }, [showFallback, pulseAnim]);
 
   const borderRadius = size / 2;
-  const showVideo = !videoError && !showFallback;
-  const showBeautifulFallback = videoError || showFallback;
-  
+
   const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
@@ -192,11 +116,11 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       />
-      
-      <Animated.View 
+
+      <Animated.View
         style={[
           styles.fallbackRing,
-          { 
+          {
             width: size * 0.85,
             height: size * 0.85,
             borderRadius: size * 0.425,
@@ -205,11 +129,11 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
           }
         ]}
       />
-      
-      <Animated.View 
+
+      <Animated.View
         style={[
           styles.fallbackRing,
-          { 
+          {
             width: size * 0.65,
             height: size * 0.65,
             borderRadius: size * 0.325,
@@ -218,8 +142,8 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
           }
         ]}
       />
-      
-      <Animated.View 
+
+      <Animated.View
         style={[
           styles.fallbackGlowCenter,
           {
@@ -231,7 +155,7 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
           }
         ]}
       />
-      
+
       <View style={styles.fallbackIcon}>
         <Sparkles size={size * 0.18} color={color} strokeWidth={1.5} />
       </View>
@@ -239,29 +163,19 @@ const RewardOrbInner: React.FC<RewardOrbProps> = ({
   );
 
   return (
-    <View style={[styles.container, { width: size, height: size, borderRadius }]}>  
-      {showVideo && (
-        <Video
-          ref={videoRef}
-          source={{ uri: videoUri }}
-          style={[styles.video, { width: size, height: size }]}
-          resizeMode={ResizeMode.COVER}
+    <View style={[styles.container, { width: size, height: size, borderRadius }]}>
+      {!showFallback && (
+        <MiniVideoPlayer
+          uri={videoUri}
+          style={{ width: size, height: size }}
+          contentFit="cover"
           shouldPlay={shouldPlay}
-          isLooping
-          isMuted
-          progressUpdateIntervalMillis={10000}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          onError={handleError}
+          loop
+          muted
         />
       )}
-      
-      {showBeautifulFallback && renderFallbackOrb()}
 
-      {!videoLoaded && !videoError && !showFallback && (
-        <Animated.View style={[styles.loadingOverlay, { width: size, height: size, borderRadius, opacity: pulseAnim }]}>
-          <ActivityIndicator size="small" color="rgba(255,215,0,0.6)" />
-        </Animated.View>
-      )}
+      {showFallback && renderFallbackOrb()}
 
       {!isUnlocked && (
         <View style={[styles.lockedOverlay, { borderRadius }]}>
@@ -279,9 +193,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  video: {
-    position: 'absolute',
   },
   fallback: {
     backgroundColor: '#0a0a14',
@@ -302,12 +213,6 @@ const styles = StyleSheet.create({
   },
   fallbackIcon: {
     position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,10,20,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

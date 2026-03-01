@@ -9,8 +9,7 @@ import {
   Animated,
   useWindowDimensions,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import type { Video as VideoType } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,15 +24,56 @@ export default function VideoIntroScreen() {
   const [videoError, setVideoError] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
   
-  const videoRef = useRef<VideoType>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
   const lastVibrationTime = useRef(0);
-  const videoDuration = useRef(0);
 
-  const triggerProgressiveVibration = useCallback((progress: number, isPlaying: boolean) => {
+  const player = useVideoPlayer(VIDEO_URL, (p) => {
+    p.loop = false;
+    p.muted = false;
+    p.timeUpdateEventInterval = 0.5;
+    p.play();
+  });
+
+  useEffect(() => {
+    if (!player) return;
+
+    const statusSub = player.addListener('statusChange', (payload) => {
+      console.log('[VideoIntro] Status changed:', payload.status);
+      if (payload.status === 'readyToPlay') {
+        setVideoLoaded(true);
+        console.log('[VideoIntro] Video loaded successfully');
+      }
+      if (payload.status === 'error') {
+        console.error('[VideoIntro] Video error');
+        setVideoError(true);
+      }
+    });
+
+    const endSub = player.addListener('playToEnd', () => {
+      setVideoFinished(true);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      console.log('[VideoIntro] Video ended');
+    });
+
+    const timeSub = player.addListener('timeUpdate', (payload) => {
+      if (player.duration > 0) {
+        const progress = payload.currentTime / player.duration;
+        triggerProgressiveVibration(progress);
+      }
+    });
+
+    return () => {
+      statusSub.remove();
+      endSub.remove();
+      timeSub.remove();
+    };
+  }, [player]);
+
+  const triggerProgressiveVibration = useCallback((progress: number) => {
     if (Platform.OS === 'web') return;
-    if (!isPlaying) return;
     
     const now = Date.now();
     
@@ -67,37 +107,6 @@ export default function VideoIntroScreen() {
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
-
-  const handleVideoLoad = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    
-    if (!videoLoaded) {
-      setVideoLoaded(true);
-      console.log('[VideoIntro] Video loaded successfully');
-    }
-    
-    if (status.durationMillis && status.durationMillis > 0) {
-      videoDuration.current = status.durationMillis;
-    }
-    
-    if (status.isPlaying && videoDuration.current > 0 && status.positionMillis && !videoFinished) {
-      const progress = status.positionMillis / videoDuration.current;
-      triggerProgressiveVibration(progress, true);
-    }
-    
-    if (status.didJustFinish && !videoFinished) {
-      setVideoFinished(true);
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-      console.log('[VideoIntro] Video ended');
-    }
-  }, [videoLoaded, videoFinished, triggerProgressiveVibration]);
-
-  const handleVideoError = useCallback((error: string) => {
-    console.error('[VideoIntro] Video error:', error);
-    setVideoError(true);
-  }, []);
 
   const handleContinue = useCallback(() => {
     Animated.sequence([
@@ -143,7 +152,7 @@ export default function VideoIntroScreen() {
             <Text style={styles.skipButtonText}>Skip</Text>
           </TouchableOpacity>
         </SafeAreaView>
-        {!videoLoaded && !videoError && (
+        {!videoLoaded && !videoError && Platform.OS !== 'web' && (
           <View style={styles.videoLoader}>
             <ActivityIndicator size="large" color="#F59E0B" />
             <Text style={styles.videoLoadingText}>Loading...</Text>
@@ -156,17 +165,11 @@ export default function VideoIntroScreen() {
             <Text style={styles.videoErrorText}>Welcome!</Text>
           </View>
         ) : (
-          <Video
-            ref={videoRef}
-            source={{ uri: VIDEO_URL }}
+          <VideoView
+            player={player}
             style={[styles.video, !videoLoaded && styles.videoHidden]}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay
-            isLooping={false}
-            isMuted={false}
-            progressUpdateIntervalMillis={500}
-            onPlaybackStatusUpdate={handleVideoLoad}
-            onError={(error: string) => handleVideoError(error)}
+            contentFit="contain"
+            nativeControls={false}
           />
         )}
       </View>
