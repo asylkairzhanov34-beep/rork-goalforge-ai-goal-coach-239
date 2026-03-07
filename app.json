@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "GoalForge AI",
-    "slug": "goalforge-ai-goal-coach",
+    "slug": "personalized-ai-goal",
     "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
