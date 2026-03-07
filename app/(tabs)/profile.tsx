@@ -154,7 +154,7 @@ export default function ProfileScreen() {
       icon: Info,
       title: 'About',
       subtitle: 'Version 1.0.8',
-      onPress: () => Alert.alert('GoalForge AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0.8'),
+      onPress: () => Alert.alert('GoalForge AI', 'Your personal AI coach for achieving goals\n\nVersion 1.0.9'),
       iconColor: '#9CA3AF',
     },
   ];
