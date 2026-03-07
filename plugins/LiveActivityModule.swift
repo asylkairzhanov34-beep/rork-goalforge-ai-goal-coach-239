@@ -6,6 +6,7 @@ import React
 class LiveActivityModule: RCTEventEmitter {
     
     private var currentActivity: Activity<TimerActivityAttributes>?
+    private var hasListeners = false
     
     override init() {
         super.init()
@@ -19,7 +20,23 @@ class LiveActivityModule: RCTEventEmitter {
         return ["LiveActivityAction", "LiveActivityStateChange"]
     }
     
-    // MARK: - Start Activity
+    override func startObserving() {
+        hasListeners = true
+    }
+    
+    override func stopObserving() {
+        hasListeners = false
+    }
+    
+    @objc func isSupported(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 16.1, *) else {
+            resolver(["supported": false])
+            return
+        }
+        
+        resolver(["supported": ActivityAuthorizationInfo().areActivitiesEnabled])
+    }
+    
     @objc func startActivity(_ params: NSDictionary, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.1, *) else {
             rejecter("UNSUPPORTED", "Live Activities require iOS 16.1+", nil)
@@ -34,11 +51,10 @@ class LiveActivityModule: RCTEventEmitter {
         let timerName = params["timerName"] as? String ?? "Focus Session"
         let mode = params["mode"] as? String ?? "focus"
         let totalDuration = params["totalDuration"] as? Int ?? 1500
-        let remainingTime = params["remainingTime"] as? Int ?? 1500
+        let remainingTime = params["remainingTime"] as? Int ?? totalDuration
         let endTimeUnix = params["endTime"] as? Double ?? (Date().timeIntervalSince1970 + Double(remainingTime))
         let isPaused = params["isPaused"] as? Bool ?? false
         let progress = params["progress"] as? Double ?? 0.0
-        
         let endTime = Date(timeIntervalSince1970: endTimeUnix)
         
         let attributes = TimerActivityAttributes(
@@ -47,48 +63,66 @@ class LiveActivityModule: RCTEventEmitter {
             totalDuration: totalDuration
         )
         
-        let contentState = TimerActivityAttributes.ContentState(
+        let initialState = TimerActivityAttributes.ContentState(
             remainingTime: remainingTime,
             isPaused: isPaused,
             progress: progress,
             endTime: endTime
         )
         
-        do {
-            // End any existing activity first
+        Task {
             if let existingActivity = currentActivity {
-                Task {
-                    await existingActivity.end(dismissalPolicy: .immediate)
-                }
+                await existingActivity.end(dismissalPolicy: .immediate)
+                currentActivity = nil
             }
             
-            let activityContent = ActivityContent(state: contentState, staleDate: nil)
-            let activity = try Activity.request(
-                attributes: attributes,
-                content: activityContent,
-                pushType: nil
-            )
+            for activity in Activity<TimerActivityAttributes>.activities {
+                await activity.end(dismissalPolicy: .immediate)
+            }
             
-            currentActivity = activity
-            
-            print("[LiveActivityModule] Started activity: \(activity.id)")
-            
-            resolver([
-                "activityId": activity.id,
-                "success": true
-            ])
-            
-        } catch {
-            print("[LiveActivityModule] Failed to start activity: \(error)")
-            rejecter("START_FAILED", "Failed to start Live Activity: \(error.localizedDescription)", error)
+            do {
+                let activityContent = ActivityContent(state: initialState, staleDate: endTime)
+                let activity = try Activity.request(
+                    attributes: attributes,
+                    content: activityContent,
+                    pushType: nil
+                )
+                
+                currentActivity = activity
+                print("[LiveActivityModule] Started activity: \(activity.id)")
+                
+                Task {
+                    for await state in activity.activityStateUpdates {
+                        print("[LiveActivityModule] State changed: \(state)")
+                        if state == .dismissed || state == .ended {
+                            self.currentActivity = nil
+                        }
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    resolver([
+                        "activityId": activity.id,
+                        "success": true
+                    ])
+                }
+            } catch {
+                print("[LiveActivityModule] Failed to start activity: \(error)")
+                DispatchQueue.main.async {
+                    rejecter("START_FAILED", "Failed to start Live Activity: \(error.localizedDescription)", error)
+                }
+            }
         }
     }
     
-    // MARK: - Update Activity
     @objc func updateActivity(_ params: NSDictionary, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.1, *) else {
             rejecter("UNSUPPORTED", "Live Activities require iOS 16.1+", nil)
             return
+        }
+        
+        if currentActivity == nil {
+            currentActivity = Activity<TimerActivityAttributes>.activities.first
         }
         
         guard let activity = currentActivity else {
@@ -100,7 +134,6 @@ class LiveActivityModule: RCTEventEmitter {
         let isPaused = params["isPaused"] as? Bool ?? false
         let progress = params["progress"] as? Double ?? 0.0
         let endTimeUnix = params["endTime"] as? Double ?? Date().timeIntervalSince1970
-        
         let endTime = Date(timeIntervalSince1970: endTimeUnix)
         
         let updatedState = TimerActivityAttributes.ContentState(
@@ -111,9 +144,8 @@ class LiveActivityModule: RCTEventEmitter {
         )
         
         Task {
-            let activityContent = ActivityContent(state: updatedState, staleDate: nil)
+            let activityContent = ActivityContent(state: updatedState, staleDate: endTime)
             await activity.update(activityContent)
-            
             print("[LiveActivityModule] Updated activity: remaining=\(remainingTime), paused=\(isPaused), progress=\(progress)")
             
             DispatchQueue.main.async {
@@ -125,15 +157,8 @@ class LiveActivityModule: RCTEventEmitter {
         }
     }
     
-    // MARK: - End Activity
     @objc func endActivity(_ params: NSDictionary, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.1, *) else {
-            rejecter("UNSUPPORTED", "Live Activities require iOS 16.1+", nil)
-            return
-        }
-        
-        guard let activity = currentActivity else {
-            // No activity to end, but that's okay
             resolver(["success": true])
             return
         }
@@ -141,20 +166,26 @@ class LiveActivityModule: RCTEventEmitter {
         let completed = params["completed"] as? Bool ?? true
         
         Task {
-            // Create a final state showing completion
-            let finalState = TimerActivityAttributes.ContentState(
-                remainingTime: 0,
-                isPaused: false,
-                progress: 1.0,
-                endTime: Date()
-            )
+            if currentActivity == nil {
+                currentActivity = Activity<TimerActivityAttributes>.activities.first
+            }
             
-            let finalContent = ActivityContent(state: finalState, staleDate: nil)
+            if let activity = currentActivity {
+                let finalState = TimerActivityAttributes.ContentState(
+                    remainingTime: 0,
+                    isPaused: false,
+                    progress: 1.0,
+                    endTime: Date()
+                )
+                
+                let finalContent = ActivityContent(state: finalState, staleDate: nil)
+                await activity.end(finalContent, dismissalPolicy: .immediate)
+                print("[LiveActivityModule] Ended activity, completed: \(completed)")
+            }
             
-            // Dismiss after a short delay so user sees completion
-            await activity.end(finalContent, dismissalPolicy: completed ? .after(.now + 5) : .immediate)
-            
-            print("[LiveActivityModule] Ended activity, completed: \(completed)")
+            for activity in Activity<TimerActivityAttributes>.activities {
+                await activity.end(dismissalPolicy: .immediate)
+            }
             
             DispatchQueue.main.async { [weak self] in
                 self?.currentActivity = nil
@@ -163,25 +194,25 @@ class LiveActivityModule: RCTEventEmitter {
         }
     }
     
-    // MARK: - Get Activity Status
     @objc func getActivityStatus(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.1, *) else {
             resolver(["isActive": false, "isSupported": false])
             return
         }
         
+        let activities = Activity<TimerActivityAttributes>.activities
         let isEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
-        let isActive = currentActivity != nil
+        let activeActivity = currentActivity ?? activities.first
         
         resolver([
-            "isActive": isActive,
+            "isActive": activeActivity != nil,
             "isSupported": true,
             "isEnabled": isEnabled,
-            "activityId": currentActivity?.id ?? NSNull()
+            "activityId": activeActivity?.id ?? NSNull(),
+            "count": activities.count
         ])
     }
     
-    // MARK: - End All Activities
     @objc func endAllActivities(_ resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.1, *) else {
             resolver(["success": true])

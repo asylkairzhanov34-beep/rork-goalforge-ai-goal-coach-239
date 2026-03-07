@@ -1,4 +1,4 @@
-const { withInfoPlist, withXcodeProject, withEntitlementsPlist, withDangerousMod, IOSConfig } = require('@expo/config-plugins');
+const { withInfoPlist, withEntitlementsPlist, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -151,7 +151,7 @@ public struct SharedTimerActivityAttributes: ActivityAttributes {
 `;
 }
 
-function generateLiveActivityView(appGroup) {
+function generateLiveActivityView(_appGroup) {
   return `import ActivityKit
 import WidgetKit
 import SwiftUI
@@ -259,19 +259,33 @@ struct TimerLiveActivity: Widget {
 struct CompactTrailingView: View {
     let context: ActivityViewContext<TimerActivityAttributes>
     
+    private var timerRange: ClosedRange<Date> {
+        let startTime = context.state.endTime.addingTimeInterval(TimeInterval(-context.attributes.totalDuration))
+        return startTime...context.state.endTime
+    }
+    
+    private var pausedTimeText: String {
+        let minutes = context.state.remainingTime / 60
+        let seconds = context.state.remainingTime % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
     var body: some View {
-        if context.state.isPaused {
-            Image(systemName: "pause.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(context.attributes.modeColor)
-        } else {
-            Text(timerInterval: Date()...context.state.endTime, countsDown: true)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundColor(context.attributes.modeColor)
-                .monospacedDigit()
-                .frame(minWidth: 48)
-                .multilineTextAlignment(.center)
-        }
+        Text(context.state.isPaused ? pausedTimeText : "")
+            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .foregroundColor(context.attributes.modeColor)
+            .monospacedDigit()
+            .frame(minWidth: 52)
+            .multilineTextAlignment(.center)
+            .overlay {
+                if !context.state.isPaused {
+                    Text(timerInterval: timerRange, countsDown: true)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(context.attributes.modeColor)
+                        .monospacedDigit()
+                        .multilineTextAlignment(.center)
+                }
+            }
     }
 }
 
@@ -300,23 +314,31 @@ struct ExpandedLeadingView: View {
 struct ExpandedTrailingView: View {
     let context: ActivityViewContext<TimerActivityAttributes>
     
+    private var timerRange: ClosedRange<Date> {
+        let startTime = context.state.endTime.addingTimeInterval(TimeInterval(-context.attributes.totalDuration))
+        return startTime...context.state.endTime
+    }
+    
+    private var pausedTimeText: String {
+        let minutes = context.state.remainingTime / 60
+        let seconds = context.state.remainingTime % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
     var body: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(context.state.isPaused ? "paused" : "remaining")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+            
             if context.state.isPaused {
-                Image(systemName: "pause.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(context.attributes.modeColor.opacity(0.7))
-                
-                Text("--:--")
+                Text(pausedTimeText)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(context.attributes.modeColor)
                     .monospacedDigit()
+                    .multilineTextAlignment(.trailing)
             } else {
-                Text("remaining")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-                
-                Text(timerInterval: Date()...context.state.endTime, countsDown: true)
+                Text(timerInterval: timerRange, countsDown: true)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(context.attributes.modeColor)
                     .monospacedDigit()
@@ -330,39 +352,44 @@ struct ExpandedTrailingView: View {
 struct ExpandedBottomView: View {
     let context: ActivityViewContext<TimerActivityAttributes>
     
+    private var timerRange: ClosedRange<Date> {
+        let startTime = context.state.endTime.addingTimeInterval(TimeInterval(-context.attributes.totalDuration))
+        return startTime...context.state.endTime
+    }
+    
     var body: some View {
         VStack(spacing: 10) {
-            // Progress Bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.12))
-                        .frame(height: 5)
-                    
-                    Capsule()
-                        .fill(context.attributes.modeGradient)
-                        .frame(width: max(0, geometry.size.width * context.state.progress), height: 5)
-                }
+            if context.state.isPaused {
+                ProgressView(value: context.state.progress)
+                    .progressViewStyle(.linear)
+                    .tint(context.attributes.modeColor)
+            } else {
+                ProgressView(timerInterval: timerRange, countsDown: false, label: {
+                    EmptyView()
+                }, currentValueLabel: {
+                    EmptyView()
+                })
+                .progressViewStyle(.linear)
+                .tint(context.attributes.modeColor)
             }
-            .frame(height: 5)
             
-            // Bottom Info
             HStack {
                 HStack(spacing: 5) {
                     Image(systemName: context.attributes.modeIcon)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(context.attributes.modeColor)
                     
-                    Text(context.state.isPaused ? "Tap to resume" : "Stay focused")
+                    Text(context.state.isPaused ? "Paused on iPhone" : "Running on iPhone")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.65))
                 }
                 
                 Spacer()
                 
-                Text("\\(Int(context.state.progress * 100))%")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(context.attributes.modeColor)
+                Text(context.attributes.timerName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                    .lineLimit(1)
             }
         }
         .padding(.top, 6)
@@ -373,9 +400,19 @@ struct ExpandedBottomView: View {
 struct LockScreenView: View {
     let context: ActivityViewContext<TimerActivityAttributes>
     
+    private var timerRange: ClosedRange<Date> {
+        let startTime = context.state.endTime.addingTimeInterval(TimeInterval(-context.attributes.totalDuration))
+        return startTime...context.state.endTime
+    }
+    
+    private var pausedTimeText: String {
+        let minutes = context.state.remainingTime / 60
+        let seconds = context.state.remainingTime % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
     var body: some View {
         HStack(spacing: 16) {
-            // Left - Logo and Info
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
@@ -385,52 +422,48 @@ struct LockScreenView: View {
                     AppLogoView(size: 42)
                 }
                 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(context.attributes.timerName)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
+                        .lineLimit(1)
                     
-                    // Mini progress bar
-                    HStack(spacing: 8) {
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.18))
-                                    .frame(height: 4)
-                                
-                                Capsule()
-                                    .fill(context.attributes.modeGradient)
-                                    .frame(width: max(0, geometry.size.width * context.state.progress), height: 4)
-                            }
-                        }
-                        .frame(width: 65, height: 4)
-                        
-                        Text(context.state.isPaused ? "Paused" : "\\(Int(context.state.progress * 100))%")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
+                    if context.state.isPaused {
+                        ProgressView(value: context.state.progress)
+                            .progressViewStyle(.linear)
+                            .tint(context.attributes.modeColor)
+                            .frame(width: 92)
+                    } else {
+                        ProgressView(timerInterval: timerRange, countsDown: false, label: {
+                            EmptyView()
+                        }, currentValueLabel: {
+                            EmptyView()
+                        })
+                        .progressViewStyle(.linear)
+                        .tint(context.attributes.modeColor)
+                        .frame(width: 92)
                     }
+                    
+                    Text(context.state.isPaused ? "Paused" : "Live focus session")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.62))
                 }
             }
             
             Spacer()
             
-            // Right - Timer
-            VStack(alignment: .trailing, spacing: 3) {
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(context.state.isPaused ? "paused" : "remaining")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.45))
+                
                 if context.state.isPaused {
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
-                    
-                    Text("--:--")
+                    Text(pausedTimeText)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(context.attributes.modeColor)
                         .monospacedDigit()
                 } else {
-                    Text("remaining")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.45))
-                    
-                    Text(timerInterval: Date()...context.state.endTime, countsDown: true)
+                    Text(timerInterval: timerRange, countsDown: true)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(context.attributes.modeColor)
                         .monospacedDigit()
@@ -462,6 +495,7 @@ struct LockScreenView: View {
             }
         )
         .activityBackgroundTint(Color.black.opacity(0.85))
+        .activitySystemActionForegroundColor(context.attributes.modeColor)
     }
 }
 
@@ -522,7 +556,7 @@ extension TimerActivityAttributes {
 `;
 }
 
-function generateNativeModule(appGroup) {
+function generateNativeModule(_appGroup) {
   return `import Foundation
 import ActivityKit
 import React

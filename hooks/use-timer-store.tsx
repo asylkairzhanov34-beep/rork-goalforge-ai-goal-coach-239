@@ -20,6 +20,8 @@ const isLiveActivitySupported = (): boolean => {
   return supported;
 };
 
+const isFocusLiveActivityMode = (mode: 'focus' | 'shortBreak' | 'longBreak'): boolean => mode === 'focus';
+
 const BACKGROUND_TIMER_KEY = 'background_timer_state';
 const BACKGROUND_START_TIME_KEY = 'background_start_time';
 
@@ -111,13 +113,17 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     mode: 'focus' | 'shortBreak' | 'longBreak',
     durationSeconds: number
   ) => {
+    if (!isFocusLiveActivityMode(mode)) {
+      console.log('[TimerStore] Skipping Live Activity start for mode:', mode);
+      return null;
+    }
+
     if (!isLiveActivitySupported()) {
       console.log('[TimerStore] Live Activities not supported');
       return null;
     }
 
     try {
-      // End any existing activity first
       if (liveActivityIdRef.current) {
         try {
           await LiveActivityModule.endActivity({
@@ -130,17 +136,11 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
         liveActivityIdRef.current = null;
       }
 
-      const modeLabels = {
-        focus: 'Focus Session',
-        shortBreak: 'Short Break',
-        longBreak: 'Long Break',
-      };
-
       const endTime = Math.floor((Date.now() + durationSeconds * 1000) / 1000);
       const progress = 0;
 
       console.log('[TimerStore] Starting Live Activity:', {
-        timerName: modeLabels[mode],
+        timerName: 'Focus Session',
         mode,
         totalDuration: durationSeconds,
         remainingTime: durationSeconds,
@@ -149,7 +149,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       });
 
       const result = await LiveActivityModule.startActivity({
-        timerName: modeLabels[mode],
+        timerName: 'Focus Session',
         mode,
         totalDuration: durationSeconds,
         remainingTime: durationSeconds,
@@ -162,22 +162,29 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
         liveActivityIdRef.current = result.activityId;
         console.log('[TimerStore] Live Activity started successfully:', result.activityId);
         return result.activityId;
-      } else {
-        console.log('[TimerStore] Live Activity started but no activityId returned');
       }
+
+      console.log('[TimerStore] Live Activity started but no activityId returned');
     } catch (error) {
       console.log('[TimerStore] Live Activity start error:', error);
     }
+
     return null;
   }, []);
 
   const updateLiveActivity = useCallback(async (
+    mode: 'focus' | 'shortBreak' | 'longBreak',
     remainingTime: number,
     totalTime: number,
     isPaused: boolean = false
   ) => {
-    if (!isLiveActivitySupported() || !liveActivityIdRef.current) {
-      console.log('[TimerStore] Skipping Live Activity update - not supported or no activity');
+    if (!isFocusLiveActivityMode(mode)) {
+      console.log('[TimerStore] Skipping Live Activity update for mode:', mode);
+      return;
+    }
+
+    if (!isLiveActivitySupported()) {
+      console.log('[TimerStore] Skipping Live Activity update - not supported');
       return;
     }
 
@@ -186,7 +193,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       const endTime = isPaused ? Math.floor(Date.now() / 1000) : Math.floor((Date.now() + remainingTime * 1000) / 1000);
 
       console.log('[TimerStore] Updating Live Activity:', {
-        activityId: liveActivityIdRef.current,
+        activityId: liveActivityIdRef.current ?? 'pending',
         remainingTime,
         isPaused,
         progress: progress.toFixed(2),
@@ -194,7 +201,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       });
 
       await LiveActivityModule.updateActivity({
-        activityId: liveActivityIdRef.current,
+        activityId: liveActivityIdRef.current ?? '',
         remainingTime,
         isPaused,
         progress,
@@ -206,17 +213,23 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
   }, []);
 
   const endLiveActivity = useCallback(async (completed: boolean = true) => {
-    if (!isLiveActivitySupported() || !liveActivityIdRef.current) return;
+    if (!isLiveActivitySupported()) return;
 
     try {
       await LiveActivityModule.endActivity({
-        activityId: liveActivityIdRef.current,
+        activityId: liveActivityIdRef.current ?? '',
         completed,
       });
-      liveActivityIdRef.current = null;
       console.log('[TimerStore] Live Activity ended');
     } catch (error) {
       console.log('[TimerStore] Live Activity end error:', error);
+      try {
+        await LiveActivityModule.endAllActivities();
+      } catch (fallbackError) {
+        console.log('[TimerStore] Live Activity endAll fallback error:', fallbackError);
+      }
+    } finally {
+      liveActivityIdRef.current = null;
     }
   }, []);
 
@@ -441,7 +454,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
   }, []);
 
-  const scheduleCountdownNotifications = useCallback(async (
+  const _scheduleCountdownNotifications = useCallback(async (
     totalSeconds: number,
     mode: 'focus' | 'shortBreak' | 'longBreak',
     totalTime: number
@@ -612,11 +625,6 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
   }, [cancelAllCountdownNotifications]);
 
-  const startLiveNotificationUpdates = useCallback((mode: 'focus' | 'shortBreak' | 'longBreak', totalTime: number) => {
-    // Disabled: no longer sending frequent notification updates
-    // Only completion notification will be shown
-  }, []);
-
   const playSound = useCallback(async (soundId: SoundId) => {
     console.log('[TimerStore] Playing sound:', soundId);
     
@@ -719,7 +727,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
     const currentUserId = userId;
     const currentIsRealUser = isRealUser;
-    const currentTimerKeys = TIMER_KEYS;
+    const currentTimerKeys = getTimerStorageKeys(currentUserId);
     let cancelled = false;
 
     const initializeStore = async () => {
@@ -801,7 +809,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       }
     };
     
-    initializeStore();
+    void initializeStore();
 
     return () => {
       cancelled = true;
@@ -817,6 +825,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       const previousAppState = appState.current;
+      const currentState = stateRef.current;
       console.log('[TimerStore] AppState:', previousAppState, '->', nextAppState);
       
       if (nextAppState === 'background' && !isInBackground.current) {
@@ -828,38 +837,37 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
         isInBackground.current = true;
         backgroundEntryTime.current = Date.now();
         console.log('[TimerStore] Going to background');
-        console.log('[TimerStore] Timer state - running:', state.isRunning, 'paused:', state.isPaused, 'time:', state.currentTime);
+        console.log('[TimerStore] Timer state - running:', currentState.isRunning, 'paused:', currentState.isPaused, 'time:', currentState.currentTime);
         
-        if (state.isRunning && !state.isPaused && state.currentTime > 0) {
+        if (currentState.isRunning && !currentState.isPaused && currentState.currentTime > 0) {
           console.log('[TimerStore] Timer is active, saving state');
-          await saveBackgroundState(state);
+          await saveBackgroundState(currentState);
           
-          const timeStr = formatTimeForNotification(state.currentTime);
-          const modeLabels = {
-            focus: '🎯 Focus Session',
-            shortBreak: '☕ Short Break',
-            longBreak: '🌴 Long Break',
-          };
-          await showLiveTimerNotification(
-            state.currentTime,
-            state.mode,
-            false,
-            state.totalTime
-          );
-          console.log('[TimerStore] Showed active timer notification:', timeStr);
+          if (Platform.OS === 'ios' && isFocusLiveActivityMode(currentState.mode)) {
+            console.log('[TimerStore] Skipping local live notification for iOS focus timer because Live Activity covers lock screen and notification center');
+          } else {
+            const timeStr = formatTimeForNotification(currentState.currentTime);
+            await showLiveTimerNotification(
+              currentState.currentTime,
+              currentState.mode,
+              false,
+              currentState.totalTime
+            );
+            console.log('[TimerStore] Showed active timer notification:', timeStr);
+          }
           
-          if (state.currentTime > 5) {
+          if (currentState.currentTime > 5) {
             const modeConfig = {
               focus: { emoji: '🎯', title: 'Focus Complete!', body: 'Amazing work! Time for a well-deserved break. 🌟' },
               shortBreak: { emoji: '☕', title: 'Break Over!', body: 'Feeling refreshed? Time to get back to work! 💪' },
               longBreak: { emoji: '🌴', title: 'Long Break Done!', body: 'Ready to conquer the next session? Let\'s go! 🚀' },
             };
-            const config = modeConfig[state.mode];
+            const config = modeConfig[currentState.mode];
             
             const notifId = await scheduleBackgroundNotification(
               `${config.emoji} ${config.title}`,
               config.body,
-              state.currentTime
+              currentState.currentTime
             );
             
             if (notifId) {
@@ -868,14 +876,18 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           } else {
             console.log('[TimerStore] Timer too short, skipping notification');
           }
-        } else if (state.isRunning && state.isPaused && state.currentTime > 0) {
-          await showLiveTimerNotification(
-            state.currentTime,
-            state.mode,
-            true,
-            state.totalTime
-          );
-          console.log('[TimerStore] Showed paused timer notification');
+        } else if (currentState.isRunning && currentState.isPaused && currentState.currentTime > 0) {
+          if (Platform.OS === 'ios' && isFocusLiveActivityMode(currentState.mode)) {
+            console.log('[TimerStore] Skipping paused local notification for iOS focus timer because Live Activity is already visible');
+          } else {
+            await showLiveTimerNotification(
+              currentState.currentTime,
+              currentState.mode,
+              true,
+              currentState.totalTime
+            );
+            console.log('[TimerStore] Showed paused timer notification');
+          }
         } else {
           console.log('[TimerStore] Timer not active, no notification scheduled');
         }
@@ -898,7 +910,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           
           if (bgState.remainingTime <= 0) {
             console.log('[TimerStore] Timer completed in background');
-            handleTimerComplete();
+            void handleTimerComplete();
           } else {
             console.log('[TimerStore] Updating timer with background time');
             setState(prev => ({
@@ -927,7 +939,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     return () => {
       subscription.remove();
     };
-  }, [state.isRunning, state.isPaused, state.currentTime, state.totalTime, state.mode, saveBackgroundState, getBackgroundState, clearBackgroundState, scheduleBackgroundNotification, cancelBackgroundNotification, handleTimerComplete, showLiveTimerNotification, scheduleCountdownNotifications, cancelAllCountdownNotifications]);
+  }, [saveBackgroundState, getBackgroundState, clearBackgroundState, scheduleBackgroundNotification, cancelBackgroundNotification, handleTimerComplete, showLiveTimerNotification, cancelAllCountdownNotifications, formatTimeForNotification]);
 
   useEffect(() => {
     if (state.sessions.length > 0) {
@@ -935,7 +947,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
         ...s,
         completedAt: s.completedAt instanceof Date ? s.completedAt.toISOString() : s.completedAt,
       }));
-      safeStorageSet(TIMER_KEYS.SESSIONS, serialized);
+      void safeStorageSet(TIMER_KEYS.SESSIONS, serialized);
 
       if (isRealUser) {
         saveUserTimerSessions(userId, serialized).catch(e =>
@@ -974,25 +986,28 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
   useEffect(() => {
     if (state.currentTime === 0 && state.isRunning) {
-      handleTimerComplete();
+      void handleTimerComplete();
     }
   }, [state.currentTime, state.isRunning, handleTimerComplete]);
 
   const startTimer = useCallback(async (goalId?: string) => {
     console.log('[TimerStore] Starting timer...');
+
+    const snapshot = stateRef.current;
+    if (isFocusLiveActivityMode(snapshot.mode)) {
+      await startLiveActivity(snapshot.mode, snapshot.currentTime);
+    } else {
+      await endLiveActivity(false);
+    }
     
-    setState(prev => {
-      startLiveActivity(prev.mode, prev.currentTime);
-      
-      return {
-        ...prev,
-        isRunning: true,
-        isPaused: false,
-        currentGoalId: goalId,
-        notificationId: undefined,
-      };
-    });
-  }, [startLiveActivity]);
+    setState(prev => ({
+      ...prev,
+      isRunning: true,
+      isPaused: false,
+      currentGoalId: goalId,
+      notificationId: undefined,
+    }));
+  }, [startLiveActivity, endLiveActivity]);
 
   const pauseTimer = useCallback(async () => {
     console.log('[TimerStore] Pausing timer');
@@ -1007,7 +1022,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
     
     setState(prev => {
-      updateLiveActivity(prev.currentTime, prev.totalTime, true);
+      void updateLiveActivity(prev.mode, prev.currentTime, prev.totalTime, true);
       return {
         ...prev,
         isPaused: true,
@@ -1019,7 +1034,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     console.log('[TimerStore] Resuming timer');
     
     setState(prev => {
-      updateLiveActivity(prev.currentTime, prev.totalTime, false);
+      void updateLiveActivity(prev.mode, prev.currentTime, prev.totalTime, false);
       
       return {
         ...prev,
@@ -1050,7 +1065,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
   }, [state.notificationId, cancelNotification, endLiveActivity, cancelBackgroundNotification, clearBackgroundState, cancelLiveTimerNotification]);
 
   const skipTimer = useCallback(() => {
-    handleTimerComplete();
+    void handleTimerComplete();
   }, [handleTimerComplete]);
 
   const setMode = useCallback((mode: 'focus' | 'shortBreak' | 'longBreak') => {
@@ -1084,8 +1099,8 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       ...prev,
       notificationSound: sound,
     }));
-    safeStorageSet(TIMER_KEYS.SOUND, sound);
-  }, []);
+    void safeStorageSet(TIMER_KEYS.SOUND, sound);
+  }, [TIMER_KEYS.SOUND]);
 
   const setCustomDuration = useCallback((seconds: number) => {
     console.log('[TimerStore] Setting duration:', seconds);
@@ -1119,13 +1134,13 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       
       switch (actionIdentifier) {
         case TIMER_ACTION_PAUSE:
-          pauseTimer();
+          void pauseTimer();
           break;
         case TIMER_ACTION_RESUME:
           resumeTimer();
           break;
         case TIMER_ACTION_STOP:
-          stopTimer();
+          void stopTimer();
           break;
         default:
           console.log('[TimerStore] Unknown action:', actionIdentifier);

@@ -20,6 +20,8 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
         "NSFaceIDUsageDescription": "Allow $(PRODUCT_NAME) to access your Face ID biometric data.",
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true,
         "UIBackgroundModes": [
           "audio"
         ]
@@ -79,6 +81,12 @@
           "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
       ],
+      [
+        "./plugins/withLiveActivity.js",
+        {
+          "appGroupIdentifier": "group.app.goalforge-ai-goal-coach"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
