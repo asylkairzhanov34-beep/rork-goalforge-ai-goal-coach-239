@@ -562,7 +562,7 @@ export default function SettingsScreen() {
 
           <View style={styles.appInfo}>
             <Text style={styles.appName}>GoalForge AI</Text>
-            <Text style={styles.appVersion}>Version 1.0.8</Text>
+            <Text style={styles.appVersion}>Version 1.0.9</Text>
             <Text style={styles.appCopyright}>© 2025 GoalForge. All rights reserved.</Text>
           </View>
         </ScrollView>
