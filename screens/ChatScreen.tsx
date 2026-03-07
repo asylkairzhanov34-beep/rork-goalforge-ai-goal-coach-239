@@ -13,7 +13,7 @@ import {
   Easing,
   Image,
 } from 'react-native';
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { Audio } from 'expo-av';
 import { MiniVideoPlayer } from '@/components/MiniVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -361,7 +361,7 @@ const ChatScreenContent: React.FC = () => {
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const prevMessagesLength = useRef(messages.length);
   
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -461,7 +461,7 @@ const ChatScreenContent: React.FC = () => {
         }
       } else {
         console.log('[ChatScreen] Requesting audio permissions...');
-        const permissionResponse = await AudioModule.requestRecordingPermissionsAsync();
+        const permissionResponse = await Audio.requestPermissionsAsync();
         console.log('[ChatScreen] Permission response:', permissionResponse);
         
         if (!permissionResponse.granted) {
@@ -471,14 +471,16 @@ const ChatScreenContent: React.FC = () => {
         }
         
         console.log('[ChatScreen] Setting audio mode...');
-        await setAudioModeAsync({
-          allowsRecording: true,
-          playsInSilentMode: true,
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
         });
         
         console.log('[ChatScreen] Creating recording...');
-        await audioRecorder.prepareToRecordAsync();
-        audioRecorder.record();
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await recording.startAsync();
+        recordingRef.current = recording;
         
         setIsRecording(true);
         console.log('[ChatScreen] Mobile recording started');
@@ -488,7 +490,7 @@ const ChatScreenContent: React.FC = () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setIsRecording(false);
     }
-  }, [audioRecorder]);
+  }, []);
 
   const stopRecording = useCallback(async () => {
     try {
@@ -539,10 +541,17 @@ const ChatScreenContent: React.FC = () => {
         }
       } else {
         console.log('[ChatScreen] Stopping mobile recording...');
-        await audioRecorder.stop();
-        await setAudioModeAsync({ allowsRecording: false });
+        const recording = recordingRef.current;
+        if (!recording) {
+          console.log('[ChatScreen] No recording found');
+          setIsTranscribing(false);
+          return;
+        }
+        await recording.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        recordingRef.current = null;
         
-        const uri = audioRecorder.uri;
+        const uri = recording.getURI();
         console.log('[ChatScreen] Recording URI:', uri);
         
         if (!uri) {
@@ -585,13 +594,13 @@ const ChatScreenContent: React.FC = () => {
     } finally {
       setIsTranscribing(false);
     }
-  }, [audioRecorder]);
+  }, []);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
-      stopRecording();
+      void stopRecording();
     } else {
-      startRecording();
+      void startRecording();
     }
   }, [isRecording, startRecording, stopRecording]);
 
@@ -845,7 +854,7 @@ const ChatScreenContent: React.FC = () => {
                       style={styles.quickActionChip}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
-                        handleGenerateTask();
+                        void handleGenerateTask();
                       }}
                       activeOpacity={0.7}
                     >
@@ -856,7 +865,7 @@ const ChatScreenContent: React.FC = () => {
                       style={styles.quickActionChip}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
-                        handleAnalyzeCompleted();
+                        void handleAnalyzeCompleted();
                       }}
                       activeOpacity={0.7}
                     >
@@ -867,7 +876,7 @@ const ChatScreenContent: React.FC = () => {
                       style={styles.quickActionChip}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
-                        sendMessage('Show me my tasks for today');
+                        void sendMessage('Show me my tasks for today');
                       }}
                       activeOpacity={0.7}
                     >

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useRef, useEffect } from 'react';
+import { Video, ResizeMode } from 'expo-av';
 import { Platform, View, type ViewStyle } from 'react-native';
 
 interface MiniVideoPlayerProps {
@@ -12,30 +12,34 @@ interface MiniVideoPlayerProps {
 }
 
 function MiniVideoPlayerInner({ uri, style, shouldPlay = true, loop = true, muted = true, contentFit = 'cover' }: MiniVideoPlayerProps) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = loop;
-    p.muted = muted;
-    if (shouldPlay) p.play();
-  });
+  const videoRef = useRef<Video>(null);
 
   useEffect(() => {
-    if (shouldPlay) {
-      player.play();
-    } else {
-      player.pause();
+    if (videoRef.current) {
+      if (shouldPlay) {
+        videoRef.current.playAsync().catch(() => {});
+      } else {
+        videoRef.current.pauseAsync().catch(() => {});
+      }
     }
-  }, [shouldPlay, player]);
+  }, [shouldPlay]);
+
+  const resizeMode = contentFit === 'cover' ? ResizeMode.COVER : contentFit === 'contain' ? ResizeMode.CONTAIN : ResizeMode.STRETCH;
 
   if (Platform.OS === 'web') {
     return <View style={[style, { backgroundColor: '#0A0A14' }]} />;
   }
 
   return (
-    <VideoView
-      player={player}
+    <Video
+      ref={videoRef}
+      source={{ uri }}
       style={style}
-      contentFit={contentFit}
-      nativeControls={false}
+      resizeMode={resizeMode}
+      shouldPlay={shouldPlay}
+      isLooping={loop}
+      isMuted={muted}
+      useNativeControls={false}
     />
   );
 }

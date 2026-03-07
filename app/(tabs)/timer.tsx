@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Animated, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Settings, Volume2, Check, Play, Pause, Headphones, VolumeX, Radio, Waves, Sparkles, Globe, Moon, Orbit, Wind, CloudRain, Coffee } from 'lucide-react-native';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { Settings, Volume2, Check, Play, Headphones, VolumeX, Radio, Globe, Moon, Orbit, Wind, CloudRain, Coffee } from 'lucide-react-native';
+import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { theme } from '@/constants/theme';
@@ -43,7 +43,7 @@ export default function TimerScreen() {
   
   const [ambientEnabled, setAmbientEnabled] = useState(false);
   const [selectedAmbientId, setSelectedAmbientId] = useState('groovesalad');
-  const ambientSoundRef = useRef<AudioPlayer | null>(null);
+  const ambientSoundRef = useRef<Audio.Sound | null>(null);
   
   const selectedSound = timerStore?.notificationSound || 'bell';
   const setNotificationSound = timerStore?.setNotificationSound;
@@ -67,7 +67,7 @@ export default function TimerScreen() {
         console.log('Error loading ambient settings:', error);
       }
     };
-    loadAmbientSettings();
+    void loadAmbientSettings();
   }, []);
 
   const saveAmbientSettings = useCallback(async (soundId: string, enabled: boolean) => {
@@ -85,24 +85,24 @@ export default function TimerScreen() {
         if (!selectedStation) return;
         try {
           if (ambientSoundRef.current) {
-            try { ambientSoundRef.current.remove(); } catch {}
+            try { await ambientSoundRef.current.unloadAsync(); } catch {}
             ambientSoundRef.current = null;
           }
           setIsBuffering(true);
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: true,
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
           });
-          const player = createAudioPlayer({ uri: selectedStation.url });
-          player.volume = 0.6;
-          player.loop = false;
-          ambientSoundRef.current = player;
-          player.addListener('playbackStatusUpdate', (status) => {
-            if (status.isLoaded) {
-              setIsBuffering(status.isBuffering);
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: selectedStation.url },
+            { shouldPlay: true, volume: 0.6, isLooping: false },
+            (status) => {
+              if (status.isLoaded) {
+                setIsBuffering(status.isBuffering);
+              }
             }
-          });
-          player.play();
+          );
+          ambientSoundRef.current = sound;
           console.log('[Timer] Lo-fi radio started:', selectedStation.name);
         } catch (error) {
           console.log('Error playing lo-fi radio:', error);
@@ -110,14 +110,14 @@ export default function TimerScreen() {
         }
       } else if (isPaused && ambientSoundRef.current) {
         try {
-          ambientSoundRef.current.pause();
+          await ambientSoundRef.current.pauseAsync();
         } catch (error) {
           console.log('Error pausing lo-fi radio:', error);
         }
       } else if (!isRunning && ambientSoundRef.current) {
         try {
-          ambientSoundRef.current.pause();
-          ambientSoundRef.current.remove();
+          await ambientSoundRef.current.pauseAsync();
+          await ambientSoundRef.current.unloadAsync();
           ambientSoundRef.current = null;
           setIsBuffering(false);
         } catch (error) {
@@ -125,13 +125,13 @@ export default function TimerScreen() {
         }
       }
     };
-    handleAmbientPlayback();
+    void handleAmbientPlayback();
   }, [isRunning, isPaused, ambientEnabled, selectedAmbientId]);
 
   useEffect(() => {
     return () => {
       if (ambientSoundRef.current) {
-        try { ambientSoundRef.current.remove(); } catch {}
+        ambientSoundRef.current.unloadAsync().catch(() => {});
       }
     };
   }, []);
@@ -139,16 +139,16 @@ export default function TimerScreen() {
   const handleToggleAmbient = useCallback(async () => {
     const newEnabled = !ambientEnabled;
     setAmbientEnabled(newEnabled);
-    saveAmbientSettings(selectedAmbientId, newEnabled);
+    void saveAmbientSettings(selectedAmbientId, newEnabled);
     
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
     if (!newEnabled && ambientSoundRef.current) {
       try {
-        ambientSoundRef.current.pause();
-        ambientSoundRef.current.remove();
+        await ambientSoundRef.current.pauseAsync();
+        await ambientSoundRef.current.unloadAsync();
         ambientSoundRef.current = null;
       } catch (error) {
         console.log('Error stopping ambient:', error);
@@ -160,35 +160,35 @@ export default function TimerScreen() {
 
   const handleAmbientSelect = useCallback(async (soundId: string) => {
     setSelectedAmbientId(soundId);
-    saveAmbientSettings(soundId, ambientEnabled);
+    void saveAmbientSettings(soundId, ambientEnabled);
     
     if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
+      void Haptics.selectionAsync();
     }
 
     if (isRunning && !isPaused && ambientEnabled) {
       try {
         if (ambientSoundRef.current) {
-          try { ambientSoundRef.current.remove(); } catch {}
+          try { await ambientSoundRef.current.unloadAsync(); } catch {}
           ambientSoundRef.current = null;
         }
         setIsBuffering(true);
         const newStation = LOFI_STATIONS.find(s => s.id === soundId);
         if (newStation) {
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: true,
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
           });
-          const player = createAudioPlayer({ uri: newStation.url });
-          player.volume = 0.6;
-          player.loop = false;
-          ambientSoundRef.current = player;
-          player.addListener('playbackStatusUpdate', (status) => {
-            if (status.isLoaded) {
-              setIsBuffering(status.isBuffering);
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: newStation.url },
+            { shouldPlay: true, volume: 0.6, isLooping: false },
+            (status) => {
+              if (status.isLoaded) {
+                setIsBuffering(status.isBuffering);
+              }
             }
-          });
-          player.play();
+          );
+          ambientSoundRef.current = sound;
           console.log('[Timer] Switched to lo-fi radio:', newStation.name);
         }
       } catch (error) {
@@ -219,7 +219,7 @@ export default function TimerScreen() {
   };
 
   const handleSoundSelect = async (soundId: SoundId) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (setNotificationSound) {
       setNotificationSound(soundId);
     }

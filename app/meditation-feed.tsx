@@ -10,8 +10,7 @@ import {
   StatusBar,
   useWindowDimensions,
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { setAudioModeAsync } from 'expo-audio';
+import { Video, ResizeMode, Audio, AVPlaybackStatus } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -42,19 +41,12 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const durationDetected = useRef(false);
+  const videoRef = useRef<Video>(null);
 
-  const player = useVideoPlayer(item.videoUrl, (p) => {
-    p.loop = false;
-    p.muted = false;
-    p.timeUpdateEventInterval = 0.5;
-  });
-
-  useEffect(() => {
-    if (!player) return;
-
-    const statusSub = player.addListener('statusChange', (payload) => {
-      if (payload.status === 'readyToPlay' && !durationDetected.current && isActive) {
-        const videoDurationSec = Math.ceil(player.duration);
+  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      if (status.durationMillis && !durationDetected.current && isActive) {
+        const videoDurationSec = Math.ceil(status.durationMillis / 1000);
         if (videoDurationSec > 0 && videoDurationSec !== actualDuration) {
           console.log('[MeditationFeed] Video duration detected:', videoDurationSec, 'seconds');
           durationDetected.current = true;
@@ -73,10 +65,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
           progressAnimRef.current.start();
         }
       }
-    });
 
-    const endSub = player.addListener('playToEnd', () => {
-      if (isActive && !isComplete) {
+      if (status.didJustFinish && isActive && !isComplete) {
         console.log('[MeditationFeed] Video finished playing');
         setIsComplete(true);
         onSlideReady(true);
@@ -85,13 +75,8 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         }
         setTimeLeft(0);
       }
-    });
-
-    return () => {
-      statusSub.remove();
-      endSub.remove();
-    };
-  }, [player, isActive, actualDuration, isComplete, onSlideReady, progressAnim]);
+    }
+  }, [isActive, actualDuration, isComplete, onSlideReady, progressAnim]);
 
   useEffect(() => {
     if (isActive) {
@@ -123,8 +108,11 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       });
       progressAnimRef.current.start();
 
-      player.currentTime = 0;
-      player.play();
+      if (videoRef.current) {
+        void videoRef.current.setPositionAsync(0).then(() => {
+          void videoRef.current?.playAsync();
+        }).catch(() => {});
+      }
     } else {
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.95);
@@ -135,8 +123,10 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
       if (progressAnimRef.current) {
         progressAnimRef.current.stop();
       }
-      player.pause();
-      player.currentTime = 0;
+      if (videoRef.current) {
+        videoRef.current.pauseAsync().catch(() => {});
+        videoRef.current.setPositionAsync(0).catch(() => {});
+      }
     }
 
     return () => {
@@ -147,7 +137,7 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
         progressAnimRef.current.stop();
       }
     };
-  }, [isActive, actualDuration, fadeAnim, progressAnim, scaleAnim, onSlideReady, player]);
+  }, [isActive, actualDuration, fadeAnim, progressAnim, scaleAnim, onSlideReady]);
 
   useEffect(() => {
     if (isActive && !isPaused && timeLeft > 0 && !isComplete) {
@@ -174,14 +164,16 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   }, [isActive, isPaused, timeLeft, isComplete]);
 
   const togglePause = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newPausedState = !isPaused;
     setIsPaused(newPausedState);
 
-    if (newPausedState) {
-      player.pause();
-    } else {
-      player.play();
+    if (videoRef.current) {
+      if (newPausedState) {
+        void videoRef.current.pauseAsync().catch(() => {});
+      } else {
+        void videoRef.current.playAsync().catch(() => {});
+      }
     }
 
     if (progressAnimRef.current) {
@@ -201,8 +193,10 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   };
 
   const handleContinue = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    player.pause();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (videoRef.current) {
+      void videoRef.current.pauseAsync().catch(() => {});
+    }
     onComplete();
   };
 
@@ -214,11 +208,17 @@ function SlideItem({ item, index, isActive, onComplete, isLastSlide, onSlideRead
   return (
     <View style={[styles.slideContainer, { width: screenWidth, height: screenHeight }]}>
       {Platform.OS !== 'web' ? (
-        <VideoView
-          player={player}
+        <Video
+          ref={videoRef}
+          source={{ uri: item.videoUrl }}
           style={[styles.slideVideo, { width: screenWidth, height: screenHeight }]}
-          contentFit="cover"
-          nativeControls={false}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={isActive}
+          isLooping={false}
+          isMuted={false}
+          useNativeControls={false}
+          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+          progressUpdateIntervalMillis={500}
         />
       ) : (
         <View style={[styles.slideVideo, { width: screenWidth, height: screenHeight, backgroundColor: '#111' }]} />
@@ -323,17 +323,17 @@ export default function MeditationFeedScreen() {
   useEffect(() => {
     const setupAudio = async () => {
       try {
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          shouldPlayInBackground: false,
-          interruptionModeAndroid: 'duckOthers',
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          interruptionModeAndroid: 1,
         });
         console.log('[MeditationFeed] Audio mode configured');
       } catch (error) {
         console.error('[MeditationFeed] Error setting audio mode:', error);
       }
     };
-    setupAudio();
+    void setupAudio();
   }, []);
 
   const handleSlideReady = useCallback((ready: boolean) => {
@@ -347,7 +347,7 @@ export default function MeditationFeedScreen() {
       if (newIndex !== null && newIndex !== undefined && newIndex !== activeIndex) {
         setActiveIndex(newIndex);
         setCanScroll(false);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     }
   }, [activeIndex]);
@@ -372,7 +372,7 @@ export default function MeditationFeedScreen() {
   }, []);
 
   const handleClose = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.back();
   };
 

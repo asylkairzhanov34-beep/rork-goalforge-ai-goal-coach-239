@@ -8,7 +8,7 @@ import {
   Easing,
   useWindowDimensions,
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { Sparkles } from 'lucide-react-native';
 
@@ -31,37 +31,39 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
   const textOpacity = useRef(new Animated.Value(0)).current;
   const glowPulse = useRef(new Animated.Value(0.3)).current;
   const hasFinished = useRef(false);
+  const videoRef = useRef<Video>(null);
 
-  const player = useVideoPlayer(SPLASH_VIDEO_URL, (p) => {
-    p.loop = false;
-    p.muted = true;
+  const handleFinish = useCallback(() => {
+    if (hasFinished.current) return;
+    hasFinished.current = true;
+
     if (Platform.OS !== 'web') {
-      p.play();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-  });
 
-  useEffect(() => {
-    if (!player || Platform.OS === 'web') return;
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 400,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      onFinish();
+    });
+  }, [fadeAnim, onFinish]);
 
-    const statusSub = player.addListener('statusChange', (payload) => {
-      if (payload.status === 'readyToPlay' && !videoLoaded) {
+  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      if (!videoLoaded) {
         setVideoLoaded(true);
       }
-      if (payload.status === 'error') {
-        console.error('[VideoSplash] Video error');
-        setTimeout(handleFinish, BRANDED_FALLBACK_DURATION);
+      if (status.didJustFinish) {
+        handleFinish();
       }
-    });
-
-    const endSub = player.addListener('playToEnd', () => {
-      handleFinish();
-    });
-
-    return () => {
-      statusSub.remove();
-      endSub.remove();
-    };
-  }, [player, videoLoaded]);
+    } else if (status.error) {
+      console.error('[VideoSplash] Video error:', status.error);
+      setTimeout(handleFinish, BRANDED_FALLBACK_DURATION);
+    }
+  }, [videoLoaded, handleFinish]);
 
   useEffect(() => {
     Animated.timing(scaleAnim, {
@@ -121,25 +123,7 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
       handleFinish();
     }, MAX_SPLASH_DURATION);
     return () => clearTimeout(safety);
-  }, []);
-
-  const handleFinish = useCallback(() => {
-    if (hasFinished.current) return;
-    hasFinished.current = true;
-
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 400,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start(() => {
-      onFinish();
-    });
-  }, [fadeAnim, onFinish]);
+  }, [handleFinish]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -184,11 +168,16 @@ export function VideoSplashScreen({ onFinish }: VideoSplashScreenProps) {
           { transform: [{ scale: scaleAnim }] }
         ]}
       >
-        <VideoView
-          player={player}
+        <Video
+          ref={videoRef}
+          source={{ uri: SPLASH_VIDEO_URL }}
           style={{ width, height }}
-          contentFit="cover"
-          nativeControls={false}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay
+          isLooping={false}
+          isMuted
+          useNativeControls={false}
+          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
         />
       </Animated.View>
       {!videoLoaded && renderBrandOverlay()}

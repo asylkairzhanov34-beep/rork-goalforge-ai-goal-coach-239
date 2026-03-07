@@ -9,7 +9,7 @@ import {
   Animated,
   useWindowDimensions,
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,39 +25,23 @@ export default function VideoIntro2Screen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
+  const videoRef = useRef<Video>(null);
 
-  const player = useVideoPlayer(VIDEO_URL, (p) => {
-    p.loop = false;
-    p.muted = false;
-    p.play();
-  });
-
-  useEffect(() => {
-    if (!player) return;
-
-    const statusSub = player.addListener('statusChange', (payload) => {
-      if (payload.status === 'readyToPlay' && !videoLoaded) {
+  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      if (!videoLoaded) {
         setVideoLoaded(true);
         console.log('[VideoIntro2] Video loaded successfully');
       }
-      if (payload.status === 'error') {
-        setVideoError(true);
-        console.error('[VideoIntro2] Video error');
-      }
-    });
-
-    const endSub = player.addListener('playToEnd', () => {
-      if (!videoFinished) {
+      if (status.didJustFinish && !videoFinished) {
         setVideoFinished(true);
         console.log('[VideoIntro2] Video ended');
       }
-    });
-
-    return () => {
-      statusSub.remove();
-      endSub.remove();
-    };
-  }, [player, videoLoaded, videoFinished]);
+    } else if (status.error) {
+      setVideoError(true);
+      console.error('[VideoIntro2] Video error:', status.error);
+    }
+  }, [videoLoaded, videoFinished]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -124,11 +108,16 @@ export default function VideoIntro2Screen() {
             <Text style={styles.videoErrorText}>Welcome!</Text>
           </View>
         ) : (
-          <VideoView
-            player={player}
+          <Video
+            ref={videoRef}
+            source={{ uri: VIDEO_URL }}
             style={[styles.video, !videoLoaded && styles.videoHidden]}
-            contentFit="contain"
-            nativeControls={false}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+            isLooping={false}
+            isMuted={false}
+            useNativeControls={false}
+            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
           />
         )}
       </View>

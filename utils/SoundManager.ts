@@ -1,4 +1,4 @@
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { Audio } from 'expo-av';
 import { Asset } from 'expo-asset';
 import { SoundId, getNormalizedVolume } from '@/constants/sounds';
 
@@ -56,7 +56,7 @@ const SOUNDS_CONFIG = [
 const CONCURRENCY = 3;
 
 interface SoundEntry {
-  sound: AudioPlayer | null;
+  sound: Audio.Sound | null;
   loaded: boolean;
   error?: Error;
 }
@@ -65,19 +65,19 @@ class SoundManagerClass {
   private sounds: Record<string, SoundEntry> = {};
   private loading: Set<string> = new Set();
   private configured: boolean = false;
-  private currentPreviewSound: AudioPlayer | null = null;
-  private currentTimerSound: AudioPlayer | null = null;
+  private currentPreviewSound: Audio.Sound | null = null;
+  private currentTimerSound: Audio.Sound | null = null;
 
   async configure(): Promise<void> {
     if (this.configured) return;
     
     try {
-      await setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: true,
-        interruptionMode: 'duckOthers',
-        interruptionModeAndroid: 'duckOthers',
-        shouldPlayInBackground: false,
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        interruptionModeIOS: 1,
+        interruptionModeAndroid: 1,
+        staysActiveInBackground: false,
       });
       this.configured = true;
       console.log('[SOUND MANAGER] Audio configured');
@@ -94,7 +94,7 @@ class SoundManagerClass {
         await asset.downloadAsync();
       }
       return asset.localUri || asset.uri;
-    } catch (err) {
+    } catch {
       console.warn(`[SOUND MANAGER] Asset download fallback for ${uri.substring(0, 50)}`);
       return uri;
     }
@@ -119,8 +119,10 @@ class SoundManagerClass {
       const localUri = await this.downloadAsset(uri);
       const normalizedVolume = getNormalizedVolume(id);
       
-      const sound = createAudioPlayer({ uri: localUri });
-      sound.volume = normalizedVolume;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: localUri },
+        { volume: normalizedVolume, shouldPlay: false }
+      );
       
       this.sounds[id] = { sound, loaded: true };
       console.log(`[SOUND LOADED] ${id} at volume ${normalizedVolume.toFixed(2)}`);
@@ -168,10 +170,10 @@ class SoundManagerClass {
   private async _stopAndUnloadPreview(): Promise<void> {
     if (this.currentPreviewSound) {
       try {
-        this.currentPreviewSound.pause();
+        await this.currentPreviewSound.stopAsync();
       } catch {}
       try {
-        this.currentPreviewSound.remove();
+        await this.currentPreviewSound.unloadAsync();
       } catch {}
       this.currentPreviewSound = null;
       console.log('[PREVIEW] Stopped and unloaded previous preview');
@@ -181,10 +183,10 @@ class SoundManagerClass {
   private async _stopAndUnloadTimer(): Promise<void> {
     if (this.currentTimerSound) {
       try {
-        this.currentTimerSound.pause();
+        await this.currentTimerSound.stopAsync();
       } catch {}
       try {
-        this.currentTimerSound.remove();
+        await this.currentTimerSound.unloadAsync();
       } catch {}
       this.currentTimerSound = null;
       console.log('[TIMER] Stopped and unloaded previous timer sound');
@@ -205,19 +207,18 @@ class SoundManagerClass {
       const normalizedVolume = getNormalizedVolume(id);
       const finalVolume = options.volume ?? normalizedVolume;
 
-      const sound = createAudioPlayer({ uri: localUri });
-      sound.volume = finalVolume;
-      sound.loop = false;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: localUri },
+        { volume: finalVolume, shouldPlay: true, isLooping: false }
+      );
 
       this.currentPreviewSound = sound;
 
-      sound.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) {
-          this._stopAndUnloadPreview();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          void this._stopAndUnloadPreview();
         }
       });
-      
-      sound.play();
 
       console.log(`[PREVIEW PLAY] ${id} at volume ${finalVolume.toFixed(2)}`);
     } catch (error) {
@@ -240,19 +241,18 @@ class SoundManagerClass {
       const normalizedVolume = getNormalizedVolume(id);
       const finalVolume = options.volume ?? normalizedVolume;
 
-      const sound = createAudioPlayer({ uri: localUri });
-      sound.volume = finalVolume;
-      sound.loop = false;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: localUri },
+        { volume: finalVolume, shouldPlay: true, isLooping: false }
+      );
 
       this.currentTimerSound = sound;
 
-      sound.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) {
-          this._stopAndUnloadTimer();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          void this._stopAndUnloadTimer();
         }
       });
-      
-      sound.play();
 
       console.log(`[TIMER SOUND PLAYED] ${id} at volume ${finalVolume.toFixed(2)}`);
     } catch (error) {
@@ -264,8 +264,8 @@ class SoundManagerClass {
     try {
       const entry = this.sounds[id];
       if (entry?.loaded && entry.sound) {
-        entry.sound.pause();
-        entry.sound.seekTo(0);
+        await entry.sound.stopAsync();
+        await entry.sound.setPositionAsync(0);
       }
     } catch (error) {
       console.error(`[STOP ERROR] ${id}:`, error);
@@ -301,7 +301,7 @@ class SoundManagerClass {
     const unloadPromises = Object.entries(this.sounds).map(async ([id, entry]) => {
       if (entry?.sound) {
         try {
-          entry.sound.remove();
+          await entry.sound.unloadAsync();
           console.log(`[SOUND UNLOADED] ${id}`);
         } catch (error) {
           console.error(`[UNLOAD ERROR] ${id}:`, error);

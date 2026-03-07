@@ -67,7 +67,7 @@
         }
       ],
       [
-        "expo-audio",
+        "expo-av",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
         }
@@ -79,7 +79,6 @@
           "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
       ],
-      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
