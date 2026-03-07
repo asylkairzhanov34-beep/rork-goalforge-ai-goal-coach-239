@@ -800,6 +800,10 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
               currentGoalId: bgState.goalId,
               notificationSound: bgState.notificationSound || prev.notificationSound,
             }));
+
+            if (isFocusLiveActivityMode(bgState.mode)) {
+              await startLiveActivity(bgState.mode, bgState.remainingTime);
+            }
           } else {
             console.log('[TimerStore] Timer completed in background');
           }
@@ -814,7 +818,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     return () => {
       cancelled = true;
     };
-  }, [userId, isRealUser, TIMER_KEYS.SESSIONS, TIMER_KEYS.SOUND, getBackgroundState, clearBackgroundState, setupNotificationCategories]);
+  }, [userId, isRealUser, TIMER_KEYS.SESSIONS, TIMER_KEYS.SOUND, getBackgroundState, clearBackgroundState, setupNotificationCategories, startLiveActivity]);
 
   const backgroundDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInBackground = useRef<boolean>(false);
@@ -843,18 +847,14 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           console.log('[TimerStore] Timer is active, saving state');
           await saveBackgroundState(currentState);
           
-          if (Platform.OS === 'ios' && isFocusLiveActivityMode(currentState.mode)) {
-            console.log('[TimerStore] Skipping local live notification for iOS focus timer because Live Activity covers lock screen and notification center');
-          } else {
-            const timeStr = formatTimeForNotification(currentState.currentTime);
-            await showLiveTimerNotification(
-              currentState.currentTime,
-              currentState.mode,
-              false,
-              currentState.totalTime
-            );
-            console.log('[TimerStore] Showed active timer notification:', timeStr);
-          }
+          const timeStr = formatTimeForNotification(currentState.currentTime);
+          await showLiveTimerNotification(
+            currentState.currentTime,
+            currentState.mode,
+            false,
+            currentState.totalTime
+          );
+          console.log('[TimerStore] Showed active timer notification:', timeStr);
           
           if (currentState.currentTime > 5) {
             const modeConfig = {
@@ -877,17 +877,13 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
             console.log('[TimerStore] Timer too short, skipping notification');
           }
         } else if (currentState.isRunning && currentState.isPaused && currentState.currentTime > 0) {
-          if (Platform.OS === 'ios' && isFocusLiveActivityMode(currentState.mode)) {
-            console.log('[TimerStore] Skipping paused local notification for iOS focus timer because Live Activity is already visible');
-          } else {
-            await showLiveTimerNotification(
-              currentState.currentTime,
-              currentState.mode,
-              true,
-              currentState.totalTime
-            );
-            console.log('[TimerStore] Showed paused timer notification');
-          }
+          await showLiveTimerNotification(
+            currentState.currentTime,
+            currentState.mode,
+            true,
+            currentState.totalTime
+          );
+          console.log('[TimerStore] Showed paused timer notification');
         } else {
           console.log('[TimerStore] Timer not active, no notification scheduled');
         }
@@ -1011,6 +1007,8 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
 
   const pauseTimer = useCallback(async () => {
     console.log('[TimerStore] Pausing timer');
+
+    const snapshot = stateRef.current;
     
     await cancelBackgroundNotification();
     await clearBackgroundState();
@@ -1020,28 +1018,50 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       clearInterval(liveNotificationIntervalRef.current);
       liveNotificationIntervalRef.current = null;
     }
-    
-    setState(prev => {
-      void updateLiveActivity(prev.mode, prev.currentTime, prev.totalTime, true);
-      return {
-        ...prev,
-        isPaused: true,
-      };
-    });
-  }, [updateLiveActivity, cancelBackgroundNotification, clearBackgroundState, cancelAllCountdownNotifications]);
 
-  const resumeTimer = useCallback(() => {
-    console.log('[TimerStore] Resuming timer');
+    await updateLiveActivity(snapshot.mode, snapshot.currentTime, snapshot.totalTime, true);
     
-    setState(prev => {
-      void updateLiveActivity(prev.mode, prev.currentTime, prev.totalTime, false);
-      
-      return {
-        ...prev,
-        isPaused: false,
-      };
-    });
-  }, [updateLiveActivity]);
+    setState(prev => ({
+      ...prev,
+      isPaused: true,
+    }));
+
+    if (isInBackground.current && snapshot.isRunning && snapshot.currentTime > 0) {
+      await showLiveTimerNotification(
+        snapshot.currentTime,
+        snapshot.mode,
+        true,
+        snapshot.totalTime
+      );
+    }
+  }, [updateLiveActivity, cancelBackgroundNotification, clearBackgroundState, cancelAllCountdownNotifications, showLiveTimerNotification]);
+
+  const resumeTimer = useCallback(async () => {
+    console.log('[TimerStore] Resuming timer');
+
+    const snapshot = stateRef.current;
+    const nextTimerState: TimerState = {
+      ...snapshot,
+      isPaused: false,
+    };
+
+    await updateLiveActivity(snapshot.mode, snapshot.currentTime, snapshot.totalTime, false);
+    
+    setState(prev => ({
+      ...prev,
+      isPaused: false,
+    }));
+
+    if (isInBackground.current && nextTimerState.isRunning && nextTimerState.currentTime > 0) {
+      await saveBackgroundState(nextTimerState);
+      await showLiveTimerNotification(
+        nextTimerState.currentTime,
+        nextTimerState.mode,
+        false,
+        nextTimerState.totalTime
+      );
+    }
+  }, [updateLiveActivity, saveBackgroundState, showLiveTimerNotification]);
 
   const stopTimer = useCallback(async () => {
     console.log('[TimerStore] Stopping timer');
@@ -1137,7 +1157,7 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
           void pauseTimer();
           break;
         case TIMER_ACTION_RESUME:
-          resumeTimer();
+          void resumeTimer();
           break;
         case TIMER_ACTION_STOP:
           void stopTimer();

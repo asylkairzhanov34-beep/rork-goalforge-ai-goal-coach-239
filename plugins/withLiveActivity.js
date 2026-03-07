@@ -162,53 +162,28 @@ struct AppLogoView: View {
     
     var body: some View {
         ZStack {
-            // Outer glow
             Circle()
                 .fill(
-                    RadialGradient(
+                    LinearGradient(
                         colors: [
-                            Color(red: 1.0, green: 0.55, blue: 0.0).opacity(0.5),
-                            Color.clear
+                            Color(red: 1.0, green: 0.72, blue: 0.18),
+                            Color(red: 0.98, green: 0.41, blue: 0.09)
                         ],
-                        center: .center,
-                        startRadius: size * 0.3,
-                        endRadius: size * 0.7
-                    )
-                )
-                .frame(width: size * 1.3, height: size * 1.3)
-            
-            // Main orb with gradient
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 1.0, green: 0.9, blue: 0.5),
-                            Color(red: 1.0, green: 0.6, blue: 0.15),
-                            Color(red: 0.95, green: 0.4, blue: 0.05)
-                        ],
-                        center: UnitPoint(x: 0.3, y: 0.3),
-                        startRadius: 0,
-                        endRadius: size * 0.55
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
                 )
                 .frame(width: size, height: size)
-                .shadow(color: Color(red: 1.0, green: 0.5, blue: 0.0).opacity(0.6), radius: size * 0.15, x: 0, y: 0)
-            
-            // Inner highlight
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.85),
-                            Color.white.opacity(0.0)
-                        ],
-                        center: UnitPoint(x: 0.35, y: 0.35),
-                        startRadius: 0,
-                        endRadius: size * 0.3
-                    )
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.22), lineWidth: max(1, size * 0.06))
                 )
-                .frame(width: size * 0.45, height: size * 0.45)
-                .offset(x: -size * 0.1, y: -size * 0.1)
+                .shadow(color: Color(red: 1.0, green: 0.55, blue: 0.12).opacity(0.4), radius: size * 0.18, x: 0, y: size * 0.08)
+            
+            Image(systemName: "flame.fill")
+                .font(.system(size: size * 0.44, weight: .bold))
+                .foregroundColor(Color.white)
+                .offset(y: size * -0.02)
         }
     }
 }
@@ -379,9 +354,10 @@ struct ExpandedBottomView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(context.attributes.modeColor)
                     
-                    Text(context.state.isPaused ? "Paused on iPhone" : "Running on iPhone")
+                    Text(context.state.isPaused ? "Paused • controls in notifications" : "Running • controls in notifications")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.65))
+                        .lineLimit(1)
                 }
                 
                 Spacer()
@@ -444,9 +420,10 @@ struct LockScreenView: View {
                         .frame(width: 92)
                     }
                     
-                    Text(context.state.isPaused ? "Paused" : "Live focus session")
+                    Text(context.state.isPaused ? "Paused" : "Live focus session • controls in notifications")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.62))
+                        .lineLimit(1)
                 }
             }
             
