@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Asset } from 'expo-asset';
 import { SoundId, getNormalizedVolume } from '@/constants/sounds';
 
@@ -193,6 +193,27 @@ class SoundManagerClass {
     }
   }
 
+  private async _waitForPlaybackCompletion(sound: Audio.Sound): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+
+      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+        if (!status.isLoaded) {
+          if (!settled && 'error' in status && typeof status.error === 'string') {
+            settled = true;
+            reject(new Error(status.error));
+          }
+          return;
+        }
+
+        if (!settled && status.didJustFinish) {
+          settled = true;
+          resolve();
+        }
+      });
+    });
+  }
+
   async playPreview(id: SoundId, options: { volume?: number } = {}): Promise<void> {
     await this._stopAndUnloadPreview();
 
@@ -247,16 +268,14 @@ class SoundManagerClass {
       );
 
       this.currentTimerSound = sound;
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          void this._stopAndUnloadTimer();
-        }
-      });
-
-      console.log(`[TIMER SOUND PLAYED] ${id} at volume ${finalVolume.toFixed(2)}`);
+      console.log(`[TIMER SOUND PLAYING] ${id} at volume ${finalVolume.toFixed(2)}`);
+      await this._waitForPlaybackCompletion(sound);
+      console.log(`[TIMER SOUND FINISHED] ${id}`);
     } catch (error) {
       console.error(`[TIMER SOUND ERROR] ${id}:`, error);
+      throw error;
+    } finally {
+      await this._stopAndUnloadTimer();
     }
   }
 

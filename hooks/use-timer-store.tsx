@@ -76,6 +76,13 @@ const TIMER_DURATIONS = {
   longBreak: 15 * 60,
 };
 
+const FOCUS_COMPLETION_REPEAT_COUNT = 3;
+const FOCUS_COMPLETION_REPEAT_GAP_MS = 180;
+
+const waitFor = (durationMs: number): Promise<void> => new Promise(resolve => {
+  setTimeout(resolve, durationMs);
+});
+
 const getTimerStorageKeys = (userId: string) => ({
   SESSIONS: `timerSessions_${userId}`,
   SOUND: `notificationSound_${userId}`,
@@ -625,21 +632,31 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
     }
   }, [cancelAllCountdownNotifications]);
 
-  const playSound = useCallback(async (soundId: SoundId) => {
-    console.log('[TimerStore] Playing sound:', soundId);
-    
-    try {
-      await SoundManager.playTimerSound(soundId);
-      console.log('[TimerStore] Sound played');
-    } catch {
-      console.log('[TimerStore] Sound error');
-    }
-    
-    if (Platform.OS !== 'web') {
+  const playCompletionFeedback = useCallback(async (soundId: SoundId, mode: TimerState['mode']) => {
+    const repeatCount = mode === 'focus' ? FOCUS_COMPLETION_REPEAT_COUNT : 1;
+    console.log('[TimerStore] Playing completion feedback:', { soundId, mode, repeatCount });
+
+    for (let index = 0; index < repeatCount; index += 1) {
       try {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {
-        console.log('[TimerStore] Haptics not available');
+        const feedbackTasks: Promise<void>[] = [SoundManager.playTimerSound(soundId)];
+
+        if (Platform.OS !== 'web') {
+          feedbackTasks.push(
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+              console.log('[TimerStore] Haptics not available');
+            })
+          );
+        }
+
+        await Promise.all(feedbackTasks);
+        console.log(`[TimerStore] Completion feedback ${index + 1}/${repeatCount} finished`);
+      } catch (error) {
+        console.log('[TimerStore] Sound error:', error);
+        break;
+      }
+
+      if (index < repeatCount - 1) {
+        await waitFor(FOCUS_COMPLETION_REPEAT_GAP_MS);
       }
     }
   }, []);
@@ -709,13 +726,13 @@ export const [TimerProvider, useTimer] = createContextHook(() => {
       clearBackgroundState().catch(e => console.log('[TimerStore] clear bg err:', e));
       cancelLiveTimerNotification().catch(e => console.log('[TimerStore] cancel live notif err:', e));
 
-      playSound(snap.notificationSound).catch(e => console.log('[TimerStore] play sound err:', e));
+      playCompletionFeedback(snap.notificationSound, snap.mode).catch(e => console.log('[TimerStore] play sound err:', e));
     } catch (e) {
       console.error('[TimerStore] handleTimerComplete cleanup error:', e);
     } finally {
       isCompletingRef.current = false;
     }
-  }, [cancelNotification, playSound, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
+  }, [cancelNotification, playCompletionFeedback, endLiveActivity, clearBackgroundState, cancelLiveTimerNotification]);
 
   const prevTimerUserIdRef = useRef<string | null>(null);
 
